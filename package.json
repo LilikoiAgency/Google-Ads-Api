@@ -1,0 +1,30 @@
+{
+  "name": "google-ads-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "google-ads-api": "^17.1.0-rest-beta",
+    "google-auth-library": "^9.14.1",
+    "googleapis": "^144.0.0",
+    "mongodb": "^6.9.0",
+    "mongoose": "^8.7.0",
+    "next": "14.2.14",
+    "next-auth": "^4.24.8",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.14",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1"
+  }
+}
