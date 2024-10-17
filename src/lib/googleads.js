@@ -1,7 +1,8 @@
+// lib/googleads.js
 import { google } from 'googleapis';
 import { getCredentials } from './dbFunctions'; // Adjust the path if necessary
 
-let oauth2Client;
+let oauth2Client; // Keep the original oauth2Client variable
 
 // Function to initialize the OAuth2 client
 async function initializeClient() {
@@ -15,8 +16,13 @@ async function initializeClient() {
     );
 }
 
-// Initialize the client when the module loads
-initializeClient(); // Ensure it runs once when the module is imported
+// Ensure oauth2Client is initialized before using it
+async function getOAuth2Client() {
+    if (!oauth2Client) {
+        await initializeClient(); // Initialize if not already initialized
+    }
+    return oauth2Client; // Return the oauth2Client object
+}
 
-// Export oauth2Client for use in other files
-export { oauth2Client };
+// Export oauth2Client and initialization function
+export { oauth2Client, getOAuth2Client, initializeClient };

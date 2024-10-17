@@ -132,7 +132,7 @@ export default function Dashboard() {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-white">
         <h2 className="text-2xl text-customPurple mb-4">
-          Data is Refreshing....
+          Pulling Data From Google....
         </h2>
         <img
           src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
