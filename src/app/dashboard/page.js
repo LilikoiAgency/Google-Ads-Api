@@ -15,7 +15,7 @@ export default function Dashboard() {
   // Fetch data or load from localStorage
   const fetchData = async () => {
     setLoading(true); // Set loading to true when fetching starts
-
+  
     const storedData = localStorage.getItem("campaignData");
     if (storedData) {
       setAllCampaignData(JSON.parse(storedData));
@@ -26,7 +26,7 @@ export default function Dashboard() {
         if (!response.ok) {
           throw new Error("Failed to fetch data");
         }
-
+  
         const data = await response.json();
         localStorage.setItem(
           "campaignData",
@@ -39,7 +39,18 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
+  
+    // Add this to set 'lastUpdated' if it doesn't exist
+    const storedLastUpdated = localStorage.getItem("lastUpdated");
+    if (!storedLastUpdated) {
+      const currentDate = new Date().toLocaleDateString();
+      setLastUpdated(currentDate);
+      localStorage.setItem("lastUpdated", currentDate); // Save in localStorage
+    } else {
+      setLastUpdated(storedLastUpdated); // Use the stored value if available
+    }
   };
+  
 
   // Load saved lastUpdated value on component mount
   useEffect(() => {
