@@ -7,20 +7,17 @@ export async function GET() {
         // Fetch credentials from MongoDB
         const credentials = await getCredentials();
         // console.log("Fetched Credentials:", credentials);
-
         const client = new GoogleAdsApi({
             client_id: credentials.client_id,
             client_secret: credentials.client_secret,
             developer_token: credentials.developer_token,
         });
-
         // Creating the MCC customer object to access child accounts
         const mccCustomer = client.Customer({
             customer_id: credentials.customer_id,
             refresh_token: credentials.refresh_token,
             login_customer_id: credentials.customer_id,
         });
-
         // Query to list all child accounts under the MCC
         const customerClientQuery = `
             SELECT
@@ -34,7 +31,6 @@ export async function GET() {
             FROM customer_client
             WHERE customer_client.level <= 1 AND customer_client.status = 'ENABLED'
         `;
-
         // Fetch the child accounts under the MCC
         const customerClients = await mccCustomer.query(customerClientQuery);
         // console.log("Accessible Customers:", customerClients);
@@ -140,7 +136,9 @@ export async function GET() {
             })
         );
 
-        return NextResponse.json({ allCampaignData });
+        const response = NextResponse.json({ allCampaignData });
+        response.headers.set('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+        return response;
 
     } catch (error) {
         console.error('Error fetching data from Google Ads API:', error);

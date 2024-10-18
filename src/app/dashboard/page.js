@@ -22,7 +22,7 @@ export default function Dashboard() {
       setLoading(false);
     } else {
       try {
-        const response = await fetch("/api"); // Update this with your API route
+        const response = await fetch('/api'); 
         if (!response.ok) {
           throw new Error("Failed to fetch data");
         }
@@ -51,14 +51,6 @@ export default function Dashboard() {
     }
   };
   
-
-  // Load saved lastUpdated value on component mount
-  useEffect(() => {
-    const storedLastUpdated = localStorage.getItem("lastUpdated");
-    if (storedLastUpdated) {
-      setLastUpdated(storedLastUpdated); // Set lastUpdated from localStorage
-    }
-  }, []);
 
   // Call fetchData when the component mounts
   useEffect(() => {
