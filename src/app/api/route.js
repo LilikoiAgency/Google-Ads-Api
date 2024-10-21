@@ -21,31 +21,23 @@ export async function GET() {
         // Query to list all child accounts under the MCC
         const customerClientQuery = `
             SELECT
-                customer_client.client_customer,
                 customer_client.level,
-                customer_client.manager,
                 customer_client.descriptive_name,
-                customer_client.currency_code,
-                customer_client.time_zone,
                 customer_client.id
             FROM customer_client
-            WHERE customer_client.level <= 1 AND customer_client.status = 'ENABLED'
+            WHERE customer_client.level = 1 AND customer_client.status = 'ENABLED'
         `;
         // Fetch the child accounts under the MCC
         const customerClients = await mccCustomer.query(customerClientQuery);
         // console.log("Accessible Customers:", customerClients);
-
         // If no child accounts are found, return an error
         if (!customerClients || customerClients.length === 0) {
             return NextResponse.json({ error: 'No accessible customers found' }, { status: 404 });
         }
-
         // Fetch campaigns and ads for each customer (client account)
         const allCampaignData = await Promise.all(
             customerClients.map(async (customerClient) => {
                 const customerId = customerClient.customer_client.id;
-                // console.log(`Fetching campaigns for customer ID: ${customerId}`);
-
                 // Creating the customer object for the selected child account
                 const customer = client.Customer({
                     customer_id: customerId,
@@ -59,20 +51,22 @@ export async function GET() {
                         campaign.id,
                         campaign.name,
                         campaign.status,
-                        campaign.start_date,
-                        campaign.end_date,
                         campaign.advertising_channel_type,
-                        campaign.advertising_channel_sub_type,
-                        campaign.bidding_strategy_type,
-                        campaign.tracking_url_template,
-                        campaign.url_custom_parameters,
-                        campaign.labels,
-                        campaign.resource_name
+                        campaign.resource_name,
+                        metrics.clicks,
+                        metrics.all_conversions
                     FROM
                         campaign
                     WHERE
                         campaign.status = 'ENABLED'
+                        AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
+                        AND campaign.serving_status = 'SERVING'
+                        AND segments.date DURING LAST_7_DAYS
+                    ORDER BY campaign.name
                 `;
+
+            
+            
 
                 let campaigns = [];
                 try {
@@ -112,6 +106,8 @@ export async function GET() {
                             return {
                                 campaignId: campaign.campaign.id,
                                 campaignName: campaign.campaign.name,
+                                conversions: campaign.metrics.all_conversions,
+                                clicks: campaign.metrics.clicks,
                                 ads: ads.map(ad => ({
                                     resource_name: ad.ad_group_ad.ad.resource_name,
                                     headlines: ad.ad_group_ad.ad.responsive_search_ad.headlines ? ad.ad_group_ad.ad.responsive_search_ad.headlines.map(headline => headline.text) : [],
@@ -127,18 +123,20 @@ export async function GET() {
                         campaigns: adsData
                     };
                 } else {
-                    // console.log(`No campaigns found for customer ID ${customerId}`);
-                    return {
-                        customer: customerClient,
-                        error: 'No campaigns found for this customer'
-                    };
+                    console.log(`No campaigns found for customer ID ${customerId}`);
+                    return null;
                 }
             })
         );
 
-        const response = NextResponse.json({ allCampaignData });
+
+        // Filter out null results
+        const validCampaignsData = allCampaignData.filter(campaign => campaign !== null && campaign !== undefined);
+
+        const response = NextResponse.json({ validCampaignsData });
         response.headers.set('Cache-Control', 's-maxage=3600, stale-while-revalidate');
         return response;
+    
 
     } catch (error) {
         console.error('Error fetching data from Google Ads API:', error);

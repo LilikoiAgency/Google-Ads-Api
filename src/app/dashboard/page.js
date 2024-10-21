@@ -15,7 +15,6 @@ export default function Dashboard() {
   // Fetch data or load from localStorage
   const fetchData = async () => {
     setLoading(true); // Set loading to true when fetching starts
-  
     const storedData = localStorage.getItem("campaignData");
     if (storedData) {
       setAllCampaignData(JSON.parse(storedData));
@@ -30,9 +29,9 @@ export default function Dashboard() {
         const data = await response.json();
         localStorage.setItem(
           "campaignData",
-          JSON.stringify(data.allCampaignData || [])
+          JSON.stringify(data.validCampaignsData || [])
         );
-        setAllCampaignData(data.allCampaignData || []);
+        setAllCampaignData(data.validCampaignsData || []);
       } catch (err) {
         setError(err.message);
       } finally {

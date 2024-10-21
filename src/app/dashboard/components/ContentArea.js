@@ -12,10 +12,29 @@ export default function ContentArea({
       <div className="space-y-6">
         {selectedCampaign ? (
           <div className="p-6 rounded-lg text-black">
-            <h2 className="text-xl font-semibold text-customPurple">Customer: {customerName}</h2>
-            <h3 className="text-lg font-medium mt-2 text-customPurple-light">
-              Selected Campaign: {selectedCampaign.campaignName}
-            </h3>
+            <h2 className="text-2xl font-semibold text-customPurple mb-4">Customer: {customerName}</h2>
+            <h3 className="text-lg font-semibold text-customPurple mb-8"> Selected Campaign: {selectedCampaign.campaignName} </h3>
+
+
+            <div className="p-6 bg-white rounded-3xl shadow-lg mb-8 max-w-md">
+                <h3 className="flex justify-between text-lg text-customPurple mb-4">
+                    <span className="font-bold">Performance Insights</span>
+                    <span className="font-light text-sm text-gray-500">Last 7 days</span>
+                </h3>
+
+                <div className="space-y-3">
+                    <p className="flex justify-between text-md text-customPurple-light">
+                    <span className="font-bold">Conversions:</span>
+                    <span className="text-green-500 text-3xl">{Math.ceil(selectedCampaign.conversions)}</span>
+                    </p>
+                    <p className="flex justify-between text-md text-customPurple-light">
+                    <span className="font-bold">Clicks:</span>
+                    <span className="text-blue-500 text-3xl">{selectedCampaign.clicks}</span>
+                    </p>
+                </div>
+            </div>
+
+
             <ul className="mt-4 space-y-4">
               {selectedCampaign.ads.map((ad, index) => (
                 <li key={ad.resource_name} className="mb-8 p-5 bg-white shadow-md rounded-xl">
