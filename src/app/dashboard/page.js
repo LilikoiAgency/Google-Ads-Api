@@ -21,7 +21,11 @@ export default function Dashboard() {
       setLoading(false);
     } else {
       try {
-        const response = await fetch('/api'); 
+        const response = await fetch('/api',  {
+          next: {
+            revalidate: 3600, // 1 hour
+          }
+        }); 
         if (!response.ok) {
           throw new Error("Failed to fetch data");
         }
