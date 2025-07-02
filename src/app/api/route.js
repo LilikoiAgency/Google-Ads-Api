@@ -38,6 +38,12 @@ export async function GET() {
         const allCampaignData = await Promise.all(
             customerClients.map(async (customerClient) => {
                 const customerId = customerClient.customer_client.id;
+
+                // ⛔️ Skip if it's the MCC account (manager)
+                if (customerId === credentials.customer_id) {
+                    console.log(`Skipping MCC account: ${customerId}`);
+                    return null;
+                }                
                 // Creating the customer object for the selected child account
                 const customer = client.Customer({
                     customer_id: customerId,
@@ -108,12 +114,17 @@ export async function GET() {
                                 campaignName: campaign.campaign.name,
                                 conversions: campaign.metrics.all_conversions,
                                 clicks: campaign.metrics.clicks,
-                                ads: ads.map(ad => ({
-                                    resource_name: ad.ad_group_ad.ad.resource_name,
-                                    headlines: ad.ad_group_ad.ad.responsive_search_ad.headlines ? ad.ad_group_ad.ad.responsive_search_ad.headlines.map(headline => headline.text) : [],
-                                    descriptions: ad.ad_group_ad.ad.responsive_search_ad.descriptions ? ad.ad_group_ad.ad.responsive_search_ad.descriptions.map(description => description.text) : [],
-                                    final_urls: ad.ad_group_ad.ad.final_urls
-                                }))
+                                ads: ads.map(ad => {
+                                    const adData = ad.ad_group_ad?.ad || {};
+                                    const rsa = adData.responsive_search_ad;
+
+                                    return {
+                                        resource_name: adData.resource_name || '',
+                                        headlines: rsa?.headlines?.map(h => h.text) || [],
+                                        descriptions: rsa?.descriptions?.map(d => d.text) || [],
+                                        final_urls: adData.final_urls || []
+                                    };
+                                })
                             };
                         })
                     );
