@@ -33,7 +33,7 @@ export default function Sidebar({
             item.campaigns.some((campaign) => campaign.ads?.length > 0) && (
               <li key={idx} className="mb-4">
                 <button
-                  className={`w-full text-left py-2 px-4 rounded-xl ${
+                  className={`w-full text-left py-2 px-4 rounded-xl text-gray-300 ${
                     selectedCustomer ===
                     item.customer.customer_client.descriptive_name
                       ? "bg-customPurple-light text-white"
@@ -70,11 +70,11 @@ export default function Sidebar({
                             <li key={campaign.campaignId} className="ml-4">
                               <button
                                 id={`campaign-${campaign.campaignId}`}
-                                className={`w-full text-left py-2 px-4 rounded-xl ${
+                                className={`w-full text-left py-2 px-4 rounded-xl text-gray-300 ${
                                   selectedCampaign?.campaignName ===
                                   campaign.campaignName
                                     ? "bg-customPurple-light text-white"
-                                    : "hover:bg-customPurple hover:text-white text-gray"
+                                    : "hover:bg-customPurple hover:text-white"
                                 }`}
                                 onClick={() =>
                                   handleCampaignSelect(campaign.campaignId)
