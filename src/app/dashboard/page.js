@@ -21,15 +21,15 @@ export default function Dashboard() {
       setLoading(false);
     } else {
       try {
-        const response = await fetch('/api',  {
+        const response = await fetch("/api", {
           next: {
             revalidate: 3600, // 1 hour
-          }
-        }); 
+          },
+        });
         if (!response.ok) {
           throw new Error("Failed to fetch data");
         }
-  
+
         const data = await response.json();
         localStorage.setItem(
           "campaignData",
@@ -42,7 +42,7 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
-  
+
     // Add this to set 'lastUpdated' if it doesn't exist
     const storedLastUpdated = localStorage.getItem("lastUpdated");
     if (!storedLastUpdated) {
@@ -53,7 +53,6 @@ export default function Dashboard() {
       setLastUpdated(storedLastUpdated); // Use the stored value if available
     }
   };
-  
 
   // Call fetchData when the component mounts
   useEffect(() => {
@@ -151,17 +150,22 @@ export default function Dashboard() {
   if (error) return <div>Error: {error}</div>;
 
   return (
-    <div className="flex min-h-screen bg-customPurple-dark">
-      <Sidebar
-        customers={allCampaignData}
-        selectedCustomer={selectedCustomer}
-        handleCustomerSelect={handleCustomerSelect}
-        handleCampaignSelect={handleCampaignSelect}
-        selectedCampaign={selectedCampaign}
-        lastUpdated={lastUpdated}
-        refreshData={refreshData}
-      />
-      <div className="flex-1 p-6 bg-gray-50 mt-8 mr-4 rounded-t-2xl ">
+    <div className="flex flex-col sm:flex-row min-h-screen bg-customPurple-dark">
+      {/* Sidebar: fixed width, scrollable if too tall */}
+      <aside className="w-full sm:w-80 sm:min-w-[16rem] bg-customPurple-dark flex-shrink-0">
+        <Sidebar
+          customers={allCampaignData}
+          selectedCustomer={selectedCustomer}
+          handleCustomerSelect={handleCustomerSelect}
+          handleCampaignSelect={handleCampaignSelect}
+          selectedCampaign={selectedCampaign}
+          lastUpdated={lastUpdated}
+          refreshData={refreshData}
+        />
+      </aside>
+
+      {/* Main content: grows to fill remaining space, prevents overflow */}
+      <main className="flex-1 min-w-0 bg-gray-50 sm:rounded-t-2xl mt-4 sm:mt-8 p-4 sm:p-6 sm:mr-4">
         {selectedCustomer && (
           <ContentArea
             customerName={selectedCustomer}
@@ -170,7 +174,7 @@ export default function Dashboard() {
             handleCampaignSelect={handleCampaignSelect}
           />
         )}
-      </div>
+      </main>
     </div>
   );
 }

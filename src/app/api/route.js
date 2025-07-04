@@ -60,7 +60,8 @@ export async function GET() {
                         campaign.advertising_channel_type,
                         campaign.resource_name,
                         metrics.clicks,
-                        metrics.all_conversions
+                        metrics.all_conversions,
+                        metrics.cost_micros
                     FROM
                         campaign
                     WHERE
@@ -77,6 +78,8 @@ export async function GET() {
                 let campaigns = [];
                 try {
                     campaigns = await customer.query(campaignQuery);
+                    console.log(`Campaigns for customer ${customerId}:`, JSON.stringify(campaigns, null, 2));
+
                 } catch (error) {
                     console.error(`Error fetching campaigns for customer ID ${customerId}:`, error);
                 }
@@ -114,6 +117,7 @@ export async function GET() {
                                 campaignName: campaign.campaign.name,
                                 conversions: campaign.metrics.all_conversions,
                                 clicks: campaign.metrics.clicks,
+                                cost: campaign.metrics.cost_micros,
                                 ads: ads.map(ad => {
                                     const adData = ad.ad_group_ad?.ad || {};
                                     const rsa = adData.responsive_search_ad;
