@@ -9,7 +9,7 @@ export default function Sidebar({
   refreshData,
 }) {
   return (
-    <div className="w-80 bg-customPurple-dark text-custom-purple p-6 shadow-lg">
+    <div className="w-80 bg-customPurple-dark  p-6 shadow-lg">
       <div className="flex items-center mb-8">
         {/* Icon */}
         <img
