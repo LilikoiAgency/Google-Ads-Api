@@ -5,67 +5,62 @@ export const GET = async (req, { params }) => {
   const { adId } = params;
 
   if (!accessToken || !adId) {
-    return new Response(JSON.stringify({ error: 'Missing access token or adId' }), {
-      status: 400,
-    });
+    return new Response(JSON.stringify({ error: 'Missing access token or adId' }), { status: 400 });
   }
 
   try {
-    // Step 1: Get the ad object with creative ID only
-    const adRes = await axios.get(`https://graph.facebook.com/v19.0/${adId}`, {
+    const adRes = await axios.get(`https://graph.facebook.com/v23.0/${adId}`, {
       params: {
-        fields: 'id,name,creative',
+        fields: 'id,name,creative{id,name,body,title,image_url,object_story_spec{video_data{image_url,title,message},link_data{child_attachments{name,description,picture,link},picture}}}',
         access_token: accessToken,
       },
     });
 
     const adData = adRes.data;
-    const creativeId = adData?.creative?.id;
+    const creative = adData?.creative || {};
+    const storySpec = creative?.object_story_spec || {};
+    const videoData = storySpec?.video_data || {};
+    const linkData = storySpec?.link_data || {};
+    const childAttachments = linkData?.child_attachments || [];
 
-    if (!creativeId) {
-      return new Response(JSON.stringify({
-        ad: {
-          id: adId,
-          name: adData?.name || null,
-          note: 'No creative attached to this ad'
-        }
-      }), { status: 200 });
+    let format = 'image';
+    let media = [];
+
+    if (videoData?.image_url) {
+      format = 'video';
+      media.push({ type: 'video', thumbnail: videoData.image_url });
+    } else if (childAttachments.length) {
+      format = 'carousel';
+      media = childAttachments
+        .filter(item => item?.picture || item?.name || item?.description || item?.link)
+        .map(item => ({
+          type: 'image',
+          url: item.picture,
+          headline: item.name,
+          description: item.description,
+          link: item.link,
+        }));
+    } else if (linkData?.picture || creative?.image_url) {
+      format = 'image';
+      media.push({ type: 'image', url: linkData.picture || creative.image_url });
     }
 
-    // Step 2: Try to fetch creative content
-    try {
-      const creativeRes = await axios.get(`https://graph.facebook.com/v19.0/${creativeId}`, {
-        params: {
-          fields: 'id,name,object_story_spec',
-          access_token: accessToken,
-        },
-      });
+    const responseData = {
+      ad_id: adData?.id || null,
+      ad_name: adData?.name || null,
+      creative_id: creative?.id || null,
+      creative_name: creative?.name || null,
+      primary_text: creative?.body || videoData?.message || null,
+      headline: creative?.title || videoData?.title || null,
+      format,
+      media,
+    };
 
-      return new Response(JSON.stringify({
-        ad: {
-          id: adId,
-          name: adData.name,
-          creative_id: creativeId,
-          creative: creativeRes.data,
-        }
-      }), { status: 200 });
-
-    } catch (creativeErr) {
-      console.warn('Creative fallback triggered:', creativeErr.response?.data || creativeErr.message);
-      return new Response(JSON.stringify({
-        ad: {
-          id: adId,
-          name: adData.name,
-          creative_id: creativeId,
-          note: 'Creative has no object_story_spec or was not accessible.'
-        }
-      }), { status: 200 });
-    }
-
+    return new Response(JSON.stringify({ ad: responseData }), { status: 200 });
   } catch (err) {
     console.error('Meta ad fetch failed:', err.response?.data || err.message);
     return new Response(JSON.stringify({
-      error: 'Failed to fetch ad/creative/story',
+      error: 'Failed to fetch ad or creative content',
       details: err.response?.data || err.message,
     }), { status: 500 });
   }
