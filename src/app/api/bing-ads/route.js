@@ -66,12 +66,65 @@ function formatDateParts(date) {
   };
 }
 
-function buildDateRange({ days, range }) {
+function formatUsDate(date) {
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const year = String(date.getUTCFullYear());
+  return `${month}-${day}-${year}`;
+}
+
+function parseUsDate(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function buildDateRange({ days, range, startDate, endDate }) {
   const now = new Date();
   let start;
   let end;
+  let computedDays;
 
-  if (range === "mtd") {
+  if (startDate || endDate) {
+    if (!startDate || !endDate) {
+      throw new Error(
+        "Both startDate and endDate are required when using a custom date range."
+      );
+    }
+
+    const parsedStart = parseUsDate(startDate);
+    const parsedEnd = parseUsDate(endDate);
+
+    if (!parsedStart || !parsedEnd) {
+      throw new Error(
+        "Invalid date format. Use MM-DD-YYYY for startDate and endDate."
+      );
+    }
+
+    if (parsedStart > parsedEnd) {
+      throw new Error("startDate must be less than or equal to endDate.");
+    }
+
+    start = parsedStart;
+    end = parsedEnd;
+    computedDays =
+      Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  } else if (range === "mtd") {
     start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     end = new Date(now);
     end.setUTCDate(end.getUTCDate() - 1);
@@ -80,15 +133,22 @@ function buildDateRange({ days, range }) {
     if (end < start) {
       start = new Date(end);
     }
+
+    computedDays =
+      Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
   } else {
     end = new Date(now);
     start = new Date(end);
     start.setUTCDate(end.getUTCDate() - Math.max(days - 1, 0));
+    computedDays = Math.max(days, 1);
   }
 
   return {
     start: formatDateParts(start),
     end: formatDateParts(end),
+    rangeDays: Math.max(computedDays, 1),
+    startDate: formatUsDate(start),
+    endDate: formatUsDate(end),
   };
 }
 
@@ -597,13 +657,30 @@ export async function GET(request) {
 
   const range = (searchParams.get("range") || "").toLowerCase();
   const isMtd = range === "mtd";
+  const startDate = searchParams.get("startDate")?.trim() || null;
+  const endDate = searchParams.get("endDate")?.trim() || null;
   const requestedDays = Number(searchParams.get("days"));
   const days =
     Number.isFinite(requestedDays) && requestedDays > 0 ? requestedDays : 7;
-  const dateRange = buildDateRange({
-    days,
-    range: isMtd ? "mtd" : null,
-  });
+  let dateRange;
+  let rangeLabel;
+
+  try {
+    dateRange = buildDateRange({
+      days,
+      range: isMtd ? "mtd" : null,
+      startDate,
+      endDate,
+    });
+    rangeLabel = startDate || endDate ? "custom" : isMtd ? "mtd" : "days";
+  } catch (error) {
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+      }),
+      { status: 400, headers: NO_STORE_HEADERS }
+    );
+  }
 
   try {
     const accessToken = await fetchAccessToken();
@@ -626,8 +703,10 @@ export async function GET(request) {
     return new Response(
       JSON.stringify({
         campaigns,
-        rangeDays: days,
-        range: isMtd ? "mtd" : "days",
+        rangeDays: dateRange.rangeDays,
+        range: rangeLabel,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
         customerId: clientContext.customerId,
         accountId: clientContext.accountId,
       }),
