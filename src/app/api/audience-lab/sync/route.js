@@ -55,6 +55,7 @@ const TABLE_SCHEMA_FIELDS = [
   { name: "address", type: "STRING", mode: "NULLABLE" },
   { name: "city", type: "STRING", mode: "NULLABLE" },
   { name: "state", type: "STRING", mode: "NULLABLE" },
+  { name: "zip", type: "STRING", mode: "NULLABLE" },
 ];
 
 function trimTrailingSlash(value) {
@@ -242,12 +243,31 @@ async function waitForTableReady(
 
 async function ensureTableExists(bigquery, projectId, datasetId, tableId) {
   try {
-    await bigquery.tables.get({
+    const table = await bigquery.tables.get({
       projectId,
       datasetId,
       tableId,
     });
-    return { created: false };
+    const existingFields = table?.data?.schema?.fields || [];
+    const existingFieldNames = new Set(existingFields.map((field) => field.name));
+    const missingFields = TABLE_SCHEMA_FIELDS.filter(
+      (field) => !existingFieldNames.has(field.name)
+    );
+
+    if (missingFields.length) {
+      await bigquery.tables.patch({
+        projectId,
+        datasetId,
+        tableId,
+        requestBody: {
+          schema: {
+            fields: [...existingFields, ...missingFields],
+          },
+        },
+      });
+    }
+
+    return { created: false, addedColumns: missingFields.map((field) => field.name) };
   } catch (error) {
     if (!isNotFoundError(error)) throw error;
 
@@ -273,7 +293,7 @@ async function ensureTableExists(bigquery, projectId, datasetId, tableId) {
       );
     }
 
-    return { created: true, readyAttempts: readyCheck.attempts };
+    return { created: true, readyAttempts: readyCheck.attempts, addedColumns: [] };
   }
 }
 
@@ -306,6 +326,7 @@ function toBigQueryRow(rawRow, segmentName, batchTimestamp) {
     address: rawRow?.PERSONAL_ADDRESS || null,
     city: rawRow?.PERSONAL_CITY || null,
     state: rawRow?.PERSONAL_STATE || null,
+    zip: splitFirstValue(rawRow?.PERSONAL_ZIP || rawRow?.SKIPTRACE_ZIP) || null,
   };
 }
 
@@ -531,6 +552,7 @@ async function syncSingleTarget({
       target: target.key,
       tableId: target.tableId,
       tableCreated: tableResult.created,
+      addedColumns: tableResult.addedColumns || [],
       readyAttempts: tableResult.readyAttempts || 1,
     });
   }
