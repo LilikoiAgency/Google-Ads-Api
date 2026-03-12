@@ -26,24 +26,36 @@ const REQUIRED_ENV_VARS = [
 
 const SEGMENT_TABLE_CONFIG = [
   {
-    key: "smp",
-    tableId: "smp_segment",
-    envVar: "AUDIENCE_LAB_SMP_SEGMENT_ID",
-    queryParam: "smpSegmentId",
+    key: "bbt_turf",
+    tableId: "bbt_interested_turf_segment",
+    envVar: "AUDIENCE_LAB_BBT_TURF_SEGMENT_ID",
+    queryParam: "bbtTurfSegmentId",
   },
   {
-    key: "bbt",
-    tableId: "bbt_segment",
-    envVar: "AUDIENCE_LAB_BBT_SEGMENT_ID",
-    queryParam: "bbtSegmentId",
+    key: "cmk_kitchen_bath",
+    tableId: "cmk_interested_kitchen_bath_remodel_segment",
+    envVar: "AUDIENCE_LAB_CMK_KITCHEN_BATH_SEGMENT_ID",
+    queryParam: "cmkKitchenBathSegmentId",
   },
   {
-    key: "cmk",
-    tableId: "cmk_segment",
-    envVar: "AUDIENCE_LAB_CMK_SEGMENT_ID",
-    queryParam: "cmkSegmentId",
+    key: "smp_roofing",
+    tableId: "smp_interested_roofing_segment",
+    envVar: "AUDIENCE_LAB_SMP_ROOFING_SEGMENT_ID",
+    queryParam: "smpRoofingSegmentId",
+  },
+  {
+    key: "smp_solar",
+    tableId: "smp_interested_solar_segment",
+    envVar: "AUDIENCE_LAB_SMP_SOLAR_SEGMENT_ID",
+    queryParam: "smpSolarSegmentId",
   },
 ];
+
+const TARGET_ALIASES = {
+  bbt: "bbt_turf",
+  cmk: "cmk_kitchen_bath",
+  smp: "smp_roofing",
+};
 
 const TABLE_SCHEMA_FIELDS = [
   { name: "date", type: "TIMESTAMP", mode: "REQUIRED" },
@@ -463,7 +475,19 @@ async function verifyBatchRowCountWithRetry({
 
 function resolveTargets(searchParams) {
   return SEGMENT_TABLE_CONFIG.map((cfg) => {
-    const segmentId = searchParams.get(cfg.queryParam) || process.env[cfg.envVar] || null;
+    const legacyQueryParam =
+      cfg.key === "bbt_turf"
+        ? "bbtSegmentId"
+        : cfg.key === "cmk_kitchen_bath"
+          ? "cmkSegmentId"
+          : cfg.key === "smp_roofing"
+            ? "smpSegmentId"
+            : null;
+    const segmentId =
+      searchParams.get(cfg.queryParam) ||
+      (legacyQueryParam ? searchParams.get(legacyQueryParam) : null) ||
+      process.env[cfg.envVar] ||
+      null;
     return {
       key: cfg.key,
       tableId: cfg.tableId,
@@ -475,9 +499,11 @@ function resolveTargets(searchParams) {
 
 function resolveRequestedTarget(searchParams) {
   const raw = (searchParams.get("target") || "all").toLowerCase();
-  const allowed = ["all", ...SEGMENT_TABLE_CONFIG.map((cfg) => cfg.key)];
-  if (!allowed.includes(raw)) return null;
-  return raw;
+  if (raw === "all") return raw;
+  const mapped = TARGET_ALIASES[raw] || raw;
+  const allowed = new Set(SEGMENT_TABLE_CONFIG.map((cfg) => cfg.key));
+  if (!allowed.has(mapped)) return null;
+  return mapped;
 }
 
 function summarizeDryRunPayload(payload) {
@@ -730,7 +756,8 @@ export async function GET(request) {
     });
     return new Response(
       JSON.stringify({
-        error: "Invalid target. Use target=all, target=smp, target=bbt, or target=cmk.",
+        error:
+          "Invalid target. Use target=all, target=bbt_turf, target=cmk_kitchen_bath, target=smp_roofing, or target=smp_solar.",
         runId: logState.runId,
       }),
       {
@@ -781,7 +808,7 @@ export async function GET(request) {
     return new Response(
       JSON.stringify({
         error:
-          "No segment IDs provided. Configure AUDIENCE_LAB_SMP_SEGMENT_ID / AUDIENCE_LAB_BBT_SEGMENT_ID / AUDIENCE_LAB_CMK_SEGMENT_ID or pass smpSegmentId/bbtSegmentId/cmkSegmentId.",
+          "No segment IDs provided. Configure segment env vars (AUDIENCE_LAB_BBT_TURF_SEGMENT_ID, AUDIENCE_LAB_CMK_KITCHEN_BATH_SEGMENT_ID, AUDIENCE_LAB_SMP_ROOFING_SEGMENT_ID, AUDIENCE_LAB_SMP_SOLAR_SEGMENT_ID) or pass target query params.",
         target: requestedTarget,
         runId: logState.runId,
       }),

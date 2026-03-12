@@ -6,8 +6,20 @@
   },
   "crons": [
     {
-      "path": "/api/audience-lab/sync?mode=write&target=smp",
+      "path": "/api/audience-lab/sync?mode=write&target=bbt_turf",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/audience-lab/sync?mode=write&target=cmk_kitchen_bath",
+      "schedule": "10 12 * * 1"
+    },
+    {
+      "path": "/api/audience-lab/sync?mode=write&target=smp_roofing",
+      "schedule": "20 12 * * 1"
+    },
+    {
+      "path": "/api/audience-lab/sync?mode=write&target=smp_solar",
+      "schedule": "30 12 * * 1"
     }
   ]
 }
