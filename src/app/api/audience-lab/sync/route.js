@@ -9,6 +9,8 @@ const DEFAULT_TEST_ROW_LIMIT = 10;
 const MAX_PAGE_SIZE = 500;
 const MAX_TEST_ROW_LIMIT = 100;
 const BIGQUERY_INSERT_BATCH_SIZE = 500;
+const AUDIENCE_LAB_MAX_FETCH_ATTEMPTS = 5;
+const AUDIENCE_LAB_RETRY_DELAY_MS = 1000;
 const NO_STORE_HEADERS = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -160,26 +162,54 @@ async function parseResponseBody(response) {
   }
 }
 
+function isRetriableAudienceLabStatus(status) {
+  return status === 429 || status >= 500;
+}
+
 async function fetchAudienceLabJson(url, headers) {
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-    cache: "no-store",
-  });
+  let lastError = null;
 
-  const body = await parseResponseBody(response);
+  for (let attempt = 1; attempt <= AUDIENCE_LAB_MAX_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
 
-  if (!response.ok) {
-    throw new Error(
-      JSON.stringify({
-        endpoint: url,
-        status: response.status,
-        response: body,
-      })
-    );
+      const body = await parseResponseBody(response);
+
+      if (!response.ok) {
+        const errorDetails = {
+          endpoint: url,
+          status: response.status,
+          response: body,
+          attempt,
+        };
+
+        if (
+          attempt < AUDIENCE_LAB_MAX_FETCH_ATTEMPTS &&
+          isRetriableAudienceLabStatus(response.status)
+        ) {
+          await sleep(AUDIENCE_LAB_RETRY_DELAY_MS * attempt);
+          continue;
+        }
+
+        throw new Error(JSON.stringify(errorDetails));
+      }
+
+      return body;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < AUDIENCE_LAB_MAX_FETCH_ATTEMPTS) {
+        await sleep(AUDIENCE_LAB_RETRY_DELAY_MS * attempt);
+        continue;
+      }
+    }
   }
 
-  return body;
+  throw lastError;
 }
 
 function splitFirstValue(value) {
