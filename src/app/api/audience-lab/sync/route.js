@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const DEFAULT_BASE_URL = "https://api.audiencelab.io";
-const DEFAULT_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 500;
 const DEFAULT_TEST_ROW_LIMIT = 10;
 const MAX_PAGE_SIZE = 500;
 const MAX_TEST_ROW_LIMIT = 100;
