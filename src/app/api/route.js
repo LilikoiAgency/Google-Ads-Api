@@ -1,9 +1,63 @@
 import { NextResponse } from 'next/server';
 import { GoogleAdsApi } from 'google-ads-api';
 import { getCredentials } from '../../lib/dbFunctions';
+import util from 'node:util';
 
-export async function GET() {
+const ALLOWED_DATE_RANGES = new Set([
+    'LAST_7_DAYS',
+    'LAST_30_DAYS',
+    'LAST_90_DAYS',
+    'THIS_MONTH',
+]);
+
+function formatDateLiteral(date) {
+    return date.toISOString().slice(0, 10);
+}
+
+function getDateWindow(dateRange) {
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+
+    switch (dateRange) {
+        case 'LAST_7_DAYS':
+            startDate.setDate(endDate.getDate() - 6);
+            break;
+        case 'LAST_30_DAYS':
+            startDate.setDate(endDate.getDate() - 29);
+            break;
+        case 'LAST_90_DAYS':
+            startDate.setDate(endDate.getDate() - 89);
+            break;
+        case 'THIS_MONTH':
+            startDate.setDate(1);
+            break;
+        default:
+            startDate.setDate(endDate.getDate() - 6);
+    }
+
+    return {
+        startDate: formatDateLiteral(startDate),
+        endDate: formatDateLiteral(endDate),
+    };
+}
+
+function buildDateFilter(dateRange) {
+    const { startDate, endDate } = getDateWindow(dateRange);
+    return {
+        dateFilter: `segments.date BETWEEN '${startDate}' AND '${endDate}'`,
+        dateWindow: { startDate, endDate },
+    };
+}
+
+export async function GET(request) {
     try {
+        const { searchParams } = new URL(request.url);
+        const requestedDateRange = searchParams.get('dateRange');
+        const dateRange = ALLOWED_DATE_RANGES.has(requestedDateRange)
+            ? requestedDateRange
+            : 'LAST_7_DAYS';
+        const { dateFilter, dateWindow } = buildDateFilter(dateRange);
+
         // Fetch credentials from MongoDB
         const credentials = await getCredentials();
         // console.log("Fetched Credentials:", credentials);
@@ -51,12 +105,111 @@ export async function GET() {
                     login_customer_id: credentials.customer_id,
                 });
 
+                let optimizationScore = null;
+                let recommendations = [];
+                let trendRows = [];
+                let searchTermRows = [];
+
+                try {
+                    const customerSummary = await customer.query(`
+                        SELECT
+                            customer.id,
+                            customer.optimization_score
+                        FROM customer
+                        LIMIT 1
+                    `);
+
+                    optimizationScore =
+                        customerSummary?.[0]?.customer?.optimization_score ?? null;
+                } catch (error) {
+                    console.error(
+                        `Error fetching optimization score for customer ID ${customerId}:`,
+                        error
+                    );
+                }
+
+                try {
+                    const recommendationRows = await customer.query(`
+                        SELECT
+                            recommendation.resource_name,
+                            recommendation.type,
+                            recommendation.campaign
+                        FROM recommendation
+                        LIMIT 10
+                    `);
+
+                    recommendations = recommendationRows.map((recommendationRow) => ({
+                        resource_name:
+                            recommendationRow.recommendation.resource_name || '',
+                        type: recommendationRow.recommendation.type || 'UNSPECIFIED',
+                        campaign_resource_name:
+                            recommendationRow.recommendation.campaign || '',
+                    }));
+                } catch (error) {
+                    console.error(
+                        `Error fetching recommendations for customer ID ${customerId}:`,
+                        error
+                    );
+                }
+
+                try {
+                    trendRows = await customer.query(`
+                        SELECT
+                            campaign.id,
+                            segments.date,
+                            metrics.clicks,
+                            metrics.all_conversions,
+                            metrics.cost_micros
+                        FROM campaign
+                        WHERE
+                            campaign.status = 'ENABLED'
+                            AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
+                            AND campaign.serving_status = 'SERVING'
+                            AND ${dateFilter}
+                        ORDER BY segments.date
+                    `);
+                } catch (error) {
+                    console.error(
+                        `Error fetching trend data for customer ID ${customerId}:`,
+                        error
+                    );
+                }
+
+                try {
+                    searchTermRows = await customer.query(`
+                        SELECT
+                            campaign.id,
+                            campaign.name,
+                            ad_group.id,
+                            ad_group.name,
+                            search_term_view.search_term,
+                            metrics.clicks,
+                            metrics.impressions,
+                            metrics.ctr,
+                            metrics.all_conversions,
+                            metrics.cost_micros
+                        FROM search_term_view
+                        WHERE
+                            campaign.status = 'ENABLED'
+                            AND campaign.advertising_channel_type = 'SEARCH'
+                            AND ${dateFilter}
+                        ORDER BY metrics.clicks DESC
+                        LIMIT 100
+                    `);
+                } catch (error) {
+                    console.error(
+                        `Error fetching search terms for customer ID ${customerId}:`,
+                        error
+                    );
+                }
+
                 // Fetch the campaigns for the selected customer
                 const campaignQuery = `
                     SELECT
                         campaign.id,
                         campaign.name,
                         campaign.status,
+                        campaign.optimization_score,
                         campaign.advertising_channel_type,
                         campaign.resource_name,
                         metrics.clicks,
@@ -68,7 +221,7 @@ export async function GET() {
                         campaign.status = 'ENABLED'
                         AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
                         AND campaign.serving_status = 'SERVING'
-                        AND segments.date DURING LAST_7_DAYS
+                        AND ${dateFilter}
                     ORDER BY campaign.name
                 `;
 
@@ -87,10 +240,93 @@ export async function GET() {
                 // console.log(`Campaign details for customer ID ${customerId}:`, campaigns);
 
                 if (campaigns && campaigns.length > 0) {
+                    let optimizationDetailsByCampaignId = {};
+                    const trendDataByCampaignId = {};
+                    const customerTrendMap = new Map();
+                    const searchTermsByCampaignId = {};
+
+                    searchTermRows.forEach((row) => {
+                        const campaignId = row.campaign.id;
+                        const searchTerm = {
+                            term: row.search_term_view.search_term || '',
+                            campaignId,
+                            campaignName: row.campaign.name || '',
+                            adGroupId: row.ad_group.id || null,
+                            adGroupName: row.ad_group.name || '',
+                            clicks: row.metrics.clicks || 0,
+                            impressions: row.metrics.impressions || 0,
+                            ctr: row.metrics.ctr || 0,
+                            conversions: row.metrics.all_conversions || 0,
+                            cost: row.metrics.cost_micros || 0,
+                        };
+
+                        if (!searchTermsByCampaignId[campaignId]) {
+                            searchTermsByCampaignId[campaignId] = [];
+                        }
+
+                        searchTermsByCampaignId[campaignId].push(searchTerm);
+                    });
+
+                    trendRows.forEach((row) => {
+                        const campaignId = row.campaign.id;
+                        const point = {
+                            date: row.segments.date,
+                            clicks: row.metrics.clicks || 0,
+                            conversions: row.metrics.all_conversions || 0,
+                            cost: row.metrics.cost_micros || 0,
+                        };
+
+                        if (!trendDataByCampaignId[campaignId]) {
+                            trendDataByCampaignId[campaignId] = [];
+                        }
+                        trendDataByCampaignId[campaignId].push(point);
+
+                        const customerPoint = customerTrendMap.get(row.segments.date) || {
+                            date: row.segments.date,
+                            clicks: 0,
+                            conversions: 0,
+                            cost: 0,
+                        };
+                        customerPoint.clicks += row.metrics.clicks || 0;
+                        customerPoint.conversions += row.metrics.all_conversions || 0;
+                        customerPoint.cost += row.metrics.cost_micros || 0;
+                        customerTrendMap.set(row.segments.date, customerPoint);
+                    });
+
+                    try {
+                        const campaignOptimizationRows = await customer.query(`
+                            SELECT
+                                campaign.id,
+                                metrics.optimization_score_url,
+                                metrics.optimization_score_uplift
+                            FROM campaign
+                            WHERE campaign.status = 'ENABLED'
+                        `);
+
+                        optimizationDetailsByCampaignId = Object.fromEntries(
+                            campaignOptimizationRows.map((row) => [
+                                row.campaign.id,
+                                {
+                                    optimizationScoreUrl:
+                                        row.metrics.optimization_score_url || '',
+                                    optimizationScoreUplift:
+                                        row.metrics.optimization_score_uplift || null,
+                                },
+                            ])
+                        );
+                    } catch (error) {
+                        console.error(
+                            `Error fetching optimization metrics for customer ID ${customerId}:`,
+                            error
+                        );
+                    }
+
                     // If there are campaigns, fetch the ads for each campaign
                     const adsData = await Promise.all(
                         campaigns.map(async (campaign) => {
                             const campaignResourceName = campaign.campaign.resource_name;
+                            const optimizationDetails =
+                                optimizationDetailsByCampaignId[campaign.campaign.id] || {};
 
                             // Fetch ads for the campaign
                             const adGroupAdsQuery = `
@@ -115,9 +351,31 @@ export async function GET() {
                             return {
                                 campaignId: campaign.campaign.id,
                                 campaignName: campaign.campaign.name,
+                                resourceName: campaign.campaign.resource_name,
+                                status: campaign.campaign.status || 'UNKNOWN',
+                                channelType:
+                                    campaign.campaign.advertising_channel_type || 'UNKNOWN',
+                                optimizationScore:
+                                    campaign.campaign.optimization_score ?? null,
+                                optimizationScoreUrl:
+                                    optimizationDetails.optimizationScoreUrl || '',
+                                optimizationScoreUplift:
+                                    optimizationDetails.optimizationScoreUplift || null,
                                 conversions: campaign.metrics.all_conversions,
                                 clicks: campaign.metrics.clicks,
                                 cost: campaign.metrics.cost_micros,
+                                trend: trendDataByCampaignId[campaign.campaign.id] || [],
+                                searchTerms: (searchTermsByCampaignId[campaign.campaign.id] || [])
+                                    .sort((a, b) => {
+                                        if ((b.conversions || 0) !== (a.conversions || 0)) {
+                                            return (b.conversions || 0) - (a.conversions || 0);
+                                        }
+                                        if ((b.clicks || 0) !== (a.clicks || 0)) {
+                                            return (b.clicks || 0) - (a.clicks || 0);
+                                        }
+                                        return (b.impressions || 0) - (a.impressions || 0);
+                                    })
+                                    .slice(0, 12),
                                 ads: ads.map(ad => {
                                     const adData = ad.ad_group_ad?.ad || {};
                                     const rsa = adData.responsive_search_ad;
@@ -133,13 +391,61 @@ export async function GET() {
                         })
                     );
 
+                    const campaignNameByResourceName = Object.fromEntries(
+                        adsData.map((campaign) => [
+                            campaign.resourceName,
+                            campaign.campaignName,
+                        ])
+                    );
+
                     return {
                         customer: customerClient,
+                        optimizationScore,
+                        recommendations: recommendations.map((recommendation) => ({
+                            ...recommendation,
+                            campaignName:
+                                campaignNameByResourceName[
+                                    recommendation.campaign_resource_name
+                                ] || null,
+                        })),
+                        searchTerms: searchTermRows
+                            .map((row) => ({
+                                term: row.search_term_view.search_term || '',
+                                campaignId: row.campaign.id,
+                                campaignName: row.campaign.name || '',
+                                adGroupId: row.ad_group.id || null,
+                                adGroupName: row.ad_group.name || '',
+                                clicks: row.metrics.clicks || 0,
+                                impressions: row.metrics.impressions || 0,
+                                ctr: row.metrics.ctr || 0,
+                                conversions: row.metrics.all_conversions || 0,
+                                cost: row.metrics.cost_micros || 0,
+                            }))
+                            .sort((a, b) => {
+                                if ((b.conversions || 0) !== (a.conversions || 0)) {
+                                    return (b.conversions || 0) - (a.conversions || 0);
+                                }
+                                if ((b.clicks || 0) !== (a.clicks || 0)) {
+                                    return (b.clicks || 0) - (a.clicks || 0);
+                                }
+                                return (b.impressions || 0) - (a.impressions || 0);
+                            })
+                            .slice(0, 20),
+                        trend: Array.from(customerTrendMap.values()).sort((a, b) =>
+                            a.date.localeCompare(b.date)
+                        ),
                         campaigns: adsData
                     };
                 } else {
                     console.log(`No campaigns found for customer ID ${customerId}`);
-                    return null;
+                    return {
+                        customer: customerClient,
+                        optimizationScore,
+                        recommendations,
+                        searchTerms: [],
+                        trend: [],
+                        campaigns: [],
+                    };
                 }
             })
         );
@@ -148,13 +454,16 @@ export async function GET() {
         // Filter out null results
         const validCampaignsData = allCampaignData.filter(campaign => campaign !== null && campaign !== undefined);
 
-        const response = NextResponse.json({ validCampaignsData });
+        const response = NextResponse.json({ validCampaignsData, dateRange, dateWindow });
         response.headers.set('Cache-Control', 's-maxage=3600, stale-while-revalidate');
         return response;
     
 
     } catch (error) {
-        console.error('Error fetching data from Google Ads API:', error);
+        console.error(
+            'Error fetching data from Google Ads API:',
+            util.inspect(error, { depth: null, colors: false })
+        );
         return NextResponse.json({ error: 'Failed to fetch campaign data' }, { status: 500 });
     }
 }

@@ -9,16 +9,20 @@ async function saveTokensToDatabase(tokens) {
     const db = client.db('tokensApi'); // Specify your database name if necessary
 
     try {
+        const existingTokenData = (await db.collection('Tokens').findOne({})) || {};
+
         // Update or insert tokens into the 'Tokens' collection
         await db.collection('Tokens').updateOne(
             {}, // Filter: Update the first document found (you might want to modify this if you have specific criteria)
             {
                 $set: {
-                    GOOGLE_ADS_CLIENT_ID: process.env.GOOGLE_ADS_CLIENT_ID,
-                    GOOGLE_ADS_CLIENT_SECRET: process.env.GOOGLE_ADS_CLIENT_SECRET,
-                    GOOGLE_ADS_DEVELOPER_TOKEN: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
-                    GOOGLE_ADS_REFRESH_TOKEN: tokens.refresh_token,
-                    ACCESS_TOKEN: tokens.access_token,
+                    GOOGLE_ADS_CLIENT_ID: existingTokenData.GOOGLE_ADS_CLIENT_ID ?? process.env.GOOGLE_ADS_CLIENT_ID,
+                    GOOGLE_ADS_CLIENT_SECRET: existingTokenData.GOOGLE_ADS_CLIENT_SECRET ?? process.env.GOOGLE_ADS_CLIENT_SECRET,
+                    GOOGLE_ADS_DEVELOPER_TOKEN: existingTokenData.GOOGLE_ADS_DEVELOPER_TOKEN ?? process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+                    GOOGLE_ADS_REFRESH_TOKEN: tokens.refresh_token ?? existingTokenData.GOOGLE_ADS_REFRESH_TOKEN,
+                    ACCESS_TOKEN: tokens.access_token ?? existingTokenData.ACCESS_TOKEN,
+                    CUSTOMER_ID: existingTokenData.CUSTOMER_ID ?? process.env.CUSTOMER_ID,
+                    REDIRECT_URI: existingTokenData.REDIRECT_URI ?? process.env.REDIRECT_URI,
                 },
             },
             { upsert: true } // If no document matches the filter, insert a new document
