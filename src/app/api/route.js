@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { GoogleAdsApi } from 'google-ads-api';
 import { getCredentials } from '../../lib/dbFunctions';
 import util from 'node:util';
+import { getServerSession } from 'next-auth';
+import { authOptions, allowedEmailDomain } from '../../lib/auth';
 
 const ALLOWED_DATE_RANGES = new Set([
     'LAST_7_DAYS',
@@ -89,6 +91,13 @@ function sortDeviceRows(a, b) {
 
 export async function GET(request) {
     try {
+        const session = await getServerSession(authOptions);
+        const sessionEmail = session?.user?.email?.toLowerCase() || '';
+
+        if (!sessionEmail.endsWith(`@${allowedEmailDomain}`)) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const requestedDateRange = searchParams.get('dateRange');
         const dateRange = ALLOWED_DATE_RANGES.has(requestedDateRange)

@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import "../globals.css";
 import Sidebar from "./components/Sidebar";
 import ContentArea from "./components/ContentArea";
@@ -87,6 +89,9 @@ function resolveSelectedCampaign(campaignData, customerId, campaignSelection) {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
+  const { status } = useSession();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [allCampaignData, setAllCampaignData] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -136,6 +141,10 @@ export default function Dashboard() {
     forceRefresh = false,
     requestedDateRange = dateRange,
   } = {}) => {
+    if (status !== "authenticated") {
+      return;
+    }
+
     setIsFetching(true);
     setError(null);
 
@@ -154,6 +163,10 @@ export default function Dashboard() {
       const response = await fetch(`/api?dateRange=${requestedDateRange}`, {
         cache: "no-store",
       });
+      if (response.status === 401) {
+        router.replace("/?callbackUrl=/dashboard");
+        return;
+      }
       if (!response.ok) {
         throw new Error("Failed to fetch dashboard data");
       }
@@ -183,6 +196,15 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/?callbackUrl=/dashboard");
+      return;
+    }
+
+    if (status !== "authenticated") {
+      return;
+    }
+
     const storedDateRange = localStorage.getItem(SELECTED_DATE_RANGE_KEY);
     const nextDateRange = DATE_RANGE_OPTIONS.some(
       (option) => option.value === storedDateRange
@@ -195,7 +217,7 @@ export default function Dashboard() {
       setLastUpdated(storedLastUpdated);
     }
     fetchData({ requestedDateRange: nextDateRange });
-  }, []);
+  }, [router, status]);
 
   useEffect(() => {
     if (selectedCustomerId) {
@@ -226,6 +248,7 @@ export default function Dashboard() {
   const handleCustomerSelect = (customerId) => {
     setSelectedCustomerId(customerId);
     setSelectedCampaign(null);
+    setIsSidebarOpen(false);
   };
 
   const handleCampaignSelect = (campaignId) => {
@@ -237,6 +260,7 @@ export default function Dashboard() {
         (item) => item.campaignId === campaignId
       ) || null;
     setSelectedCampaign(campaign);
+    setIsSidebarOpen(false);
   };
 
   const refreshData = () => {
@@ -255,11 +279,11 @@ export default function Dashboard() {
     fetchData({ requestedDateRange: nextDateRange });
   };
 
-  if (isFetching && allCampaignData.length === 0 && !error) {
+  if (status === "loading" || (isFetching && allCampaignData.length === 0 && !error)) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-white">
         <h2 className="text-2xl text-customPurple mb-4">
-          Pulling Data From Google....
+          {status === "loading" ? "Checking login..." : "Pulling Data From Google...."}
         </h2>
         <img
           src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
@@ -290,62 +314,109 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-customPurple-dark sm:flex-row">
-      <aside className="w-full flex-shrink-0 bg-customPurple-dark sm:w-80 sm:min-w-[16rem]">
-        <Sidebar
-          customers={allCampaignData}
-          selectedCustomerId={selectedCustomerId}
-          selectedCampaign={selectedCampaign}
-          handleCustomerSelect={handleCustomerSelect}
-          handleCampaignSelect={handleCampaignSelect}
-          lastUpdated={lastUpdated}
-          refreshData={refreshData}
-        />
-      </aside>
-
-      <main className="mt-4 flex-1 min-w-0 bg-gray-50 p-4 sm:mr-4 sm:mt-8 sm:rounded-t-2xl sm:p-6">
-        <div className="mb-6 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wide text-gray-500">
-              Reporting Range
-            </p>
-            <p className="text-lg font-semibold text-customPurple">
-              {DATE_RANGE_OPTIONS.find((option) => option.value === dateRange)?.label}
-            </p>
-            <p className="mt-1 text-sm text-gray-500">
-              {dateWindowLabel || "Fetching date window..."}
-            </p>
+    <div className="min-h-screen bg-customPurple-dark">
+      <header className="border-b border-white/10 bg-customPurple-dark px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img
+              src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png"
+              alt="Lilikoi Agency"
+              className="h-10 w-10 rounded-full"
+            />
+            <div>
+              <p className="text-lg font-semibold text-white">Lilikoi Agency</p>
+              <p className="text-sm text-gray-300">Google Ads Dashboard</p>
+            </div>
           </div>
-          <label className="flex items-center gap-3 text-sm text-gray-600">
-            <span>Date range</span>
-            <select
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
-              onChange={handleDateRangeChange}
-              value={dateRange}
-            >
-              {DATE_RANGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.22em] text-gray-300 sm:block">
+            Internal reporting
+          </div>
         </div>
-        {isFetching && (
-          <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Refreshing dashboard data for this date range...
+      </header>
+
+      <div className="flex flex-col sm:flex-row">
+        <aside
+          className={`w-full flex-shrink-0 bg-customPurple-dark sm:w-80 sm:min-w-[16rem] ${
+            isSidebarOpen ? "block" : "hidden"
+          } sm:block`}
+        >
+          <Sidebar
+            customers={allCampaignData}
+            selectedCustomerId={selectedCustomerId}
+            selectedCampaign={selectedCampaign}
+            handleCustomerSelect={handleCustomerSelect}
+            handleCampaignSelect={handleCampaignSelect}
+            lastUpdated={lastUpdated}
+            refreshData={refreshData}
+            closeSidebar={() => setIsSidebarOpen(false)}
+          />
+        </aside>
+
+        <main className="min-w-0 flex-1 bg-gray-50 p-4 sm:mr-4 sm:mt-8 sm:rounded-t-2xl sm:p-6">
+          <div className="mb-4 flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm sm:hidden">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                Account Navigation
+              </p>
+              <p className="mt-1 text-sm font-semibold text-customPurple">
+                {selectedCampaign?.campaignName ||
+                  allCampaignData.find(
+                    (item) => item.customer.customer_client.id === selectedCustomerId
+                  )?.customer.customer_client.descriptive_name ||
+                  "Select an account"}
+              </p>
+            </div>
+            <button
+              className="rounded-xl bg-customPurple px-4 py-2 text-sm font-semibold text-white hover:bg-customPurple-light"
+              onClick={() => setIsSidebarOpen((currentValue) => !currentValue)}
+              type="button"
+            >
+              {isSidebarOpen ? "Close" : "Accounts"}
+            </button>
           </div>
-        )}
-        <ContentArea
-          customerId={selectedCustomerId}
-          selectedCampaign={selectedCampaign}
-          allCampaignData={allCampaignData}
-          handleCampaignSelect={handleCampaignSelect}
-          dateRangeLabel={
-            DATE_RANGE_OPTIONS.find((option) => option.value === dateRange)?.label
-          }
-        />
-      </main>
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-gray-500">
+                Reporting Range
+              </p>
+              <p className="text-lg font-semibold text-customPurple">
+                {DATE_RANGE_OPTIONS.find((option) => option.value === dateRange)?.label}
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                {dateWindowLabel || "Fetching date window..."}
+              </p>
+            </div>
+            <label className="flex items-center gap-3 text-sm text-gray-600">
+              <span>Date range</span>
+              <select
+                className="min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+                onChange={handleDateRangeChange}
+                value={dateRange}
+              >
+                {DATE_RANGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {isFetching && (
+            <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              Refreshing dashboard data for this date range...
+            </div>
+          )}
+          <ContentArea
+            customerId={selectedCustomerId}
+            selectedCampaign={selectedCampaign}
+            allCampaignData={allCampaignData}
+            handleCampaignSelect={handleCampaignSelect}
+            dateRangeLabel={
+              DATE_RANGE_OPTIONS.find((option) => option.value === dateRange)?.label
+            }
+          />
+        </main>
+      </div>
     </div>
   );
 }
