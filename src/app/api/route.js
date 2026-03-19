@@ -335,6 +335,7 @@ export async function GET(request) {
 
                 if (campaigns && campaigns.length > 0) {
                     let optimizationDetailsByCampaignId = {};
+                    let impressionShareByCampaignId = {};
                     const trendDataByCampaignId = {};
                     const customerTrendMap = new Map();
                     const searchTermsByCampaignId = {};
@@ -539,12 +540,48 @@ export async function GET(request) {
                         );
                     }
 
+                    try {
+                        const campaignImpressionShareRows = await customer.query(`
+                            SELECT
+                                campaign.id,
+                                metrics.search_impression_share,
+                                metrics.search_budget_lost_impression_share,
+                                metrics.search_rank_lost_impression_share
+                            FROM campaign
+                            WHERE
+                                campaign.status = 'ENABLED'
+                                AND campaign.advertising_channel_type = 'SEARCH'
+                                AND campaign.serving_status = 'SERVING'
+                        `);
+
+                        impressionShareByCampaignId = Object.fromEntries(
+                            campaignImpressionShareRows.map((row) => [
+                                row.campaign.id,
+                                {
+                                    searchImpressionShare:
+                                        row.metrics.search_impression_share ?? null,
+                                    searchBudgetLostImpressionShare:
+                                        row.metrics.search_budget_lost_impression_share ?? null,
+                                    searchRankLostImpressionShare:
+                                        row.metrics.search_rank_lost_impression_share ?? null,
+                                },
+                            ])
+                        );
+                    } catch (error) {
+                        console.error(
+                            `Error fetching impression share metrics for customer ID ${customerId}:`,
+                            error
+                        );
+                    }
+
                     // If there are campaigns, fetch the ads for each campaign
                     const adsData = await Promise.all(
                         campaigns.map(async (campaign) => {
                             const campaignResourceName = campaign.campaign.resource_name;
                             const optimizationDetails =
                                 optimizationDetailsByCampaignId[campaign.campaign.id] || {};
+                            const impressionShareDetails =
+                                impressionShareByCampaignId[campaign.campaign.id] || {};
 
                             // Fetch ads for the campaign
                             const adGroupAdsQuery = `
@@ -579,6 +616,12 @@ export async function GET(request) {
                                     optimizationDetails.optimizationScoreUrl || '',
                                 optimizationScoreUplift:
                                     optimizationDetails.optimizationScoreUplift || null,
+                                searchImpressionShare:
+                                    impressionShareDetails.searchImpressionShare ?? null,
+                                searchBudgetLostImpressionShare:
+                                    impressionShareDetails.searchBudgetLostImpressionShare ?? null,
+                                searchRankLostImpressionShare:
+                                    impressionShareDetails.searchRankLostImpressionShare ?? null,
                                 conversions: campaign.metrics.all_conversions,
                                 clicks: campaign.metrics.clicks,
                                 cost: campaign.metrics.cost_micros,
@@ -617,6 +660,19 @@ export async function GET(request) {
                     );
 
                     return {
+                        accountSearchImpressionShareAverage:
+                            adsData.length > 0
+                                ? (() => {
+                                      const values = adsData
+                                          .map((campaign) => campaign.searchImpressionShare)
+                                          .filter((value) => value !== null && value !== undefined);
+                                      if (!values.length) return null;
+                                      return (
+                                          values.reduce((sum, value) => sum + Number(value || 0), 0) /
+                                          values.length
+                                      );
+                                  })()
+                                : null,
                         customer: customerClient,
                         optimizationScore,
                         recommendations: recommendations.map((recommendation) => ({
@@ -654,6 +710,7 @@ export async function GET(request) {
                     console.log(`No campaigns found for customer ID ${customerId}`);
                     return {
                         customer: customerClient,
+                        accountSearchImpressionShareAverage: null,
                         optimizationScore,
                         recommendations,
                         searchTerms: [],

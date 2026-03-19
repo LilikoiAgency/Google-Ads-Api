@@ -155,6 +155,17 @@ function formatDevice(value) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function InfoBadge({ title }) {
+  return (
+    <span
+      className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-gray-500 ring-1 ring-gray-300"
+      title={title}
+    >
+      i
+    </span>
+  );
+}
+
 function calculateTrendDelta(data, accessor) {
   if (!data?.length || data.length < 2) {
     return null;
@@ -287,6 +298,11 @@ export default function ContentArea({
     customerData?.optimizationScore !== undefined
       ? Number(customerData.optimizationScore) * 100
       : null;
+  const accountSearchImpressionShareAverage =
+    customerData?.accountSearchImpressionShareAverage !== null &&
+    customerData?.accountSearchImpressionShareAverage !== undefined
+      ? Number(customerData.accountSearchImpressionShareAverage)
+      : null;
   const recommendations = customerData?.recommendations || [];
   const groupedRecommendations = Object.values(
     recommendations.reduce((groups, recommendation) => {
@@ -351,6 +367,11 @@ export default function ContentArea({
     selectedCampaign?.optimizationScore !== null &&
     selectedCampaign?.optimizationScore !== undefined
       ? Number(selectedCampaign.optimizationScore) * 100
+      : null;
+  const campaignSearchImpressionShare =
+    selectedCampaign?.searchImpressionShare !== null &&
+    selectedCampaign?.searchImpressionShare !== undefined
+      ? Number(selectedCampaign.searchImpressionShare)
       : null;
   const campaignRecommendations = recommendations.filter(
     (recommendation) =>
@@ -460,6 +481,17 @@ export default function ContentArea({
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500">
+                  Search Impression Share
+                  <InfoBadge title="The percentage of eligible search impressions this campaign actually received." />
+                </p>
+                <p className="text-xl font-semibold text-sky-600">
+                  {campaignSearchImpressionShare !== null
+                    ? formatPercent(campaignSearchImpressionShare)
+                    : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">
                   Cost per Click (CPC)
                 </p>
                 <p className="text-xl font-semibold text-yellow-600">
@@ -478,6 +510,30 @@ export default function ContentArea({
                 <p className="text-xs font-medium text-gray-500">Total Spend</p>
                 <p className="text-2xl font-bold text-red-600">
                   {formatCurrency(spend)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">
+                  Lost IS (Budget)
+                  <InfoBadge title="The share of eligible search impressions this campaign missed because budget was too limited." />
+                </p>
+                <p className="text-lg font-semibold text-amber-600">
+                  {selectedCampaign?.searchBudgetLostImpressionShare !== null &&
+                  selectedCampaign?.searchBudgetLostImpressionShare !== undefined
+                    ? formatPercent(selectedCampaign.searchBudgetLostImpressionShare)
+                    : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">
+                  Lost IS (Rank)
+                  <InfoBadge title="The share of eligible search impressions this campaign missed because ad rank was not competitive enough." />
+                </p>
+                <p className="text-lg font-semibold text-rose-600">
+                  {selectedCampaign?.searchRankLostImpressionShare !== null &&
+                  selectedCampaign?.searchRankLostImpressionShare !== undefined
+                    ? formatPercent(selectedCampaign.searchRankLostImpressionShare)
+                    : "-"}
                 </p>
               </div>
               {selectedCampaign?.optimizationScoreUrl && (
@@ -908,6 +964,17 @@ export default function ContentArea({
               <p className="mt-2 text-2xl font-bold text-customPurple">
                 {accountOptimizationScore !== null
                   ? `${accountOptimizationScore.toFixed(1)}%`
+                  : "-"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                Avg. Search IS
+                <InfoBadge title="Average search impression share across campaigns in this account. Higher means your ads captured more of the impressions they were eligible for." />
+              </p>
+              <p className="mt-2 text-2xl font-bold text-sky-600">
+                {accountSearchImpressionShareAverage !== null
+                  ? formatPercent(accountSearchImpressionShareAverage)
                   : "-"}
               </p>
             </div>
@@ -1389,6 +1456,12 @@ export default function ContentArea({
                           }{" "}
                           rec
                         </span>
+                        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                          {campaign.searchImpressionShare !== null &&
+                          campaign.searchImpressionShare !== undefined
+                            ? `${formatPercent(campaign.searchImpressionShare)} IS`
+                            : "No IS"}
+                        </span>
                       </div>
                     </div>
                     <div className="text-right">
@@ -1401,7 +1474,7 @@ export default function ContentArea({
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 text-sm text-gray-600 md:grid-cols-4">
+                  <div className="mt-4 grid gap-3 text-sm text-gray-600 md:grid-cols-3 xl:grid-cols-6">
                     <div>
                       <span className="block text-xs uppercase tracking-wide text-gray-400">
                         Conversions
@@ -1437,6 +1510,28 @@ export default function ContentArea({
                                 1_000_000 /
                                 Number(campaign.conversions || 0)
                             )
+                          : "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-xs uppercase tracking-wide text-gray-400">
+                        Lost IS (Budget)
+                      </span>
+                      <span className="font-semibold text-amber-600">
+                        {campaign.searchBudgetLostImpressionShare !== null &&
+                        campaign.searchBudgetLostImpressionShare !== undefined
+                          ? formatPercent(campaign.searchBudgetLostImpressionShare)
+                          : "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-xs uppercase tracking-wide text-gray-400">
+                        Lost IS (Rank)
+                      </span>
+                      <span className="font-semibold text-rose-600">
+                        {campaign.searchRankLostImpressionShare !== null &&
+                        campaign.searchRankLostImpressionShare !== undefined
+                          ? formatPercent(campaign.searchRankLostImpressionShare)
                           : "-"}
                       </span>
                     </div>
