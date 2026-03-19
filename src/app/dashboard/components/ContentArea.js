@@ -132,6 +132,29 @@ function formatPercent(value, digits = 1) {
   return `${(Number(value) * 100).toFixed(digits)}%`;
 }
 
+function formatDevice(value) {
+  const deviceMap = {
+    0: "Unspecified",
+    1: "Unknown",
+    2: "Mobile",
+    3: "Tablet",
+    4: "Desktop",
+    5: "Connected TV",
+    6: "Other",
+  };
+
+  const normalizedValue = String(value || "UNSPECIFIED");
+
+  if (deviceMap[normalizedValue]) {
+    return deviceMap[normalizedValue];
+  }
+
+  return normalizedValue
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 function calculateTrendDelta(data, accessor) {
   if (!data?.length || data.length < 2) {
     return null;
@@ -252,6 +275,8 @@ export default function ContentArea({
   const [showCampaignRecommendations, setShowCampaignRecommendations] = useState(false);
   const [showAllAccountSearchTerms, setShowAllAccountSearchTerms] = useState(false);
   const [showAllCampaignSearchTerms, setShowAllCampaignSearchTerms] = useState(false);
+  const [showAllAccountLandingPages, setShowAllAccountLandingPages] = useState(false);
+  const [showAllCampaignLandingPages, setShowAllCampaignLandingPages] = useState(false);
   const [campaignSort, setCampaignSort] = useState("conversions");
   const customerData = allCampaignData.find(
     (item) => item.customer.customer_client.id === customerId
@@ -317,6 +342,8 @@ export default function ContentArea({
   });
   const customerTrend = customerData?.trend || [];
   const accountSearchTerms = customerData?.searchTerms || [];
+  const accountLandingPages = customerData?.landingPages || [];
+  const accountDevices = customerData?.devices || [];
   const spend = (selectedCampaign?.cost || 0) / 1_000_000;
   const clicks = selectedCampaign?.clicks || 0;
   const conversions = Number(selectedCampaign?.conversions || 0);
@@ -362,12 +389,20 @@ export default function ContentArea({
     totalConversions > 0 ? totalSpend / totalConversions : null;
   const campaignTrend = selectedCampaign?.trend || [];
   const campaignSearchTerms = selectedCampaign?.searchTerms || [];
+  const campaignLandingPages = selectedCampaign?.landingPages || [];
+  const campaignDevices = selectedCampaign?.devices || [];
   const visibleAccountSearchTerms = showAllAccountSearchTerms
     ? accountSearchTerms
     : accountSearchTerms.slice(0, 5);
   const visibleCampaignSearchTerms = showAllCampaignSearchTerms
     ? campaignSearchTerms
     : campaignSearchTerms.slice(0, 5);
+  const visibleAccountLandingPages = showAllAccountLandingPages
+    ? accountLandingPages
+    : accountLandingPages.slice(0, 5);
+  const visibleCampaignLandingPages = showAllCampaignLandingPages
+    ? campaignLandingPages
+    : campaignLandingPages.slice(0, 5);
 
   if (!customerData) {
     return (
@@ -481,6 +516,72 @@ export default function ContentArea({
               formatter={(value) => Number(value).toFixed(1)}
               label="Conversions Trend"
             />
+          </div>
+          <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-customPurple">
+                  Device Breakdown
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Clicks, conversions, and spend by device for this campaign
+                </p>
+              </div>
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                {campaignDevices.length} devices
+              </span>
+            </div>
+            {campaignDevices.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                      <th className="pb-3 pr-4 font-medium">Device</th>
+                      <th className="pb-3 pr-4 font-medium">Clicks</th>
+                      <th className="pb-3 pr-4 font-medium">Conversions</th>
+                      <th className="pb-3 pr-4 font-medium">CTR</th>
+                      <th className="pb-3 pr-4 font-medium">Spend</th>
+                      <th className="pb-3 font-medium">CPA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campaignDevices.map((device) => (
+                      <tr
+                        key={device.device}
+                        className="border-b border-gray-100 align-top last:border-b-0"
+                      >
+                        <td className="py-3 pr-4 font-medium text-gray-900">
+                          {formatDevice(device.device)}
+                        </td>
+                        <td className="py-3 pr-4 text-blue-600">{device.clicks || 0}</td>
+                        <td className="py-3 pr-4 text-green-600">
+                          {Number(device.conversions || 0).toFixed(1)}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-700">
+                          {formatPercent(device.ctr)}
+                        </td>
+                        <td className="py-3 pr-4 text-red-600">
+                          {formatCurrency((device.cost || 0) / 1_000_000)}
+                        </td>
+                        <td className="py-3 text-orange-600">
+                          {Number(device.conversions || 0) > 0
+                            ? formatCurrency(
+                                (device.cost || 0) /
+                                  1_000_000 /
+                                  Number(device.conversions || 0)
+                              )
+                            : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No device breakdown was returned for this campaign.
+              </p>
+            )}
           </div>
           <div className="mb-8 rounded-2xl border border-gray-100 bg-gray-50 p-4">
             <button
@@ -630,6 +731,104 @@ export default function ContentArea({
               <p className="text-sm text-gray-600">
                 No search terms were returned for this campaign in the selected
                 range.
+              </p>
+            )}
+          </div>
+          <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-customPurple">
+                  Top Landing Pages
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Best-performing destination pages for this campaign over{" "}
+                  {dateRangeLabel.toLowerCase()}
+                </p>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                {campaignLandingPages.length} pages
+              </span>
+            </div>
+            {campaignLandingPages.length > 0 ? (
+              <div>
+                <div className="relative overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                        <th className="pb-3 pr-4 font-medium">Landing Page</th>
+                        <th className="pb-3 pr-4 font-medium">Ad Group</th>
+                        <th className="pb-3 pr-4 font-medium">Clicks</th>
+                        <th className="pb-3 pr-4 font-medium">Conv.</th>
+                        <th className="pb-3 pr-4 font-medium">CTR</th>
+                        <th className="pb-3 pr-4 font-medium">Spend</th>
+                        <th className="pb-3 font-medium">CPA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleCampaignLandingPages.map((page, index) => (
+                        <tr
+                          key={`${page.url}-${page.adGroupId || index}`}
+                          className="border-b border-gray-100 align-top last:border-b-0"
+                        >
+                          <td className="py-3 pr-4 font-medium text-gray-900">
+                            <a
+                              className="break-all text-blue-700 underline hover:text-blue-900"
+                              href={page.url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              {page.url}
+                            </a>
+                          </td>
+                          <td className="py-3 pr-4 text-gray-600">
+                            {page.adGroupName || "-"}
+                          </td>
+                          <td className="py-3 pr-4 text-blue-600">{page.clicks || 0}</td>
+                          <td className="py-3 pr-4 text-green-600">
+                            {Number(page.conversions || 0).toFixed(1)}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-700">
+                            {formatPercent(page.ctr)}
+                          </td>
+                          <td className="py-3 pr-4 text-red-600">
+                            {formatCurrency((page.cost || 0) / 1_000_000)}
+                          </td>
+                          <td className="py-3 text-orange-600">
+                            {Number(page.conversions || 0) > 0
+                              ? formatCurrency(
+                                  (page.cost || 0) /
+                                    1_000_000 /
+                                    Number(page.conversions || 0)
+                                )
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!showAllCampaignLandingPages && campaignLandingPages.length > 5 && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white via-white/95 to-transparent" />
+                  )}
+                </div>
+                {campaignLandingPages.length > 5 && (
+                  <div className="mt-4 flex justify-center">
+                    <button
+                      className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+                      onClick={() =>
+                        setShowAllCampaignLandingPages((currentValue) => !currentValue)
+                      }
+                      type="button"
+                    >
+                      {showAllCampaignLandingPages
+                        ? "Collapse landing pages"
+                        : `View all ${campaignLandingPages.length} landing pages`}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No landing page performance rows were returned for this campaign.
               </p>
             )}
           </div>
@@ -793,6 +992,72 @@ export default function ContentArea({
               formatter={(value) => Number(value).toFixed(1)}
               label="Conversions Trend"
             />
+          </div>
+          <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-customPurple">
+                  Device Breakdown
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Conversions, clicks, and spend by device across this account
+                </p>
+              </div>
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                {accountDevices.length} devices
+              </span>
+            </div>
+            {accountDevices.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                      <th className="pb-3 pr-4 font-medium">Device</th>
+                      <th className="pb-3 pr-4 font-medium">Clicks</th>
+                      <th className="pb-3 pr-4 font-medium">Conversions</th>
+                      <th className="pb-3 pr-4 font-medium">CTR</th>
+                      <th className="pb-3 pr-4 font-medium">Spend</th>
+                      <th className="pb-3 font-medium">CPA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accountDevices.map((device) => (
+                      <tr
+                        key={device.device}
+                        className="border-b border-gray-100 align-top last:border-b-0"
+                      >
+                        <td className="py-3 pr-4 font-medium text-gray-900">
+                          {formatDevice(device.device)}
+                        </td>
+                        <td className="py-3 pr-4 text-blue-600">{device.clicks || 0}</td>
+                        <td className="py-3 pr-4 text-green-600">
+                          {Number(device.conversions || 0).toFixed(1)}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-700">
+                          {formatPercent(device.ctr)}
+                        </td>
+                        <td className="py-3 pr-4 text-red-600">
+                          {formatCurrency((device.cost || 0) / 1_000_000)}
+                        </td>
+                        <td className="py-3 text-orange-600">
+                          {Number(device.conversions || 0) > 0
+                            ? formatCurrency(
+                                (device.cost || 0) /
+                                  1_000_000 /
+                                  Number(device.conversions || 0)
+                              )
+                            : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No device breakdown was returned for this account.
+              </p>
+            )}
           </div>
           <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4">
             <button
@@ -961,6 +1226,104 @@ export default function ContentArea({
               <p className="text-sm text-gray-600">
                 No search terms were returned for this account in the selected
                 range.
+              </p>
+            )}
+          </div>
+          <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-customPurple">
+                  Top Landing Pages
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Best-performing destination pages across this account for{" "}
+                  {dateRangeLabel.toLowerCase()}
+                </p>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                {accountLandingPages.length} pages
+              </span>
+            </div>
+            {accountLandingPages.length > 0 ? (
+              <div>
+                <div className="relative overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                        <th className="pb-3 pr-4 font-medium">Landing Page</th>
+                        <th className="pb-3 pr-4 font-medium">Campaign</th>
+                        <th className="pb-3 pr-4 font-medium">Clicks</th>
+                        <th className="pb-3 pr-4 font-medium">Conv.</th>
+                        <th className="pb-3 pr-4 font-medium">CTR</th>
+                        <th className="pb-3 pr-4 font-medium">Spend</th>
+                        <th className="pb-3 font-medium">CPA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleAccountLandingPages.map((page, index) => (
+                        <tr
+                          key={`${page.url}-${index}`}
+                          className="border-b border-gray-100 align-top last:border-b-0"
+                        >
+                          <td className="py-3 pr-4 font-medium text-gray-900">
+                            <a
+                              className="break-all text-blue-700 underline hover:text-blue-900"
+                              href={page.url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              {page.url}
+                            </a>
+                          </td>
+                          <td className="py-3 pr-4 text-gray-700">
+                            {page.campaignName || "-"}
+                          </td>
+                          <td className="py-3 pr-4 text-blue-600">{page.clicks || 0}</td>
+                          <td className="py-3 pr-4 text-green-600">
+                            {Number(page.conversions || 0).toFixed(1)}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-700">
+                            {formatPercent(page.ctr)}
+                          </td>
+                          <td className="py-3 pr-4 text-red-600">
+                            {formatCurrency((page.cost || 0) / 1_000_000)}
+                          </td>
+                          <td className="py-3 text-orange-600">
+                            {Number(page.conversions || 0) > 0
+                              ? formatCurrency(
+                                  (page.cost || 0) /
+                                    1_000_000 /
+                                    Number(page.conversions || 0)
+                                )
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!showAllAccountLandingPages && accountLandingPages.length > 5 && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white via-white/95 to-transparent" />
+                  )}
+                </div>
+                {accountLandingPages.length > 5 && (
+                  <div className="mt-4 flex justify-center">
+                    <button
+                      className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+                      onClick={() =>
+                        setShowAllAccountLandingPages((currentValue) => !currentValue)
+                      }
+                      type="button"
+                    >
+                      {showAllAccountLandingPages
+                        ? "Collapse landing pages"
+                        : `View all ${accountLandingPages.length} landing pages`}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No landing page performance rows were returned for this account.
               </p>
             )}
           </div>

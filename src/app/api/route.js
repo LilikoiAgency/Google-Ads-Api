@@ -49,6 +49,44 @@ function buildDateFilter(dateRange) {
     };
 }
 
+function normalizeLandingPageUrl(value) {
+    if (!value) return null;
+
+    try {
+        const url = new URL(String(value));
+        url.search = '';
+        url.hash = '';
+
+        if (url.pathname !== '/' && url.pathname.endsWith('/')) {
+            url.pathname = url.pathname.slice(0, -1);
+        }
+
+        return url.toString();
+    } catch {
+        return String(value).trim() || null;
+    }
+}
+
+function sortPerformanceRows(a, b) {
+    if ((b.conversions || 0) !== (a.conversions || 0)) {
+        return (b.conversions || 0) - (a.conversions || 0);
+    }
+    if ((b.clicks || 0) !== (a.clicks || 0)) {
+        return (b.clicks || 0) - (a.clicks || 0);
+    }
+    return (b.impressions || 0) - (a.impressions || 0);
+}
+
+function sortDeviceRows(a, b) {
+    if ((b.conversions || 0) !== (a.conversions || 0)) {
+        return (b.conversions || 0) - (a.conversions || 0);
+    }
+    if ((b.clicks || 0) !== (a.clicks || 0)) {
+        return (b.clicks || 0) - (a.clicks || 0);
+    }
+    return (b.cost || 0) - (a.cost || 0);
+}
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -109,6 +147,8 @@ export async function GET(request) {
                 let recommendations = [];
                 let trendRows = [];
                 let searchTermRows = [];
+                let landingPageRows = [];
+                let deviceRows = [];
 
                 try {
                     const customerSummary = await customer.query(`
@@ -203,6 +243,60 @@ export async function GET(request) {
                     );
                 }
 
+                try {
+                    landingPageRows = await customer.query(`
+                        SELECT
+                            campaign.id,
+                            campaign.name,
+                            ad_group.id,
+                            ad_group.name,
+                            ad_group_ad.ad.final_urls,
+                            metrics.clicks,
+                            metrics.impressions,
+                            metrics.ctr,
+                            metrics.all_conversions,
+                            metrics.cost_micros
+                        FROM ad_group_ad
+                        WHERE
+                            campaign.status = 'ENABLED'
+                            AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
+                            AND campaign.serving_status = 'SERVING'
+                            AND ad_group.status = 'ENABLED'
+                            AND ad_group_ad.status = 'ENABLED'
+                            AND ${dateFilter}
+                    `);
+                } catch (error) {
+                    console.error(
+                        `Error fetching landing pages for customer ID ${customerId}:`,
+                        error
+                    );
+                }
+
+                try {
+                    deviceRows = await customer.query(`
+                        SELECT
+                            campaign.id,
+                            campaign.name,
+                            segments.device,
+                            metrics.clicks,
+                            metrics.impressions,
+                            metrics.ctr,
+                            metrics.all_conversions,
+                            metrics.cost_micros
+                        FROM campaign
+                        WHERE
+                            campaign.status = 'ENABLED'
+                            AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
+                            AND campaign.serving_status = 'SERVING'
+                            AND ${dateFilter}
+                    `);
+                } catch (error) {
+                    console.error(
+                        `Error fetching device performance for customer ID ${customerId}:`,
+                        error
+                    );
+                }
+
                 // Fetch the campaigns for the selected customer
                 const campaignQuery = `
                     SELECT
@@ -244,6 +338,10 @@ export async function GET(request) {
                     const trendDataByCampaignId = {};
                     const customerTrendMap = new Map();
                     const searchTermsByCampaignId = {};
+                    const landingPagesByCampaignId = {};
+                    const accountLandingPagesMap = new Map();
+                    const devicesByCampaignId = {};
+                    const accountDevicesMap = new Map();
 
                     searchTermRows.forEach((row) => {
                         const campaignId = row.campaign.id;
@@ -265,6 +363,126 @@ export async function GET(request) {
                         }
 
                         searchTermsByCampaignId[campaignId].push(searchTerm);
+                    });
+
+                    landingPageRows.forEach((row) => {
+                        const campaignId = row.campaign.id;
+                        const normalizedUrl = normalizeLandingPageUrl(
+                            row.ad_group_ad?.ad?.final_urls?.[0]
+                        );
+
+                        if (!normalizedUrl) {
+                            return;
+                        }
+
+                        const baseRow = {
+                            url: normalizedUrl,
+                            campaignId,
+                            campaignName: row.campaign.name || '',
+                            adGroupId: row.ad_group.id || null,
+                            adGroupName: row.ad_group.name || '',
+                            clicks: row.metrics.clicks || 0,
+                            impressions: row.metrics.impressions || 0,
+                            ctr: row.metrics.ctr || 0,
+                            conversions: row.metrics.all_conversions || 0,
+                            cost: row.metrics.cost_micros || 0,
+                        };
+
+                        if (!landingPagesByCampaignId[campaignId]) {
+                            landingPagesByCampaignId[campaignId] = new Map();
+                        }
+
+                        const campaignLandingPagesMap = landingPagesByCampaignId[campaignId];
+                        const existingCampaignPage = campaignLandingPagesMap.get(normalizedUrl) || {
+                            ...baseRow,
+                            adGroupName: row.ad_group.name || '',
+                            ctr: 0,
+                            clicks: 0,
+                            impressions: 0,
+                            conversions: 0,
+                            cost: 0,
+                        };
+
+                        existingCampaignPage.clicks += row.metrics.clicks || 0;
+                        existingCampaignPage.impressions += row.metrics.impressions || 0;
+                        existingCampaignPage.conversions += row.metrics.all_conversions || 0;
+                        existingCampaignPage.cost += row.metrics.cost_micros || 0;
+                        existingCampaignPage.ctr =
+                            existingCampaignPage.impressions > 0
+                                ? existingCampaignPage.clicks / existingCampaignPage.impressions
+                                : 0;
+                        campaignLandingPagesMap.set(normalizedUrl, existingCampaignPage);
+
+                        const existingAccountPage = accountLandingPagesMap.get(normalizedUrl) || {
+                            url: normalizedUrl,
+                            campaignName: row.campaign.name || '',
+                            adGroupName: row.ad_group.name || '',
+                            clicks: 0,
+                            impressions: 0,
+                            conversions: 0,
+                            cost: 0,
+                            ctr: 0,
+                        };
+
+                        existingAccountPage.clicks += row.metrics.clicks || 0;
+                        existingAccountPage.impressions += row.metrics.impressions || 0;
+                        existingAccountPage.conversions += row.metrics.all_conversions || 0;
+                        existingAccountPage.cost += row.metrics.cost_micros || 0;
+                        existingAccountPage.ctr =
+                            existingAccountPage.impressions > 0
+                                ? existingAccountPage.clicks / existingAccountPage.impressions
+                                : 0;
+                        accountLandingPagesMap.set(normalizedUrl, existingAccountPage);
+                    });
+
+                    deviceRows.forEach((row) => {
+                        const campaignId = row.campaign.id;
+                        const device = row.segments.device || 'UNSPECIFIED';
+
+                        if (!devicesByCampaignId[campaignId]) {
+                            devicesByCampaignId[campaignId] = new Map();
+                        }
+
+                        const campaignDevicesMap = devicesByCampaignId[campaignId];
+                        const existingCampaignDevice = campaignDevicesMap.get(device) || {
+                            device,
+                            campaignId,
+                            campaignName: row.campaign.name || '',
+                            clicks: 0,
+                            impressions: 0,
+                            conversions: 0,
+                            cost: 0,
+                            ctr: 0,
+                        };
+
+                        existingCampaignDevice.clicks += row.metrics.clicks || 0;
+                        existingCampaignDevice.impressions += row.metrics.impressions || 0;
+                        existingCampaignDevice.conversions += row.metrics.all_conversions || 0;
+                        existingCampaignDevice.cost += row.metrics.cost_micros || 0;
+                        existingCampaignDevice.ctr =
+                            existingCampaignDevice.impressions > 0
+                                ? existingCampaignDevice.clicks / existingCampaignDevice.impressions
+                                : 0;
+                        campaignDevicesMap.set(device, existingCampaignDevice);
+
+                        const existingAccountDevice = accountDevicesMap.get(device) || {
+                            device,
+                            clicks: 0,
+                            impressions: 0,
+                            conversions: 0,
+                            cost: 0,
+                            ctr: 0,
+                        };
+
+                        existingAccountDevice.clicks += row.metrics.clicks || 0;
+                        existingAccountDevice.impressions += row.metrics.impressions || 0;
+                        existingAccountDevice.conversions += row.metrics.all_conversions || 0;
+                        existingAccountDevice.cost += row.metrics.cost_micros || 0;
+                        existingAccountDevice.ctr =
+                            existingAccountDevice.impressions > 0
+                                ? existingAccountDevice.clicks / existingAccountDevice.impressions
+                                : 0;
+                        accountDevicesMap.set(device, existingAccountDevice);
                     });
 
                     trendRows.forEach((row) => {
@@ -366,16 +584,16 @@ export async function GET(request) {
                                 cost: campaign.metrics.cost_micros,
                                 trend: trendDataByCampaignId[campaign.campaign.id] || [],
                                 searchTerms: (searchTermsByCampaignId[campaign.campaign.id] || [])
-                                    .sort((a, b) => {
-                                        if ((b.conversions || 0) !== (a.conversions || 0)) {
-                                            return (b.conversions || 0) - (a.conversions || 0);
-                                        }
-                                        if ((b.clicks || 0) !== (a.clicks || 0)) {
-                                            return (b.clicks || 0) - (a.clicks || 0);
-                                        }
-                                        return (b.impressions || 0) - (a.impressions || 0);
-                                    })
+                                    .sort(sortPerformanceRows)
                                     .slice(0, 12),
+                                landingPages: Array.from(
+                                    (landingPagesByCampaignId[campaign.campaign.id] || new Map()).values()
+                                )
+                                    .sort(sortPerformanceRows)
+                                    .slice(0, 12),
+                                devices: Array.from(
+                                    (devicesByCampaignId[campaign.campaign.id] || new Map()).values()
+                                ).sort(sortDeviceRows),
                                 ads: ads.map(ad => {
                                     const adData = ad.ad_group_ad?.ad || {};
                                     const rsa = adData.responsive_search_ad;
@@ -421,16 +639,12 @@ export async function GET(request) {
                                 conversions: row.metrics.all_conversions || 0,
                                 cost: row.metrics.cost_micros || 0,
                             }))
-                            .sort((a, b) => {
-                                if ((b.conversions || 0) !== (a.conversions || 0)) {
-                                    return (b.conversions || 0) - (a.conversions || 0);
-                                }
-                                if ((b.clicks || 0) !== (a.clicks || 0)) {
-                                    return (b.clicks || 0) - (a.clicks || 0);
-                                }
-                                return (b.impressions || 0) - (a.impressions || 0);
-                            })
+                            .sort(sortPerformanceRows)
                             .slice(0, 20),
+                        landingPages: Array.from(accountLandingPagesMap.values())
+                            .sort(sortPerformanceRows)
+                            .slice(0, 20),
+                        devices: Array.from(accountDevicesMap.values()).sort(sortDeviceRows),
                         trend: Array.from(customerTrendMap.values()).sort((a, b) =>
                             a.date.localeCompare(b.date)
                         ),
@@ -443,6 +657,8 @@ export async function GET(request) {
                         optimizationScore,
                         recommendations,
                         searchTerms: [],
+                        landingPages: [],
+                        devices: [],
                         trend: [],
                         campaigns: [],
                     };
