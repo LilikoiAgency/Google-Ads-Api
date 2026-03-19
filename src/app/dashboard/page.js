@@ -35,6 +35,20 @@ function formatDateInputValue(date) {
     .slice(0, 10);
 }
 
+function parseDateLiteral(value) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
 function getDefaultCustomDateRange() {
   const endDate = new Date();
   const startDate = new Date();
@@ -85,9 +99,14 @@ function formatDateWindow(dateWindow) {
     year: "numeric",
   });
 
-  return `${formatter.format(new Date(dateWindow.startDate))} - ${formatter.format(
-    new Date(dateWindow.endDate)
-  )}`;
+  const startDate = parseDateLiteral(dateWindow.startDate);
+  const endDate = parseDateLiteral(dateWindow.endDate);
+
+  if (!startDate || !endDate) {
+    return null;
+  }
+
+  return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 }
 
 function getStoredCampaignData(dateRange, statusFilter, customDateRange) {
