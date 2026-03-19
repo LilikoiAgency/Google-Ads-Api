@@ -51,12 +51,19 @@ const SEGMENT_TABLE_CONFIG = [
     envVar: "AUDIENCE_LAB_SMP_SOLAR_SEGMENT_ID",
     queryParam: "smpSolarSegmentId",
   },
+  {
+    key: "smp_windows_sd_sf",
+    tableId: "smp_interested_windows_sd_sf_segment",
+    envVar: "AUDIENCE_LAB_SMP_WINDOWS_SD_SF_SEGMENT_ID",
+    queryParam: "smpWindowsSdSfSegmentId",
+  },
 ];
 
 const TARGET_ALIASES = {
   bbt: "bbt_turf",
   cmk: "cmk_kitchen_bath",
   smp: "smp_roofing",
+  smp_windows: "smp_windows_sd_sf",
 };
 
 const TABLE_SCHEMA_FIELDS = [
@@ -70,6 +77,7 @@ const TABLE_SCHEMA_FIELDS = [
   { name: "city", type: "STRING", mode: "NULLABLE" },
   { name: "state", type: "STRING", mode: "NULLABLE" },
   { name: "zip", type: "STRING", mode: "NULLABLE" },
+  { name: "country", type: "STRING", mode: "NULLABLE" },
 ];
 
 function trimTrailingSlash(value) {
@@ -369,6 +377,7 @@ function toBigQueryRow(rawRow, segmentName, batchTimestamp) {
     city: rawRow?.PERSONAL_CITY || null,
     state: rawRow?.PERSONAL_STATE || null,
     zip: splitFirstValue(rawRow?.PERSONAL_ZIP || rawRow?.SKIPTRACE_ZIP) || null,
+    country: "US",
   };
 }
 
@@ -787,7 +796,7 @@ export async function GET(request) {
     return new Response(
       JSON.stringify({
         error:
-          "Invalid target. Use target=all, target=bbt_turf, target=cmk_kitchen_bath, target=smp_roofing, or target=smp_solar.",
+          "Invalid target. Use target=all, target=bbt_turf, target=cmk_kitchen_bath, target=smp_roofing, target=smp_solar, or target=smp_windows_sd_sf.",
         runId: logState.runId,
       }),
       {
@@ -838,7 +847,7 @@ export async function GET(request) {
     return new Response(
       JSON.stringify({
         error:
-          "No segment IDs provided. Configure segment env vars (AUDIENCE_LAB_BBT_TURF_SEGMENT_ID, AUDIENCE_LAB_CMK_KITCHEN_BATH_SEGMENT_ID, AUDIENCE_LAB_SMP_ROOFING_SEGMENT_ID, AUDIENCE_LAB_SMP_SOLAR_SEGMENT_ID) or pass target query params.",
+          "No segment IDs provided. Configure segment env vars (AUDIENCE_LAB_BBT_TURF_SEGMENT_ID, AUDIENCE_LAB_CMK_KITCHEN_BATH_SEGMENT_ID, AUDIENCE_LAB_SMP_ROOFING_SEGMENT_ID, AUDIENCE_LAB_SMP_SOLAR_SEGMENT_ID, AUDIENCE_LAB_SMP_WINDOWS_SD_SF_SEGMENT_ID) or pass target query params.",
         target: requestedTarget,
         runId: logState.runId,
       }),
