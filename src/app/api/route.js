@@ -10,10 +10,21 @@ const ALLOWED_DATE_RANGES = new Set([
     'LAST_30_DAYS',
     'LAST_90_DAYS',
     'THIS_MONTH',
+    'CUSTOM',
+]);
+
+const ALLOWED_CAMPAIGN_STATUS_FILTERS = new Set([
+    'ACTIVE',
+    'INACTIVE',
+    'ALL',
 ]);
 
 function formatDateLiteral(date) {
     return date.toISOString().slice(0, 10);
+}
+
+function isValidDateLiteral(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
 }
 
 function getDateWindow(dateRange) {
@@ -43,12 +54,45 @@ function getDateWindow(dateRange) {
     };
 }
 
-function buildDateFilter(dateRange) {
-    const { startDate, endDate } = getDateWindow(dateRange);
+function buildDateFilter(dateRange, customStartDate, customEndDate) {
+    let dateWindow;
+
+    if (dateRange === 'CUSTOM') {
+        if (!isValidDateLiteral(customStartDate) || !isValidDateLiteral(customEndDate)) {
+            throw new Error('Invalid custom date range');
+        }
+
+        if (customStartDate > customEndDate) {
+            throw new Error('Custom start date must be on or before the end date');
+        }
+
+        dateWindow = {
+            startDate: customStartDate,
+            endDate: customEndDate,
+        };
+    } else {
+        dateWindow = getDateWindow(dateRange);
+    }
+
+    const { startDate, endDate } = dateWindow;
     return {
         dateFilter: `segments.date BETWEEN '${startDate}' AND '${endDate}'`,
-        dateWindow: { startDate, endDate },
+        dateWindow,
     };
+}
+
+function getCampaignStatusCondition(statusFilter, { includeServingStatus = true } = {}) {
+    switch (statusFilter) {
+        case 'INACTIVE':
+            return "campaign.status IN ('PAUSED', 'REMOVED')";
+        case 'ALL':
+            return 'campaign.id IS NOT NULL';
+        case 'ACTIVE':
+        default:
+            return includeServingStatus
+                ? "campaign.status = 'ENABLED' AND campaign.serving_status = 'SERVING'"
+                : "campaign.status = 'ENABLED'";
+    }
 }
 
 function normalizeLandingPageUrl(value) {
@@ -103,7 +147,21 @@ export async function GET(request) {
         const dateRange = ALLOWED_DATE_RANGES.has(requestedDateRange)
             ? requestedDateRange
             : 'LAST_7_DAYS';
-        const { dateFilter, dateWindow } = buildDateFilter(dateRange);
+        const requestedStatusFilter = searchParams.get('statusFilter');
+        const statusFilter = ALLOWED_CAMPAIGN_STATUS_FILTERS.has(requestedStatusFilter)
+            ? requestedStatusFilter
+            : 'ACTIVE';
+        const customStartDate = searchParams.get('startDate');
+        const customEndDate = searchParams.get('endDate');
+        const { dateFilter, dateWindow } = buildDateFilter(
+            dateRange,
+            customStartDate,
+            customEndDate
+        );
+        const campaignStatusCondition = getCampaignStatusCondition(statusFilter);
+        const campaignStatusConditionWithoutServing = getCampaignStatusCondition(statusFilter, {
+            includeServingStatus: false,
+        });
 
         // Fetch credentials from MongoDB
         const credentials = await getCredentials();
@@ -211,9 +269,8 @@ export async function GET(request) {
                             metrics.cost_micros
                         FROM campaign
                         WHERE
-                            campaign.status = 'ENABLED'
+                            ${campaignStatusCondition}
                             AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
-                            AND campaign.serving_status = 'SERVING'
                             AND ${dateFilter}
                         ORDER BY segments.date
                     `);
@@ -239,7 +296,7 @@ export async function GET(request) {
                             metrics.cost_micros
                         FROM search_term_view
                         WHERE
-                            campaign.status = 'ENABLED'
+                            ${campaignStatusConditionWithoutServing}
                             AND campaign.advertising_channel_type = 'SEARCH'
                             AND ${dateFilter}
                         ORDER BY metrics.clicks DESC
@@ -267,9 +324,8 @@ export async function GET(request) {
                             metrics.cost_micros
                         FROM ad_group_ad
                         WHERE
-                            campaign.status = 'ENABLED'
+                            ${campaignStatusCondition}
                             AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
-                            AND campaign.serving_status = 'SERVING'
                             AND ad_group.status = 'ENABLED'
                             AND ad_group_ad.status = 'ENABLED'
                             AND ${dateFilter}
@@ -294,9 +350,8 @@ export async function GET(request) {
                             metrics.cost_micros
                         FROM campaign
                         WHERE
-                            campaign.status = 'ENABLED'
+                            ${campaignStatusCondition}
                             AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
-                            AND campaign.serving_status = 'SERVING'
                             AND ${dateFilter}
                     `);
                 } catch (error) {
@@ -321,9 +376,8 @@ export async function GET(request) {
                     FROM
                         campaign
                     WHERE
-                        campaign.status = 'ENABLED'
+                        ${campaignStatusCondition}
                         AND campaign.advertising_channel_type != 'LOCAL_SERVICES'
-                        AND campaign.serving_status = 'SERVING'
                         AND ${dateFilter}
                     ORDER BY campaign.name
                 `;
@@ -334,8 +388,6 @@ export async function GET(request) {
                 let campaigns = [];
                 try {
                     campaigns = await customer.query(campaignQuery);
-                    console.log(`Campaigns for customer ${customerId}:`, JSON.stringify(campaigns, null, 2));
-
                 } catch (error) {
                     console.error(`Error fetching campaigns for customer ID ${customerId}:`, error);
                 }
@@ -528,7 +580,7 @@ export async function GET(request) {
                                 metrics.optimization_score_url,
                                 metrics.optimization_score_uplift
                             FROM campaign
-                            WHERE campaign.status = 'ENABLED'
+                            WHERE ${campaignStatusConditionWithoutServing}
                         `);
 
                         optimizationDetailsByCampaignId = Object.fromEntries(
@@ -536,9 +588,9 @@ export async function GET(request) {
                                 row.campaign.id,
                                 {
                                     optimizationScoreUrl:
-                                        row.metrics.optimization_score_url || '',
+                                        row.metrics?.optimization_score_url || '',
                                     optimizationScoreUplift:
-                                        row.metrics.optimization_score_uplift || null,
+                                        row.metrics?.optimization_score_uplift || null,
                                 },
                             ])
                         );
@@ -558,9 +610,8 @@ export async function GET(request) {
                                 metrics.search_rank_lost_impression_share
                             FROM campaign
                             WHERE
-                                campaign.status = 'ENABLED'
+                                ${campaignStatusCondition}
                                 AND campaign.advertising_channel_type = 'SEARCH'
-                                AND campaign.serving_status = 'SERVING'
                         `);
 
                         impressionShareByCampaignId = Object.fromEntries(
@@ -568,11 +619,11 @@ export async function GET(request) {
                                 row.campaign.id,
                                 {
                                     searchImpressionShare:
-                                        row.metrics.search_impression_share ?? null,
+                                        row.metrics?.search_impression_share ?? null,
                                     searchBudgetLostImpressionShare:
-                                        row.metrics.search_budget_lost_impression_share ?? null,
+                                        row.metrics?.search_budget_lost_impression_share ?? null,
                                     searchRankLostImpressionShare:
-                                        row.metrics.search_rank_lost_impression_share ?? null,
+                                        row.metrics?.search_rank_lost_impression_share ?? null,
                                 },
                             ])
                         );
@@ -736,7 +787,12 @@ export async function GET(request) {
         // Filter out null results
         const validCampaignsData = allCampaignData.filter(campaign => campaign !== null && campaign !== undefined);
 
-        const response = NextResponse.json({ validCampaignsData, dateRange, dateWindow });
+        const response = NextResponse.json({
+            validCampaignsData,
+            dateRange,
+            dateWindow,
+            statusFilter,
+        });
         response.headers.set('Cache-Control', 's-maxage=3600, stale-while-revalidate');
         return response;
     

@@ -111,6 +111,28 @@ function buildTrendAreaPath(data, accessor, height) {
 }
 
 function formatChannelType(value) {
+  const channelTypeMap = {
+    0: "Unspecified",
+    2: "Search",
+    3: "Display",
+    4: "Shopping",
+    5: "Hotel",
+    6: "Video",
+    7: "Multichannel",
+    8: "Local",
+    9: "Smart",
+    10: "Performance Max",
+    11: "Local Services",
+    12: "Demand Gen",
+    13: "Travel",
+  };
+
+  const normalizedValue = String(value || "UNKNOWN");
+
+  if (channelTypeMap[normalizedValue]) {
+    return channelTypeMap[normalizedValue];
+  }
+
   return String(value || "UNKNOWN")
     .replaceAll("_", " ")
     .toLowerCase()
@@ -118,6 +140,20 @@ function formatChannelType(value) {
 }
 
 function formatStatus(value) {
+  const statusMap = {
+    0: "Unspecified",
+    1: "Unknown",
+    2: "Enabled",
+    3: "Paused",
+    4: "Removed",
+  };
+
+  const normalizedValue = String(value || "UNKNOWN");
+
+  if (statusMap[normalizedValue]) {
+    return statusMap[normalizedValue];
+  }
+
   return String(value || "UNKNOWN")
     .replaceAll("_", " ")
     .toLowerCase()
@@ -445,9 +481,19 @@ export default function ContentArea({
           <h2 className="mb-4 text-2xl font-semibold text-customPurple">
             Customer: {customerName}
           </h2>
-          <h3 className="mb-8 text-lg font-semibold text-customPurple">
-            Selected Campaign: {selectedCampaign.campaignName}
-          </h3>
+          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="text-lg font-semibold text-customPurple">
+              Selected Campaign: {selectedCampaign.campaignName}
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                {formatStatus(selectedCampaign.status)}
+              </span>
+              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                {formatChannelType(selectedCampaign.channelType)}
+              </span>
+            </div>
+          </div>
           <div className="mb-8 max-w-md rounded-3xl bg-white p-6 shadow-lg">
             <div className="mb-4 flex justify-between">
               <h3 className="text-lg font-bold text-customPurple">
@@ -459,6 +505,12 @@ export default function ContentArea({
             </div>
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+              <div>
+                <p className="text-xs font-medium text-gray-500">Status</p>
+                <p className="text-xl font-semibold text-gray-700">
+                  {formatStatus(selectedCampaign.status)}
+                </p>
+              </div>
               <div>
                 <p className="text-xs font-medium text-gray-500">Conversions</p>
                 <p className="text-xl font-semibold text-green-600">

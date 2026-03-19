@@ -8,6 +8,9 @@ export default function Sidebar({
   selectedCampaign,
   handleCustomerSelect,
   handleCampaignSelect,
+  campaignStatusFilter,
+  campaignStatusOptions,
+  onCampaignStatusFilterChange,
   lastUpdated,
   refreshData,
   closeSidebar,
@@ -26,7 +29,40 @@ export default function Sidebar({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1 sm:pr-1">
+      <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <label className="block text-xs font-medium uppercase tracking-[0.24em] text-gray-400">
+          Status
+        </label>
+        <div className="relative mt-3">
+          <select
+            className="w-full appearance-none rounded-xl border border-white/10 bg-white/10 px-4 py-3 pr-10 text-sm font-semibold text-white outline-none transition hover:bg-white/15 focus:border-white/30 focus:bg-white/15"
+            onChange={(event) => onCampaignStatusFilterChange(event.target.value)}
+            value={campaignStatusFilter}
+          >
+            {campaignStatusOptions.map((option) => (
+              <option key={option.value} value={option.value} className="text-slate-900">
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <svg
+            aria-hidden="true"
+            className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-300"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.8"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <div className="sidebar-scrollbar flex-1 overflow-y-auto pr-1 sm:pr-1">
         {visibleCustomers.length === 0 ? (
           <div className="rounded-xl bg-customPurple p-4 text-sm text-gray-200">
             No campaign data is available yet for the connected accounts.
