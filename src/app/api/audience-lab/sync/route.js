@@ -8,6 +8,7 @@ const DEFAULT_PAGE_SIZE = 500;
 const DEFAULT_TEST_ROW_LIMIT = 10;
 const MAX_PAGE_SIZE = 500;
 const MAX_TEST_ROW_LIMIT = 100;
+const MIN_FALLBACK_PAGE_SIZE = 100;
 const BIGQUERY_INSERT_BATCH_SIZE = 500;
 const AUDIENCE_LAB_MAX_FETCH_ATTEMPTS = 8;
 const AUDIENCE_LAB_RETRY_DELAY_MS = 1000;
@@ -139,6 +140,12 @@ function getMissingEnvVars() {
 function toPositiveInt(value, fallback, max = Number.MAX_SAFE_INTEGER) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(Math.floor(parsed), max);
+}
+
+function toNonNegativeInt(value, fallback = 0, max = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return Math.min(Math.floor(parsed), max);
 }
 
@@ -577,6 +584,20 @@ function summarizeDryRunPayload(payload) {
   };
 }
 
+function buildFallbackPageSizes(initialPageSize) {
+  const sizes = [initialPageSize];
+
+  if (initialPageSize > 250) {
+    sizes.push(250);
+  }
+
+  if (initialPageSize > MIN_FALLBACK_PAGE_SIZE) {
+    sizes.push(MIN_FALLBACK_PAGE_SIZE);
+  }
+
+  return [...new Set(sizes)];
+}
+
 function buildSyncFailureError(error, partialResult, extraDetails = {}) {
   const message = String(error?.message || "Audience Lab sync failed.");
   const wrappedError = new Error(message);
@@ -600,11 +621,27 @@ function safeErrorDetails(error) {
   }
 }
 
+function extractStatusCode(error) {
+  const details = safeErrorDetails(error);
+  if (typeof details === "object" && details !== null) {
+    return (
+      details.status ||
+      details?.details?.status ||
+      error?.code ||
+      error?.response?.status ||
+      null
+    );
+  }
+
+  return error?.code || error?.response?.status || null;
+}
+
 async function syncSingleTarget({
   target,
   baseUrl,
   headers,
   pageSize,
+  startOffset,
   writeEnabled,
   maxPages,
   includePreviewRows,
@@ -628,6 +665,10 @@ async function syncSingleTarget({
     batchCountMatched: null,
     preview: null,
     testRows: [],
+    startOffset,
+    nextOffset: startOffset,
+    initialPageSize: pageSize,
+    activePageSize: pageSize,
   };
 
   if (!target.segmentId) {
@@ -653,7 +694,10 @@ async function syncSingleTarget({
     });
   }
 
-  let page = 1;
+  const fallbackPageSizes = buildFallbackPageSizes(pageSize);
+  let fallbackPageSizeIndex = 0;
+  let activePageSize = fallbackPageSizes[fallbackPageSizeIndex];
+  let rowOffset = startOffset;
   let hasMore = true;
   logInfo(logState, "target.start", {
     target: target.key,
@@ -661,15 +705,19 @@ async function syncSingleTarget({
     segmentId: target.segmentId,
     writeEnabled,
     pageSize,
+    startOffset,
+    fallbackPageSizes,
   });
 
-  try {
-    while (hasMore) {
-      const segmentUrl = new URL(`${baseUrl}/segments/${target.segmentId}`);
-      segmentUrl.searchParams.set("page", String(page));
-      segmentUrl.searchParams.set("page_size", String(pageSize));
+  while (hasMore) {
+    const page = Math.floor(rowOffset / activePageSize) + 1;
+    const segmentUrl = new URL(`${baseUrl}/segments/${target.segmentId}`);
+    segmentUrl.searchParams.set("page", String(page));
+    segmentUrl.searchParams.set("page_size", String(activePageSize));
 
-      const payload = await fetchAudienceLabJson(
+    let payload;
+    try {
+      payload = await fetchAudienceLabJson(
         segmentUrl.toString(),
         headers,
         (retryDetails) => {
@@ -677,73 +725,125 @@ async function syncSingleTarget({
             target: target.key,
             tableId: target.tableId,
             page,
+            pageSize: activePageSize,
+            offset: rowOffset,
             ...retryDetails,
           });
         }
       );
-      const dataRows = Array.isArray(payload?.data) ? payload.data : [];
+    } catch (error) {
+      const status = Number(extractStatusCode(error));
+      const hasFallbackPageSize = fallbackPageSizeIndex < fallbackPageSizes.length - 1;
+      const shouldFallback =
+        hasFallbackPageSize && (status === 429 || (Number.isFinite(status) && status >= 500));
 
-      result.segmentName = payload?.segment_name || result.segmentName;
-      result.pagesFetched += 1;
-      result.sourceRecords += dataRows.length;
-      result.lastCompletedPage = page;
-      if (!result.preview) {
-        result.preview = summarizeDryRunPayload(payload);
+      if (shouldFallback) {
+        const previousPageSize = activePageSize;
+        fallbackPageSizeIndex += 1;
+        activePageSize = fallbackPageSizes[fallbackPageSizeIndex];
+        result.activePageSize = activePageSize;
+        logInfo(logState, "target.page_size.fallback", {
+          target: target.key,
+          tableId: target.tableId,
+          failedPage: page,
+          offset: rowOffset,
+          previousPageSize,
+          nextPageSize: activePageSize,
+          status,
+          details: safeErrorDetails(error),
+        });
+        continue;
       }
 
-      const preparedRows = dataRows.map((rawRow) =>
-        toBigQueryRow(rawRow, result.segmentName, batchTimestamp)
+      result.failed = true;
+      result.failedPage = page;
+      result.failedPageSize = activePageSize;
+      result.nextOffset = rowOffset;
+      throw buildSyncFailureError(error, result, {
+        failedPage: page,
+        failedPageSize: activePageSize,
+        lastCompletedPage: result.lastCompletedPage || 0,
+        rowsInsertedBeforeFailure: result.rowsInserted,
+        pagesFetchedBeforeFailure: result.pagesFetched,
+        nextOffset: rowOffset,
+      });
+    }
+
+    const dataRows = Array.isArray(payload?.data) ? payload.data : [];
+
+    result.segmentName = payload?.segment_name || result.segmentName;
+    result.pagesFetched += 1;
+    result.sourceRecords += dataRows.length;
+    result.lastCompletedPage = page;
+    result.lastCompletedPageSize = activePageSize;
+    if (!result.preview) {
+      result.preview = summarizeDryRunPayload(payload);
+    }
+
+    const preparedRows = dataRows.map((rawRow) =>
+      toBigQueryRow(rawRow, result.segmentName, batchTimestamp)
+    );
+    result.rowsPrepared += preparedRows.length;
+    logInfo(logState, "target.page.fetched", {
+      target: target.key,
+      tableId: target.tableId,
+      page,
+      pageSize: activePageSize,
+      offset: rowOffset,
+      rows: dataRows.length,
+      totalRecords: payload?.total_records ?? null,
+      totalPages: payload?.total_pages ?? null,
+    });
+
+    if (includePreviewRows && result.testRows.length < previewRowLimit) {
+      const remaining = previewRowLimit - result.testRows.length;
+      result.testRows.push(...preparedRows.slice(0, remaining));
+    }
+
+    if (writeEnabled && preparedRows.length) {
+      const insertResult = await insertRows(
+        bigquery,
+        projectId,
+        datasetId,
+        target.tableId,
+        preparedRows
       );
-      result.rowsPrepared += preparedRows.length;
-      logInfo(logState, "target.page.fetched", {
+      result.rowsInserted += insertResult.inserted;
+      logInfo(logState, "target.page.inserted", {
         target: target.key,
         tableId: target.tableId,
         page,
-        rows: dataRows.length,
-        totalRecords: payload?.total_records ?? null,
-        totalPages: payload?.total_pages ?? null,
+        pageSize: activePageSize,
+        offset: rowOffset,
+        inserted: insertResult.inserted,
+        cumulativeInserted: result.rowsInserted,
       });
-
-      if (includePreviewRows && result.testRows.length < previewRowLimit) {
-        const remaining = previewRowLimit - result.testRows.length;
-        result.testRows.push(...preparedRows.slice(0, remaining));
-      }
-
-      if (writeEnabled && preparedRows.length) {
-        const insertResult = await insertRows(
-          bigquery,
-          projectId,
-          datasetId,
-          target.tableId,
-          preparedRows
-        );
-        result.rowsInserted += insertResult.inserted;
-        logInfo(logState, "target.page.inserted", {
-          target: target.key,
-          tableId: target.tableId,
-          page,
-          inserted: insertResult.inserted,
-          cumulativeInserted: result.rowsInserted,
-        });
-      }
-
-      const totalPages = Number(payload?.total_pages || 1);
-      const payloadHasMore = Boolean(payload?.has_more);
-      hasMore = payloadHasMore || page < totalPages;
-      if (!writeEnabled && result.pagesFetched >= maxPages) {
-        hasMore = false;
-      }
-      page += 1;
     }
-  } catch (error) {
-    result.failed = true;
-    result.failedPage = page;
-    throw buildSyncFailureError(error, result, {
-      failedPage: page,
-      lastCompletedPage: result.lastCompletedPage || 0,
-      rowsInsertedBeforeFailure: result.rowsInserted,
-      pagesFetchedBeforeFailure: result.pagesFetched,
-    });
+
+    rowOffset += dataRows.length;
+    result.nextOffset = rowOffset;
+    result.activePageSize = activePageSize;
+
+    const totalRecords = Number(payload?.total_records || 0);
+    const totalPages = Number(payload?.total_pages || 1);
+    const payloadHasMore = Boolean(payload?.has_more);
+    hasMore =
+      payloadHasMore ||
+      (Number.isFinite(totalRecords) && totalRecords > 0
+        ? rowOffset < totalRecords
+        : dataRows.length > 0 && page < totalPages);
+
+    if (!writeEnabled && result.pagesFetched >= maxPages) {
+      hasMore = false;
+    }
+
+    if (dataRows.length < activePageSize && !payloadHasMore && (!totalRecords || rowOffset >= totalRecords)) {
+      hasMore = false;
+    }
+
+    if (dataRows.length === 0) {
+      hasMore = false;
+    }
   }
 
   logInfo(logState, "target.complete", {
@@ -827,6 +927,10 @@ export async function GET(request) {
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE
   );
+  const startPage = toPositiveInt(searchParams.get("start_page"), 1);
+  const startOffset = searchParams.has("start_offset")
+    ? toNonNegativeInt(searchParams.get("start_offset"), 0)
+    : (startPage - 1) * pageSize;
 
   if (writeEnabled && !writesAllowed) {
     logError(logState, "write.blocked", { mode, writesAllowed });
@@ -922,6 +1026,8 @@ export async function GET(request) {
     target: requestedTarget,
     selectedTargets: selectedTargets.map((target) => target.key),
     pageSize,
+    startPage,
+    startOffset,
     batchTimestamp,
     projectId,
     datasetId,
@@ -941,6 +1047,7 @@ export async function GET(request) {
         baseUrl,
         headers,
         pageSize,
+        startOffset,
         writeEnabled,
         maxPages: writeEnabled ? Number.MAX_SAFE_INTEGER : dryRunMaxPages,
         includePreviewRows: !writeEnabled && isTestMode,
