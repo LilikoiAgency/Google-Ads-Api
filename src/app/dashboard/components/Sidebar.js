@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { SignOutButton } from "../../components/AuthActions";
 
 export default function Sidebar({
@@ -122,6 +123,13 @@ export default function Sidebar({
       </div>
 
       <div className="mt-8 border-t border-white/10 pt-5">
+        <Link
+          href="/report"
+          className="mb-4 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
+        >
+          <span>📊</span>
+          <span>Paid vs. Organic Report</span>
+        </Link>
         <div className="text-sm text-gray-400">
           Last Updated: {lastUpdated || "Not synced yet"}
         </div>

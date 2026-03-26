@@ -20,6 +20,7 @@ export async function getCredentials() {
             refresh_token: tokenData.GOOGLE_ADS_REFRESH_TOKEN,
             redirect_uri: tokenData.REDIRECT_URI,
             customer_id: tokenData.CUSTOMER_ID,
+            anthropic_api_key: tokenData.ANTHROPIC_API_KEY,
         };
 
         return cachedCredentials; // Return the fetched credentials
