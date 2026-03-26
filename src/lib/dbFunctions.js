@@ -3,6 +3,10 @@ import dbConnect from './mongoose';
 let cachedCredentials = null; // Variable to store cached credentials
 
 export async function getCredentials() {
+    // Bust cache if anthropic_api_key is missing (e.g. key was added to DB after this lambda cold-started)
+    if (cachedCredentials && !cachedCredentials.anthropic_api_key) {
+        cachedCredentials = null;
+    }
     if (cachedCredentials) return cachedCredentials; // Return cached credentials if available
 
     const client = await dbConnect();

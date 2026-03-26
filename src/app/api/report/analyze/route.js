@@ -47,7 +47,14 @@ export async function POST(request) {
     }
 
     const credentials = await getCredentials();
-    const client = new Anthropic({ apiKey: credentials.anthropic_api_key });
+    const apiKey = credentials.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+        return NextResponse.json(
+            { error: 'Anthropic API key not configured — add ANTHROPIC_API_KEY to your MongoDB Tokens document.' },
+            { status: 500 }
+        );
+    }
+    const client = new Anthropic({ apiKey });
 
     const { meta, summary, campaigns, stopBidding, wastedSpend, opportunities, overlap } = body;
 
