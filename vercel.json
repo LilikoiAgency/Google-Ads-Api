@@ -24,6 +24,14 @@
     {
       "path": "/api/audience-lab/sync?mode=write&target=smp_windows_sd_sf",
       "schedule": "40 12 * * 1"
+    },
+    {
+      "path": "/api/audience-lab/sync?mode=write&target=cmk_kitchen_bath_sar",
+      "schedule": "50 12 * * 1"
+    },
+    {
+      "path": "/api/audience-lab/sync?mode=write&target=ranger_electric",
+      "schedule": "0 13 * * 1"
     }
   ]
 }

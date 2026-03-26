@@ -58,6 +58,18 @@ const SEGMENT_TABLE_CONFIG = [
     envVar: "AUDIENCE_LAB_SMP_WINDOWS_SD_SF_SEGMENT_ID",
     queryParam: "smpWindowsSdSfSegmentId",
   },
+  {
+    key: "cmk_kitchen_bath_sar",
+    tableId: "cmk_interested_kitchen_bath_remodel_sar_segment",
+    envVar: "AUDIENCE_LAB_CMK_KITCHEN_BATH_SAR_SEGMENT_ID",
+    queryParam: "cmkKitchenBathSarSegmentId",
+  },
+  {
+    key: "ranger_electric",
+    tableId: "ranger_interested_electric_segment",
+    envVar: "AUDIENCE_LAB_RANGER_ELECTRIC_SEGMENT_ID",
+    queryParam: "rangerElectricSegmentId",
+  },
 ];
 
 const TARGET_ALIASES = {
