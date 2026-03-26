@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import "../../../globals.css";
-import Sidebar from "../../components/Sidebar";
 import ContentArea from "../../components/ContentArea";
 
 const DATE_RANGE_OPTIONS = [
@@ -160,10 +159,122 @@ function AccountDropdown({ accounts, selectedId, onChange }) {
   );
 }
 
+// ─── Campaign dropdown ────────────────────────────────────────────────────────
+
+// Google Ads API returns status as a number: 2=ENABLED, 3=PAUSED, 4=REMOVED
+const STATUS_NUM_MAP = { 2: "enabled", 3: "paused", 4: "removed" };
+const STATUS_COLORS = {
+  enabled:  { dot: "bg-green-500",  text: "text-green-700",  label: "Enabled"  },
+  paused:   { dot: "bg-yellow-400", text: "text-yellow-700", label: "Paused"   },
+  removed:  { dot: "bg-red-400",    text: "text-red-600",    label: "Removed"  },
+};
+
+function getCampaignStatus(status) {
+  if (typeof status === "number") return STATUS_NUM_MAP[status] || "unknown";
+  if (typeof status === "string") return status.toLowerCase();
+  return "unknown";
+}
+
+function CampaignDropdown({ campaigns, selectedCampaign, onChange, onClear }) {
+  const [open, setOpen]   = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch(""); } };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = campaigns.filter((c) =>
+    c.campaignName.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition min-w-[200px] max-w-[260px]"
+      >
+        <span className="flex-1 text-left truncate font-medium">
+          {selectedCampaign ? selectedCampaign.campaignName : "All Campaigns"}
+        </span>
+        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 w-80 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+          {/* Search */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search campaigns…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-blue-400"
+            />
+          </div>
+          {/* All campaigns option */}
+          <button
+            onClick={() => { onClear(); setOpen(false); setSearch(""); }}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left transition hover:bg-gray-50 border-b border-gray-100 ${
+              !selectedCampaign ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
+            }`}
+          >
+            <span className="text-base">📊</span>
+            <span>All Campaigns (Overview)</span>
+            {!selectedCampaign && (
+              <svg className="w-4 h-4 text-purple-600 flex-shrink-0 ml-auto" fill="none" viewBox="0 0 24 24">
+                <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          {/* Campaign list */}
+          <div className="max-h-72 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-gray-400 text-center">No campaigns found.</p>
+            ) : filtered.map((c) => {
+              const statusKey = getCampaignStatus(c.status);
+              const s = STATUS_COLORS[statusKey] || { dot: "bg-gray-400", text: "text-gray-500", label: statusKey };
+              const isSelected = selectedCampaign?.campaignId === c.campaignId;
+              return (
+                <button
+                  key={c.campaignId}
+                  onClick={() => { onChange(c.campaignId); setOpen(false); setSearch(""); }}
+                  className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
+                    isSelected ? "bg-purple-50" : ""
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                      <p className={`font-medium truncate ${isSelected ? "text-purple-700" : "text-gray-800"}`}>
+                        {c.campaignName}
+                      </p>
+                    </div>
+                    <p className={`text-xs mt-0.5 ml-4 ${s.text}`}>{s.label}</p>
+                  </div>
+                  {isSelected && (
+                    <svg className="w-4 h-4 text-purple-600 flex-shrink-0 ml-2" fill="none" viewBox="0 0 24 24">
+                      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GoogleAdsDashboard() {
   const router = useRouter();
   const { status } = useSession();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [allCampaignData, setAllCampaignData] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -331,14 +442,12 @@ export default function GoogleAdsDashboard() {
     sessionStorage.setItem("gads_customer_id", customerId);
     setSelectedCustomerId(customerId);
     setSelectedCampaign(null);
-    setIsSidebarOpen(false);
   };
 
   const handleCampaignSelect = (campaignId) => {
     const selectedCustomer = allCampaignData.find((item) => String(item.customer.customer_client.id) === String(selectedCustomerId));
     const campaign = selectedCustomer?.campaigns?.find((item) => item.campaignId === campaignId) || null;
     setSelectedCampaign(campaign);
-    setIsSidebarOpen(false);
   };
 
   const refreshData = () => {
@@ -479,12 +588,12 @@ export default function GoogleAdsDashboard() {
 
   return (
     <div className="min-h-screen bg-customPurple-dark">
+
+      {/* ── Header ── */}
       <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 flex-wrap">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Back to Dashboard">
-              ←
-            </Link>
+            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Back to Dashboard">←</Link>
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white flex-shrink-0">
               <svg viewBox="0 0 48 48" className="w-6 h-6"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
             </div>
@@ -493,127 +602,110 @@ export default function GoogleAdsDashboard() {
               <p className="text-sm text-gray-400">Campaign Dashboard</p>
             </div>
           </div>
-          {/* Account dropdown */}
           {selectedCustomerId && allCampaignData.length > 0 && (
-            <AccountDropdown
-              accounts={allCampaignData.map(d => ({
-                id: String(d.customer.customer_client.id),
-                name: d.customer.customer_client.descriptive_name,
-              }))}
-              selectedId={String(selectedCustomerId)}
-              onChange={(id) => {
-                localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
-                sessionStorage.setItem("gads_customer_id", id);
-                setSelectedCustomerId(id);
-                setSelectedCampaign(null);
-              }}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <AccountDropdown
+                accounts={allCampaignData.map((d) => ({
+                  id: String(d.customer.customer_client.id),
+                  name: d.customer.customer_client.descriptive_name,
+                }))}
+                selectedId={String(selectedCustomerId)}
+                onChange={(id) => {
+                  localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
+                  sessionStorage.setItem("gads_customer_id", id);
+                  setSelectedCustomerId(id);
+                  setSelectedCampaign(null);
+                }}
+              />
+              <CampaignDropdown
+                campaigns={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
+                selectedCampaign={selectedCampaign}
+                onChange={handleCampaignSelect}
+                onClear={() => setSelectedCampaign(null)}
+              />
+            </div>
           )}
         </div>
       </header>
 
-      <div className="flex flex-col sm:flex-row">
-        <aside className={`w-full flex-shrink-0 bg-customPurple-dark sm:w-80 sm:min-w-[16rem] ${isSidebarOpen ? "block" : "hidden"} sm:block`}>
-          <Sidebar
-            currentCustomerName={allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.customer.customer_client.descriptive_name}
-            campaigns={allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
-            selectedCampaign={selectedCampaign}
-            handleCampaignSelect={handleCampaignSelect}
-            campaignStatusFilter={campaignStatusFilter}
-            campaignStatusOptions={CAMPAIGN_STATUS_OPTIONS}
-            onCampaignStatusFilterChange={handleCampaignStatusFilterChange}
-            onClearCampaign={() => { setSelectedCampaign(null); setIsSidebarOpen(false); }}
-            lastUpdated={lastUpdated}
-            refreshData={refreshData}
-            closeSidebar={() => setIsSidebarOpen(false)}
-          />
-        </aside>
-
-        <main className="min-w-0 flex-1 bg-gray-50 p-4 sm:mr-4 sm:mt-8 sm:rounded-t-2xl sm:p-6">
-          <div className="mb-4 flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm sm:hidden">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Account Navigation</p>
-              <p className="mt-1 text-sm font-semibold text-customPurple">
-                {selectedCampaign?.campaignName ||
-                  allCampaignData.find((item) => item.customer.customer_client.id === selectedCustomerId)?.customer.customer_client.descriptive_name ||
-                  "Select an account"}
-              </p>
-            </div>
-            <button
-              className="rounded-xl bg-customPurple px-4 py-2 text-sm font-semibold text-white hover:bg-customPurple-light"
-              onClick={() => setIsSidebarOpen((v) => !v)}
-              type="button"
-            >
-              {isSidebarOpen ? "Close" : "Campaigns"}
+      {/* ── Date range bar ── */}
+      <div className="border-b border-white/10 bg-customPurple-dark px-6 py-3">
+        <div className="mx-auto max-w-7xl flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-gray-400 mr-1">Date range:</span>
+          {DATE_RANGE_OPTIONS.filter((o) => o.value !== "CUSTOM").map((o) => (
+            <button key={o.value} onClick={() => handleDateRangeChange({ target: { value: o.value } })}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                dateRange === o.value ? "bg-blue-600 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
+              }`}>
+              {o.label}
             </button>
+          ))}
+          <button onClick={() => handleDateRangeChange({ target: { value: "CUSTOM" } })}
+            className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+              dateRange === "CUSTOM" ? "bg-blue-600 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}>
+            Custom
+          </button>
+          {/* Status filter pills */}
+          <div className="ml-4 flex items-center gap-2">
+            <span className="text-xs font-medium text-gray-400">Status:</span>
+            {CAMPAIGN_STATUS_OPTIONS.map((o) => (
+              <button key={o.value} onClick={() => handleCampaignStatusFilterChange(o.value)}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                  campaignStatusFilter === o.value ? "bg-purple-600 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
+                }`}>
+                {o.label}
+              </button>
+            ))}
           </div>
+          {/* Refresh */}
+          <button onClick={refreshData} title="Refresh data"
+            className="ml-auto rounded-full bg-white/10 hover:bg-white/20 transition px-3 py-1.5 text-xs font-medium text-gray-300 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
 
-          <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Reporting Range</p>
-                <p className="mt-1 text-lg font-semibold text-customPurple">
-                  {DATE_RANGE_OPTIONS.find((o) => o.value === dateRange)?.label}
-                </p>
-                <p className="mt-1 text-sm text-gray-500">{dateWindowLabel || "Fetching date window..."}</p>
-              </div>
-              <div className="w-full max-w-2xl">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-600">Time frame</label>
-                  <select
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 shadow-sm"
-                    onChange={handleDateRangeChange}
-                    value={dateRange}
-                  >
-                    {DATE_RANGE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                {dateRange === "CUSTOM" && (
-                  <div className="mt-4 rounded-2xl border border-purple-100 bg-purple-50/60 p-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-                      <label className="flex-1 text-sm text-gray-600">
-                        <span className="mb-2 block font-medium text-gray-700">From</span>
-                        <input
-                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 shadow-sm"
-                          max={customDateRange.endDate || undefined}
-                          onChange={(e) => handleCustomDateChange("startDate", e.target.value)}
-                          type="date"
-                          value={customDateRange.startDate}
-                        />
-                      </label>
-                      <label className="flex-1 text-sm text-gray-600">
-                        <span className="mb-2 block font-medium text-gray-700">To</span>
-                        <input
-                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 shadow-sm"
-                          min={customDateRange.startDate || undefined}
-                          onChange={(e) => handleCustomDateChange("endDate", e.target.value)}
-                          type="date"
-                          value={customDateRange.endDate}
-                        />
-                      </label>
-                      <button
-                        className="rounded-xl bg-customPurple px-5 py-3 text-sm font-semibold text-white hover:bg-customPurple-light"
-                        onClick={applyCustomDateRange}
-                        type="button"
-                      >
-                        Apply dates
-                      </button>
-                    </div>
-                    {customDateError && <p className="mt-3 text-sm text-red-600">{customDateError}</p>}
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Custom date row */}
+        {dateRange === "CUSTOM" && (
+          <div className="mx-auto max-w-7xl mt-3 flex items-end gap-3 flex-wrap">
+            <label className="text-xs text-gray-400">
+              From
+              <input type="date" value={customDateRange.startDate}
+                max={customDateRange.endDate || undefined}
+                onChange={(e) => handleCustomDateChange("startDate", e.target.value)}
+                className="ml-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white" />
+            </label>
+            <label className="text-xs text-gray-400">
+              To
+              <input type="date" value={customDateRange.endDate}
+                min={customDateRange.startDate || undefined}
+                onChange={(e) => handleCustomDateChange("endDate", e.target.value)}
+                className="ml-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white" />
+            </label>
+            <button onClick={applyCustomDateRange}
+              className="rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-1.5 text-xs font-semibold text-white transition">Apply</button>
+            {customDateError && <p className="text-xs text-red-400">{customDateError}</p>}
           </div>
+        )}
+      </div>
 
+      {/* ── Content ── */}
+      <div className="bg-gray-50 min-h-[calc(100vh-120px)]">
+        <div className="mx-auto max-w-7xl px-6 py-6">
           {isFetching && (
             <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              Refreshing dashboard data for this date range...
+              Refreshing dashboard data…
             </div>
           )}
-
+          {dateWindowLabel && (
+            <p className="text-xs text-gray-400 mb-4">
+              Showing data for <span className="font-medium text-gray-600">{dateWindowLabel}</span>
+              {lastUpdated && <span> · Last updated {lastUpdated}</span>}
+            </p>
+          )}
           <ContentArea
             customerId={selectedCustomerId}
             selectedCampaign={selectedCampaign}
@@ -621,7 +713,7 @@ export default function GoogleAdsDashboard() {
             handleCampaignSelect={handleCampaignSelect}
             dateRangeLabel={DATE_RANGE_OPTIONS.find((o) => o.value === dateRange)?.label}
           />
-        </main>
+        </div>
       </div>
     </div>
   );

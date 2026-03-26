@@ -219,19 +219,39 @@ export default function AudienceLabPage() {
   };
 
 
+  const refreshLogsIfOpen = async (key) => {
+    if (!expandedLogs[key]) return;
+    try {
+      const res  = await fetch(`/api/audience-lab/logs?type=sync&key=${key}&limit=20`);
+      const json = await res.json();
+      setExpandedLogs((l) => ({ ...l, [key]: json.logs || [] }));
+    } catch {}
+  };
+
   const handleManualRun = async (seg) => {
     setOpenMenu(null);
     setRunning((r) => ({ ...r, [seg.key]: true }));
     setRunResult((r) => ({ ...r, [seg.key]: null }));
     try {
-      const res  = await fetch(`/api/audience-lab/sync?mode=write&slot=${seg.slot}`);
+      const res  = await fetch(`/api/audience-lab/sync?mode=write&slot=${seg.slot}&triggered_by=manual`);
       const json = await res.json();
-      setRunResult((r) => ({ ...r, [seg.key]: json.result ? `✅ ${(json.result.rowsInserted ?? 0).toLocaleString()} rows written to BigQuery` : json.message || json.error || "Done" }));
-      await load(); await loadActivity();
+      const msg  = json.result
+        ? `✅ ${(json.result.rowsInserted ?? 0).toLocaleString()} rows written to BigQuery`
+        : json.error
+          ? `❌ ${json.error}`
+          : json.message || "Done";
+      setRunResult((r) => ({ ...r, [seg.key]: msg }));
+      await load();
+      await loadActivity();
+      // Always open + refresh logs so user can see the new entry (or the error)
+      setExpandedLogs((l) => ({ ...l, [seg.key]: "loading" }));
+      const res2  = await fetch(`/api/audience-lab/logs?type=sync&key=${seg.key}&limit=20`);
+      const json2 = await res2.json();
+      setExpandedLogs((l) => ({ ...l, [seg.key]: json2.logs || [] }));
     } catch (e) { setRunResult((r) => ({ ...r, [seg.key]: `❌ ${e.message}` })); }
     finally {
       setRunning((r) => ({ ...r, [seg.key]: false }));
-      setTimeout(() => setRunResult((r) => ({ ...r, [seg.key]: null })), 10000);
+      setTimeout(() => setRunResult((r) => ({ ...r, [seg.key]: null })), 12000);
     }
   };
 
@@ -239,13 +259,18 @@ export default function AudienceLabPage() {
     setRunning((r) => ({ ...r, [seg.key]: true }));
     setRunResult((r) => ({ ...r, [seg.key]: null }));
     try {
-      const res  = await fetch(`/api/audience-lab/sync?mode=dry-run&slot=${seg.slot}`);
+      const res  = await fetch(`/api/audience-lab/sync?mode=dry-run&slot=${seg.slot}&triggered_by=manual`);
       const json = await res.json();
       setRunResult((r) => ({ ...r, [seg.key]: json.result ? `✅ ${(json.result.sourceRecords ?? 0).toLocaleString()} records found` : json.message || json.error || "Done" }));
+      // Auto-open logs so user can see the dry-run entry
+      setExpandedLogs((l) => ({ ...l, [seg.key]: "loading" }));
+      const res2  = await fetch(`/api/audience-lab/logs?type=sync&key=${seg.key}&limit=20`);
+      const json2 = await res2.json();
+      setExpandedLogs((l) => ({ ...l, [seg.key]: json2.logs || [] }));
     } catch (e) { setRunResult((r) => ({ ...r, [seg.key]: `❌ ${e.message}` })); }
     finally {
       setRunning((r) => ({ ...r, [seg.key]: false }));
-      setTimeout(() => setRunResult((r) => ({ ...r, [seg.key]: null })), 8000);
+      setTimeout(() => setRunResult((r) => ({ ...r, [seg.key]: null })), 10000);
     }
   };
 

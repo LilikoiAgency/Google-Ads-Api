@@ -945,7 +945,10 @@ export async function GET(request) {
     ? toNonNegativeInt(searchParams.get("start_offset"), 0)
     : (startPage - 1) * pageSize;
 
-  if (writeEnabled && !writesAllowed) {
+  // Write-blocked check is handled inside slot routing so we can still write a log entry.
+  // For non-slot (legacy target) requests, block early as before.
+  const slotParam = searchParams.get("slot");
+  if (!slotParam && writeEnabled && !writesAllowed) {
     logError(logState, "write.blocked", { mode, writesAllowed });
     return new Response(
       JSON.stringify({
@@ -960,7 +963,6 @@ export async function GET(request) {
     );
   }
   // ── Slot-based routing (MongoDB-driven) ──────────────────────────────────────
-  const slotParam = searchParams.get("slot");
   if (slotParam !== null) {
     const slot = Number(slotParam);
     if (!Number.isFinite(slot) || slot < 0) {
@@ -978,6 +980,27 @@ export async function GET(request) {
     if (!segDoc.active) {
       logInfo(logState, "slot.inactive", { slot, key: segDoc.key });
       return new Response(JSON.stringify({ ok: true, slot, key: segDoc.key, message: "Segment is inactive — skipped.", runId: logState.runId }), { status: 200, headers: NO_STORE_HEADERS });
+    }
+
+    // If write mode is requested but BQ writes are disabled, log it and return a clear error
+    if (writeEnabled && !writesAllowed) {
+      logError(logState, "write.blocked", { slot, key: segDoc.key });
+      await writeSyncLog({
+        segmentKey: segDoc.key, segmentName: segDoc.name, slot,
+        runId: logState.runId, mode: "write",
+        startedAt: new Date(), status: "error",
+        rowsInserted: 0, sourceRecords: 0, pagesFetched: 0,
+        durationMs: 0,
+        errorMessage: "Write mode is disabled — set AUDIENCE_LAB_BQ_WRITE_ENABLED=true to allow BigQuery writes.",
+        triggeredBy: searchParams.get("triggered_by") || "manual",
+      }).catch((e) => console.warn("[sync] writeSyncLog (write.blocked) failed:", e.message));
+      return new Response(
+        JSON.stringify({
+          error: "Write mode is disabled. Set AUDIENCE_LAB_BQ_WRITE_ENABLED=true to allow BigQuery writes.",
+          slot, key: segDoc.key, runId: logState.runId,
+        }),
+        { status: 403, headers: NO_STORE_HEADERS }
+      );
     }
 
     // Build a single target from the MongoDB document
@@ -1000,7 +1023,7 @@ export async function GET(request) {
     const batchTimestamp = new Date().toISOString();
 
     const syncStarted = Date.now();
-    const triggeredBy = slotParam !== null ? (writeEnabled ? "cron" : "manual") : "manual";
+    const triggeredBy = searchParams.get("triggered_by") || (writeEnabled ? "cron" : "manual");
 
     let syncResult;
     try {

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { downloadReportAsHtml } from "../../lib/reportHtml";
 import Link from "next/link";
+import "../globals.css";
 import {
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, Sector,
@@ -1168,18 +1169,22 @@ function ReportPageInner() {
 
     <div style={{ minHeight: "100vh", background: "#1A1122", overflowX: "hidden" }}>
       {/* App header */}
-      <header style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", background: "#1A1122", padding: "16px 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png" alt="Lilikoi" style={{ width: 40, height: 40, borderRadius: "50%" }} />
+      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Back to Dashboard">←</Link>
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white">
+              {/* Report icon */}
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="3" fill="#f59e0b" opacity="0.15"/>
+                <path d="M7 17V13M10 17V10M13 17V12M16 17V7" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
             <div>
-              <p style={{ fontSize: 16, fontWeight: 600, color: "#fff" }}>Lilikoi Agency</p>
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>Paid vs. Organic Report</p>
+              <p className="text-lg font-semibold text-white">Paid vs. Organic Report</p>
+              <p className="text-sm text-gray-400">Cross-channel keyword overlap analysis</p>
             </div>
           </div>
-          <Link href="/dashboard" style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)", textDecoration: "none" }}>
-            ← Dashboard
-          </Link>
         </div>
       </header>
 
