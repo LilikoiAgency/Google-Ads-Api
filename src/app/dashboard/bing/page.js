@@ -220,6 +220,98 @@ function AccountPicker({ accounts, selected, onChange, loading }) {
   );
 }
 
+// ─── campaign picker ──────────────────────────────────────────────────────────
+
+const BING_STATUS_COLORS = {
+  active:   { dot: "bg-green-500",  text: "text-green-700",  label: "Active"   },
+  paused:   { dot: "bg-yellow-400", text: "text-yellow-700", label: "Paused"   },
+  deleted:  { dot: "bg-red-400",    text: "text-red-600",    label: "Deleted"  },
+};
+
+function CampaignPicker({ campaigns, selected, onChange, onClear }) {
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch(""); } };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = (campaigns || []).filter((c) =>
+    (c.name || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition min-w-[200px] max-w-[260px]"
+      >
+        <span className="flex-1 text-left truncate font-medium">
+          {selected ? selected.name : "All Campaigns"}
+        </span>
+        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 w-80 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 border-b border-gray-100">
+            <input autoFocus type="text" placeholder="Search campaigns…" value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-blue-400" />
+          </div>
+          <button
+            onClick={() => { onClear(); setOpen(false); setSearch(""); }}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left transition hover:bg-gray-50 border-b border-gray-100 ${
+              !selected ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-700"
+            }`}
+          >
+            <span className="text-base">📊</span>
+            <span>All Campaigns (Overview)</span>
+            {!selected && (
+              <svg className="w-4 h-4 text-blue-600 ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+          <div className="max-h-72 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-gray-400 text-center">No campaigns found.</p>
+            ) : filtered.map((c) => {
+              const key = (c.status || "").toLowerCase();
+              const s = BING_STATUS_COLORS[key] || { dot: "bg-gray-400", text: "text-gray-500", label: c.status || "Unknown" };
+              const isSelected = selected?.id === c.id;
+              return (
+                <button key={c.id}
+                  onClick={() => { onChange(c); setOpen(false); setSearch(""); }}
+                  className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${isSelected ? "bg-blue-50" : ""}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                      <p className={`font-medium truncate ${isSelected ? "text-blue-700" : "text-gray-800"}`}>{c.name}</p>
+                    </div>
+                    <p className={`text-xs mt-0.5 ml-4 ${s.text}`}>{s.label}</p>
+                  </div>
+                  {isSelected && (
+                    <svg className="w-4 h-4 text-blue-600 flex-shrink-0 ml-2" fill="none" viewBox="0 0 24 24">
+                      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── main page ────────────────────────────────────────────────────────────────
 
 export default function BingDashboard() {
@@ -240,6 +332,7 @@ export default function BingDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
   const [trendMetric, setTrendMetric] = useState("spend");
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/bing");
@@ -302,6 +395,7 @@ export default function BingDashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to fetch");
       setData(json);
+      setSelectedCampaign(null); // reset campaign selection on new data load
     } catch (err) {
       setError(err.message);
     } finally {
@@ -335,7 +429,20 @@ export default function BingDashboard() {
     );
   }
 
-  const totals = data?.totals || {};
+  // When a campaign is selected, use its numbers; otherwise use account totals
+  const accountTotals = data?.totals || {};
+  const totals = selectedCampaign
+    ? {
+        spend:       selectedCampaign.spend,
+        clicks:      selectedCampaign.clicks,
+        impressions: selectedCampaign.impressions,
+        ctr:         selectedCampaign.ctr,
+        cpc:         selectedCampaign.cpc,
+        conversions: selectedCampaign.conversions,
+        revenue:     selectedCampaign.revenue,
+        roas:        selectedCampaign.roas,
+      }
+    : accountTotals;
 
   return (
     <div className="min-h-screen bg-customPurple-dark">
@@ -356,12 +463,22 @@ export default function BingDashboard() {
               <p className="text-sm text-gray-400">Bing Ads Dashboard</p>
             </div>
           </div>
-          <AccountPicker
-            accounts={accounts}
-            selected={selectedAccount}
-            onChange={(a) => { sessionStorage.setItem("bing_selected_account", JSON.stringify(a)); setSelectedAccount(a); setData(null); }}
-            loading={accountsLoading}
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <AccountPicker
+              accounts={accounts}
+              selected={selectedAccount}
+              onChange={(a) => { sessionStorage.setItem("bing_selected_account", JSON.stringify(a)); setSelectedAccount(a); setData(null); setSelectedCampaign(null); }}
+              loading={accountsLoading}
+            />
+            {data?.campaigns?.length > 0 && (
+              <CampaignPicker
+                campaigns={data.campaigns}
+                selected={selectedCampaign}
+                onChange={setSelectedCampaign}
+                onClear={() => setSelectedCampaign(null)}
+              />
+            )}
+          </div>
         </div>
       </header>
 
@@ -470,6 +587,18 @@ export default function BingDashboard() {
             </div>
           )}
 
+          {/* Campaign context label */}
+          {selectedCampaign && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+              <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+              <p className="text-sm font-semibold text-blue-800 truncate">{selectedCampaign.name}</p>
+              <span className="text-xs text-blue-500 bg-blue-100 rounded-full px-2 py-0.5">{selectedCampaign.status}</span>
+              <button onClick={() => setSelectedCampaign(null)} className="ml-auto text-xs text-blue-500 hover:text-blue-700 font-medium flex-shrink-0">
+                ← All Campaigns
+              </button>
+            </div>
+          )}
+
           {/* KPI cards */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-4 mb-6">
             <KpiCard label="Total Spend"       value={fmtD(totals.spend)}        color="#0078D4" icon="💰" loading={loading && !data} />
@@ -524,10 +653,19 @@ export default function BingDashboard() {
           {/* Campaign table */}
           <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-800">Campaigns</p>
-              {data && <p className="text-xs text-gray-400">{data.campaigns?.length || 0} campaigns</p>}
+              <p className="text-sm font-semibold text-gray-800">
+                {selectedCampaign ? selectedCampaign.name : "All Campaigns"}
+              </p>
+              {data && (
+                <p className="text-xs text-gray-400">
+                  {selectedCampaign ? "1 campaign selected" : `${data.campaigns?.length || 0} campaigns`}
+                </p>
+              )}
             </div>
-            <CampaignTable campaigns={data?.campaigns} loading={loading && !data} />
+            <CampaignTable
+              campaigns={selectedCampaign ? [selectedCampaign] : data?.campaigns}
+              loading={loading && !data}
+            />
           </div>
 
           </>)}
