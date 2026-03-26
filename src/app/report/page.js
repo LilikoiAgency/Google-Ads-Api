@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { downloadReportAsHtml } from "../../lib/reportHtml";
@@ -935,7 +935,7 @@ function ConfigForm({ onGenerate }) {
         {/* Google Ads Account */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#444", marginBottom: 8 }}>
-            <img src="https://www.google.com/s2/favicons?domain=ads.google.com&sz=16" width={14} height={14} style={{ borderRadius: 2 }} />
+            <img src="https://www.google.com/s2/favicons?domain=ads.google.com&sz=16" width={14} height={14} alt="" style={{ borderRadius: 2 }} />
             Google Ads Account
           </label>
           {loadingCustomers
@@ -949,7 +949,7 @@ function ConfigForm({ onGenerate }) {
         {/* Search Console Property */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#444", marginBottom: 8 }}>
-            <img src="https://www.google.com/s2/favicons?domain=search.google.com&sz=16" width={14} height={14} style={{ borderRadius: 2 }} />
+            <img src="https://www.google.com/s2/favicons?domain=search.google.com&sz=16" width={14} height={14} alt="" style={{ borderRadius: 2 }} />
             Search Console Property
           </label>
           {loadingGsc
@@ -965,7 +965,7 @@ function ConfigForm({ onGenerate }) {
                 ? <p style={{ fontSize: 13, color: "#e74c3c" }}>No properties found for this account.</p>
                 : <div style={{ position: "relative" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid #e0e4ea", background: "#fff", pointerEvents: "none" }}>
-                      <img src={getFavicon(selectedSite)} width={16} height={16} onError={e => e.target.style.display="none"} style={{ borderRadius: 2, flexShrink: 0 }} />
+                      <img src={getFavicon(selectedSite)} width={16} height={16} alt="" onError={e => e.target.style.display="none"} style={{ borderRadius: 2, flexShrink: 0 }} />
                       <span style={{ flex: 1, fontSize: 13, color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedSite}</span>
                       <span style={{ color: "#aaa", fontSize: 11, flexShrink: 0 }}>▾</span>
                     </div>
@@ -1139,7 +1139,7 @@ const PRINT_STYLES = `
 }
 `;
 
-export default function ReportPage() {
+function ReportPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status } = useSession();
@@ -1165,6 +1165,7 @@ export default function ReportPage() {
   }
 
   return (
+
     <div style={{ minHeight: "100vh", background: "#1A1122", overflowX: "hidden" }}>
       {/* App header */}
       <header style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", background: "#1A1122", padding: "16px 24px" }}>
@@ -1193,5 +1194,13 @@ export default function ReportPage() {
           : <ConfigForm onGenerate={setReportData} />}
       </main>
     </div>
+  );
+}
+
+export default function ReportPage() {
+  return (
+    <Suspense fallback={<div style={{ display:"flex", minHeight:"100vh", alignItems:"center", justifyContent:"center", background:"#f0f2f5" }}><p style={{color:"#aaa"}}>Loading...</p></div>}>
+      <ReportPageInner />
+    </Suspense>
   );
 }
