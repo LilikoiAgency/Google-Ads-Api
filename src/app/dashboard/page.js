@@ -50,6 +50,16 @@ function ReportIcon() {
   );
 }
 
+function AudienceLabIcon() {
+  return (
+    <svg viewBox="0 0 48 48" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="8" fill="#4285F4" />
+      <circle cx="32" cy="16" r="8" fill="#EA4335" opacity="0.85" />
+      <circle cx="24" cy="30" r="8" fill="#34A853" opacity="0.85" />
+    </svg>
+  );
+}
+
 const TILES = [
   {
     href: "/dashboard/google/ads",
@@ -82,6 +92,14 @@ const TILES = [
     description: "Cross-reference paid keywords with organic queries to find overlap and opportunities.",
     tag: "Report",
     tagColor: "#f59e0b",
+  },
+  {
+    href: "/dashboard/audience-lab",
+    Icon: AudienceLabIcon,
+    title: "Audience Lab",
+    description: "Manage segment syncs to BigQuery. Add, pause, or test Audience Lab segments.",
+    tag: "Segments",
+    tagColor: "#a855f7",
   },
 ];
 

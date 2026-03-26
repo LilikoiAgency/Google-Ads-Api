@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { getSegmentBySlot, updateSyncStatus, writeSyncLog, seedFromEnvIfEmpty } from "../../../../lib/audienceLabSegments";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -958,6 +959,110 @@ export async function GET(request) {
       }
     );
   }
+  // ── Slot-based routing (MongoDB-driven) ──────────────────────────────────────
+  const slotParam = searchParams.get("slot");
+  if (slotParam !== null) {
+    const slot = Number(slotParam);
+    if (!Number.isFinite(slot) || slot < 0) {
+      return new Response(JSON.stringify({ error: "Invalid slot number.", runId: logState.runId }), { status: 400, headers: NO_STORE_HEADERS });
+    }
+
+    // Seed from env vars if first run
+    await seedFromEnvIfEmpty().catch(() => {});
+
+    const segDoc = await getSegmentBySlot(slot).catch(() => null);
+    if (!segDoc) {
+      logInfo(logState, "slot.empty", { slot });
+      return new Response(JSON.stringify({ ok: true, slot, message: "No segment assigned to this slot.", runId: logState.runId }), { status: 200, headers: NO_STORE_HEADERS });
+    }
+    if (!segDoc.active) {
+      logInfo(logState, "slot.inactive", { slot, key: segDoc.key });
+      return new Response(JSON.stringify({ ok: true, slot, key: segDoc.key, message: "Segment is inactive — skipped.", runId: logState.runId }), { status: 200, headers: NO_STORE_HEADERS });
+    }
+
+    // Build a single target from the MongoDB document
+    const slotTarget = { key: segDoc.key, tableId: segDoc.tableId, segmentId: segDoc.segmentId, source: "mongodb" };
+    logInfo(logState, "slot.resolved", { slot, key: segDoc.key, tableId: segDoc.tableId });
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key:  (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+      },
+      scopes: ["https://www.googleapis.com/auth/bigquery"],
+    });
+    const bigquery   = google.bigquery({ version: "v2", auth });
+    const projectId  = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const datasetId  = process.env.BQ_DATASET_ID;
+    const baseUrl    = trimTrailingSlash(process.env.AUDIENCE_LAB_BASE_URL || DEFAULT_BASE_URL);
+    const apiKey     = process.env.AUDIENCE_LAB_API_KEY;
+    const headers    = { "x-api-key": apiKey, "Content-Type": "application/json" };
+    const batchTimestamp = new Date().toISOString();
+
+    const syncStarted = Date.now();
+    const triggeredBy = slotParam !== null ? (writeEnabled ? "cron" : "manual") : "manual";
+
+    let syncResult;
+    try {
+      syncResult = await syncSingleTarget({
+        target:             slotTarget,
+        baseUrl, headers, pageSize, startOffset,
+        writeEnabled,
+        maxPages:           dryRunMaxPages,
+        includePreviewRows: isTestMode,
+        previewRowLimit,
+        batchTimestamp,
+        bigquery,
+        projectId,
+        datasetId,
+        logState,
+      });
+
+      const syncStatus = syncResult.failed ? "error" : "success";
+      const durationMs = Date.now() - syncStarted;
+
+      // Update segment's last-sync fields
+      await updateSyncStatus(segDoc.key, {
+        status:  syncStatus,
+        message: syncResult.failed ? `Failed on page ${syncResult.failedPage}` : null,
+        count:   syncResult.rowsInserted ?? 0,
+      }).catch((e) => console.warn("[sync] MongoDB status update failed:", e.message));
+
+      // Write detailed log entry
+      await writeSyncLog({
+        segmentKey:    segDoc.key,
+        segmentName:   segDoc.name,
+        slot,
+        runId:         logState.runId,
+        mode:          writeEnabled ? "write" : isTestMode ? "test" : "dry-run",
+        startedAt:     new Date(syncStarted),
+        status:        syncStatus,
+        rowsInserted:  syncResult.rowsInserted  ?? 0,
+        sourceRecords: syncResult.sourceRecords ?? 0,
+        pagesFetched:  syncResult.pagesFetched  ?? 0,
+        durationMs,
+        errorMessage:  syncResult.failed ? `Failed on page ${syncResult.failedPage}` : null,
+        triggeredBy,
+      }).catch((e) => console.warn("[sync] MongoDB log write failed:", e.message));
+
+    } catch (err) {
+      const durationMs = Date.now() - syncStarted;
+      await updateSyncStatus(segDoc.key, { status: "error", message: err.message, count: 0 }).catch(() => {});
+      await writeSyncLog({
+        segmentKey: segDoc.key, segmentName: segDoc.name, slot,
+        runId: logState.runId, mode: writeEnabled ? "write" : "dry-run",
+        startedAt: new Date(syncStarted), status: "error",
+        rowsInserted: 0, sourceRecords: 0, pagesFetched: 0,
+        durationMs, errorMessage: err.message, triggeredBy,
+      }).catch(() => {});
+      logError(logState, "slot.sync.error", { slot, key: segDoc.key, error: err.message });
+      return new Response(JSON.stringify({ error: err.message, slot, key: segDoc.key, runId: logState.runId }), { status: 500, headers: NO_STORE_HEADERS });
+    }
+
+    return new Response(JSON.stringify({ ok: true, slot, key: segDoc.key, result: syncResult, runId: logState.runId, logs: logState.includeLogs ? logState.entries : undefined }), { status: 200, headers: NO_STORE_HEADERS });
+  }
+  // ── End slot-based routing ───────────────────────────────────────────────────
+
   const requestedTarget = resolveRequestedTarget(searchParams);
   if (!requestedTarget) {
     logError(logState, "target.invalid", {
@@ -966,7 +1071,7 @@ export async function GET(request) {
     return new Response(
       JSON.stringify({
         error:
-          "Invalid target. Use target=all, target=bbt_turf, target=cmk_kitchen_bath, target=smp_roofing, target=smp_solar, or target=smp_windows_sd_sf.",
+          "Invalid target. Use slot=N, or target=all/bbt_turf/cmk_kitchen_bath/smp_roofing/smp_solar/smp_windows_sd_sf.",
         runId: logState.runId,
       }),
       {
