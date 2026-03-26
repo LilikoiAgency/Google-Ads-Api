@@ -124,6 +124,13 @@ export default function Sidebar({
 
       <div className="mt-8 border-t border-white/10 pt-5">
         <Link
+          href="/dashboard"
+          className="mb-2 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
+        >
+          <span>🏠</span>
+          <span>Home</span>
+        </Link>
+        <Link
           href="/report"
           className="mb-4 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
         >
