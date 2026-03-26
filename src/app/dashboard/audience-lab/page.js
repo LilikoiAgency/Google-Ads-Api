@@ -139,9 +139,10 @@ export default function AudienceLabPage() {
   const [saveError, setSaveError]     = useState(null);
   const [running, setRunning]         = useState({});
   const [runResult, setRunResult]     = useState({});
-  const [expandedLogs, setExpandedLogs] = useState({});
-  const [activityLogs, setActivityLogs] = useState([]);
+  const [expandedLogs, setExpandedLogs]   = useState({});
+  const [activityLogs, setActivityLogs]   = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [openMenu, setOpenMenu]           = useState(null); // segment key or null
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/audience-lab");
@@ -217,6 +218,23 @@ export default function AudienceLabPage() {
     } catch { setExpandedLogs((l) => ({ ...l, [key]: [] })); }
   };
 
+
+  const handleManualRun = async (seg) => {
+    setOpenMenu(null);
+    setRunning((r) => ({ ...r, [seg.key]: true }));
+    setRunResult((r) => ({ ...r, [seg.key]: null }));
+    try {
+      const res  = await fetch(`/api/audience-lab/sync?mode=write&slot=${seg.slot}`);
+      const json = await res.json();
+      setRunResult((r) => ({ ...r, [seg.key]: json.result ? `✅ ${(json.result.rowsInserted ?? 0).toLocaleString()} rows written to BigQuery` : json.message || json.error || "Done" }));
+      await load(); await loadActivity();
+    } catch (e) { setRunResult((r) => ({ ...r, [seg.key]: `❌ ${e.message}` })); }
+    finally {
+      setRunning((r) => ({ ...r, [seg.key]: false }));
+      setTimeout(() => setRunResult((r) => ({ ...r, [seg.key]: null })), 10000);
+    }
+  };
+
   const handleRunNow = async (seg) => {
     setRunning((r) => ({ ...r, [seg.key]: true }));
     setRunResult((r) => ({ ...r, [seg.key]: null }));
@@ -285,7 +303,7 @@ export default function AudienceLabPage() {
                 [...Array(7)].map((_, i) => <div key={i} className="h-20 rounded-2xl bg-white border border-gray-100 animate-pulse" />)
               ) : (
                 slots.map(({ slot, schedule, occupied: occ, segment }) => (
-                  <div key={slot} className={`rounded-2xl bg-white shadow-sm transition overflow-hidden ${occ ? "border border-gray-100" : "border border-dashed border-gray-200"}`}>
+                  <div key={slot} className={`rounded-2xl bg-white shadow-sm transition ${occ ? "border border-gray-100" : "border border-dashed border-gray-200"}`}>
 
                     {/* Row */}
                     <div className="flex items-center gap-3 px-4 py-3.5">
@@ -301,9 +319,11 @@ export default function AudienceLabPage() {
                               <StatusBadge status={segment.lastSyncStatus} size="sm" />
                               {!segment.active && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">Paused</span>}
                             </div>
-                            <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            <p className="text-xs text-gray-400 mt-0.5">
                               <span className="font-mono">{segment.tableId}</span>
-                              {" · "}Last sync: {fmtDateShort(segment.lastSyncedAt)}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Last sync: {fmtDateShort(segment.lastSyncedAt)}
                               {segment.lastSyncCount != null && ` · ${segment.lastSyncCount.toLocaleString()} rows`}
                             </p>
                             {runResult[segment.key] && <p className="mt-0.5 text-xs font-medium text-purple-700">{runResult[segment.key]}</p>}
@@ -314,34 +334,68 @@ export default function AudienceLabPage() {
                           </div>
 
                           <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {/* Test dry-run */}
                             <button onClick={() => handleRunNow(segment)} disabled={running[segment.key]}
                               className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition">
                               {running[segment.key] ? "…" : "Test"}
                             </button>
+
+                            {/* Logs toggle */}
                             <button onClick={() => toggleLogs(segment)}
                               className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${expandedLogs[segment.key] ? "border-purple-300 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                               {expandedLogs[segment.key] === "loading" ? "…" : "Logs"}
                             </button>
-                            {isAdminUser ? (
-                              <>
-                                <button onClick={() => handleToggle(segment)}
-                                  className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition">
-                                  {segment.active ? "Pause" : "Resume"}
-                                </button>
-                                <button onClick={() => openEdit(segment)}
-                                  className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition">
-                                  Edit
-                                </button>
-                                <button onClick={() => handleDelete(segment.key)}
-                                  className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition">
-                                  Delete
-                                </button>
-                              </>
-                            ) : (
-                              <span title="Admin access required to make changes" className="rounded-lg border border-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-300 cursor-not-allowed select-none">
-                                🔒 View only
-                              </span>
-                            )}
+
+                            {/* ⋯ menu */}
+                            <div className="relative">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === segment.key ? null : segment.key); }}
+                                className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+                              >
+                                •••
+                              </button>
+
+                              {openMenu === segment.key && (
+                                <>
+                                  {/* Invisible overlay — click outside to close */}
+                                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenu(null)} />
+                                  {/* Dropdown */}
+                                  <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                                    <button
+                                      onClick={() => handleManualRun(segment)}
+                                      disabled={running[segment.key]}
+                                      className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                                    >
+                                      <span>▶</span> Run Now
+                                    </button>
+                                    {isAdminUser && (
+                                      <>
+                                        <div className="border-t border-gray-100" />
+                                        <button
+                                          onClick={() => { setOpenMenu(null); openEdit(segment); }}
+                                          className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+                                        >
+                                          <span>✎</span> Edit
+                                        </button>
+                                        <button
+                                          onClick={() => { setOpenMenu(null); handleToggle(segment); }}
+                                          className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+                                        >
+                                          <span>{segment.active ? "⏸" : "▶"}</span> {segment.active ? "Pause" : "Resume"}
+                                        </button>
+                                        <div className="border-t border-gray-100" />
+                                        <button
+                                          onClick={() => { setOpenMenu(null); handleDelete(segment.key); }}
+                                          className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                                        >
+                                          <span>✕</span> Delete
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </>
                       ) : (
@@ -362,7 +416,7 @@ export default function AudienceLabPage() {
 
                     {/* Sync log history */}
                     {occ && expandedLogs[segment.key] && expandedLogs[segment.key] !== "loading" && (
-                      <div className="border-t border-gray-100">
+                      <div className="border-t border-gray-100 rounded-b-2xl overflow-hidden">
                         <div className="flex items-center justify-between px-5 py-2.5 bg-gray-50 border-b border-gray-100">
                           <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Sync History</p>
                           <p className="text-xs text-gray-400">{expandedLogs[segment.key].length} runs stored</p>
