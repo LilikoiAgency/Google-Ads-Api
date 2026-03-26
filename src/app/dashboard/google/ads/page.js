@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -102,9 +102,62 @@ function getStoredCampaignData(dateRange, statusFilter, customDateRange) {
 
 function resolveSelectedCampaign(campaignData, customerId, campaignSelection) {
   if (!customerId || !campaignSelection?.campaignId) return null;
-  const selectedCustomer = campaignData.find((item) => item.customer.customer_client.id === customerId);
+  const selectedCustomer = campaignData.find((item) => String(item.customer.customer_client.id) === String(customerId));
   if (!selectedCustomer) return null;
   return selectedCustomer.campaigns?.find((campaign) => campaign.campaignId === campaignSelection.campaignId) || null;
+}
+
+// ─── Account dropdown ─────────────────────────────────────────────────────────
+
+function AccountDropdown({ accounts, selectedId, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = accounts.find((a) => a.id === selectedId);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition min-w-[180px]"
+      >
+        <span className="flex-1 text-left truncate font-medium">{current?.name || "Select account"}</span>
+        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[240px] rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => { onChange(a.id); setOpen(false); }}
+              className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
+                a.id === selectedId ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
+              }`}
+            >
+              <div>
+                <p className="font-medium">{a.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">ID: {a.id}</p>
+              </div>
+              {a.id === selectedId && (
+                <svg className="w-4 h-4 text-purple-600 flex-shrink-0 ml-3" fill="none" viewBox="0 0 24 24">
+                  <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function GoogleAdsDashboard() {
@@ -122,6 +175,11 @@ export default function GoogleAdsDashboard() {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+
+  // ── Account picker state (null = checking, true = show picker, false = skip) ─
+  const [showPicker, setShowPicker]           = useState(null);
+  const [pickerCustomers, setPickerCustomers] = useState([]);
+  const [pickerLoading, setPickerLoading]     = useState(false);
 
   const updateLastUpdated = (
     date = new Date(),
@@ -143,7 +201,7 @@ export default function GoogleAdsDashboard() {
       catch { localStorage.removeItem(SELECTED_CAMPAIGN_KEY); }
     }
     const nextSelectedCustomerId =
-      storedCustomerId && campaignData.some((item) => item.customer.customer_client.id === storedCustomerId)
+      storedCustomerId && campaignData.some((item) => String(item.customer.customer_client.id) === String(storedCustomerId))
         ? storedCustomerId
         : campaignData[0]?.customer.customer_client.id || null;
     const nextSelectedCampaign = resolveSelectedCampaign(campaignData, nextSelectedCustomerId, parsedCampaignSelection);
@@ -198,12 +256,40 @@ export default function GoogleAdsDashboard() {
     }
   };
 
+  // ── Step 1: check sessionStorage for saved account, or show picker ──────────
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const savedId = sessionStorage.getItem("gads_customer_id");
+    if (savedId) {
+      setShowPicker(false); // skip picker — we remember their choice
+    } else {
+      setShowPicker(true);
+      setPickerLoading(true);
+      const cached = sessionStorage.getItem("gads_customers_list");
+      if (cached) {
+        try { setPickerCustomers(JSON.parse(cached)); } catch {}
+        setPickerLoading(false);
+      } else {
+        fetch("/api/customers")
+          .then((r) => r.json())
+          .then((d) => {
+            const list = d.customers || [];
+            setPickerCustomers(list);
+            sessionStorage.setItem("gads_customers_list", JSON.stringify(list));
+          })
+          .catch(() => setPickerCustomers([]))
+          .finally(() => setPickerLoading(false));
+      }
+    }
+  }, [status]);
+
+  // ── Step 2: load campaign data — only after account is picked ────────────────
   useEffect(() => {
     if (status === "unauthenticated") {
       router.replace("/?callbackUrl=/dashboard/google/ads");
       return;
     }
-    if (status !== "authenticated") return;
+    if (status !== "authenticated" || showPicker !== false) return;
     const storedDateRange = localStorage.getItem(SELECTED_DATE_RANGE_KEY);
     const nextDateRange = DATE_RANGE_OPTIONS.some((o) => o.value === storedDateRange) ? storedDateRange : "LAST_7_DAYS";
     const storedStatusFilter = localStorage.getItem(SELECTED_STATUS_FILTER_KEY);
@@ -222,7 +308,7 @@ export default function GoogleAdsDashboard() {
     setCustomDateRange(nextCustomDateRange);
     if (storedLastUpdated) setLastUpdated(storedLastUpdated);
     fetchData({ requestedDateRange: nextDateRange, requestedStatusFilter: nextStatusFilter, requestedCustomDateRange: nextCustomDateRange });
-  }, [router, status]);
+  }, [router, status, showPicker]);
 
   useEffect(() => {
     if (selectedCustomerId) localStorage.setItem(SELECTED_CUSTOMER_KEY, selectedCustomerId);
@@ -242,13 +328,14 @@ export default function GoogleAdsDashboard() {
   useEffect(() => { localStorage.setItem(CUSTOM_DATE_RANGE_KEY, JSON.stringify(customDateRange)); }, [customDateRange]);
 
   const handleCustomerSelect = (customerId) => {
+    sessionStorage.setItem("gads_customer_id", customerId);
     setSelectedCustomerId(customerId);
     setSelectedCampaign(null);
     setIsSidebarOpen(false);
   };
 
   const handleCampaignSelect = (campaignId) => {
-    const selectedCustomer = allCampaignData.find((item) => item.customer.customer_client.id === selectedCustomerId);
+    const selectedCustomer = allCampaignData.find((item) => String(item.customer.customer_client.id) === String(selectedCustomerId));
     const campaign = selectedCustomer?.campaigns?.find((item) => item.campaignId === campaignId) || null;
     setSelectedCampaign(campaign);
     setIsSidebarOpen(false);
@@ -303,7 +390,62 @@ export default function GoogleAdsDashboard() {
     fetchData({ requestedDateRange: "CUSTOM", requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange });
   };
 
-  if (status === "loading" || (isFetching && allCampaignData.length === 0 && !error)) {
+  // ── Account picker screen ──────────────────────────────────────────────────
+  if (showPicker === true) {
+    return (
+      <div className="min-h-screen bg-customPurple-dark flex flex-col">
+        <header className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Home">←</Link>
+          <img src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png" alt="Lilikoi" className="h-10 w-10 rounded-full" />
+          <div>
+            <p className="text-lg font-semibold text-white">Google Ads</p>
+            <p className="text-sm text-gray-400">Select an account to continue</p>
+          </div>
+        </header>
+        <div className="flex-1 flex items-start justify-center pt-16 px-6">
+          <div className="w-full max-w-lg">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm border border-gray-100 mb-4">
+                <svg viewBox="0 0 48 48" className="w-8 h-8"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1">Select a Google Ads Account</h2>
+              <p className="text-sm text-gray-400">Your selection will be remembered for this session</p>
+            </div>
+            {pickerLoading ? (
+              <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-2xl bg-white/10 animate-pulse" />)}</div>
+            ) : pickerCustomers.length === 0 ? (
+              <div className="rounded-2xl bg-white/10 p-8 text-center text-gray-400 text-sm">No accounts found.</div>
+            ) : (
+              <div className="space-y-2">
+                {pickerCustomers.map((c) => (
+                  <button key={c.id} onClick={() => {
+                    sessionStorage.setItem("gads_customer_id", c.id);
+                    localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
+                    setShowPicker(false);
+                  }}
+                    className="w-full flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 px-5 py-4 hover:bg-white/20 hover:border-white/20 transition text-left group"
+                  >
+                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 group-hover:bg-white/20 transition flex-shrink-0">
+                      <svg viewBox="0 0 48 48" className="w-5 h-5"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white truncate">{c.name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">ID: {c.id}</p>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-500 group-hover:text-white transition flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                      <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showPicker === null || status === "loading" || (showPicker === false && isFetching && allCampaignData.length === 0 && !error)) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-white">
         <h2 className="text-2xl text-customPurple mb-4">
@@ -337,39 +479,50 @@ export default function GoogleAdsDashboard() {
 
   return (
     <div className="min-h-screen bg-customPurple-dark">
-      <header className="border-b border-white/10 bg-customPurple-dark px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm mr-1" title="Home">
+            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Back to Dashboard">
               ←
             </Link>
-            <img
-              src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png"
-              alt="Lilikoi Agency"
-              className="h-10 w-10 rounded-full"
-            />
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white flex-shrink-0">
+              <svg viewBox="0 0 48 48" className="w-6 h-6"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            </div>
             <div>
-              <p className="text-lg font-semibold text-white">Lilikoi Agency</p>
-              <p className="text-sm text-gray-300">Google Ads Dashboard</p>
+              <p className="text-lg font-semibold text-white">Google Ads</p>
+              <p className="text-sm text-gray-400">Campaign Dashboard</p>
             </div>
           </div>
-          <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.22em] text-gray-300 sm:block">
-            Internal reporting
-          </div>
+          {/* Account dropdown */}
+          {selectedCustomerId && allCampaignData.length > 0 && (
+            <AccountDropdown
+              accounts={allCampaignData.map(d => ({
+                id: String(d.customer.customer_client.id),
+                name: d.customer.customer_client.descriptive_name,
+              }))}
+              selectedId={String(selectedCustomerId)}
+              onChange={(id) => {
+                localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
+                sessionStorage.setItem("gads_customer_id", id);
+                setSelectedCustomerId(id);
+                setSelectedCampaign(null);
+              }}
+            />
+          )}
         </div>
       </header>
 
       <div className="flex flex-col sm:flex-row">
         <aside className={`w-full flex-shrink-0 bg-customPurple-dark sm:w-80 sm:min-w-[16rem] ${isSidebarOpen ? "block" : "hidden"} sm:block`}>
           <Sidebar
-            customers={allCampaignData}
-            selectedCustomerId={selectedCustomerId}
+            currentCustomerName={allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.customer.customer_client.descriptive_name}
+            campaigns={allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
             selectedCampaign={selectedCampaign}
-            handleCustomerSelect={handleCustomerSelect}
             handleCampaignSelect={handleCampaignSelect}
             campaignStatusFilter={campaignStatusFilter}
             campaignStatusOptions={CAMPAIGN_STATUS_OPTIONS}
             onCampaignStatusFilterChange={handleCampaignStatusFilterChange}
+            onClearCampaign={() => { setSelectedCampaign(null); setIsSidebarOpen(false); }}
             lastUpdated={lastUpdated}
             refreshData={refreshData}
             closeSidebar={() => setIsSidebarOpen(false)}
@@ -391,7 +544,7 @@ export default function GoogleAdsDashboard() {
               onClick={() => setIsSidebarOpen((v) => !v)}
               type="button"
             >
-              {isSidebarOpen ? "Close" : "Accounts"}
+              {isSidebarOpen ? "Close" : "Campaigns"}
             </button>
           </div>
 

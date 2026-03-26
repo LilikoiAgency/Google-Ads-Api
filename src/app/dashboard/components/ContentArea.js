@@ -326,7 +326,7 @@ export default function ContentArea({
   const [showAllCampaignLandingPages, setShowAllCampaignLandingPages] = useState(false);
   const [campaignSort, setCampaignSort] = useState("conversions");
   const customerData = allCampaignData.find(
-    (item) => item.customer.customer_client.id === customerId
+    (item) => String(item.customer.customer_client.id) === String(customerId)
   );
   const customerName = customerData?.customer.customer_client.descriptive_name;
   const accountOptimizationScore =

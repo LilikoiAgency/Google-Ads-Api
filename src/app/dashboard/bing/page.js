@@ -245,22 +245,41 @@ export default function BingDashboard() {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/bing");
   }, [status, router]);
 
-  // Load accounts on mount
+  // Load accounts — restore from sessionStorage if available
   useEffect(() => {
     if (status !== "authenticated") return;
+
+    const loadAccounts = (list) => {
+      setAccounts(list);
+      const saved = sessionStorage.getItem("bing_selected_account");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (list.some((a) => a.accountId === parsed.accountId)) {
+            setSelectedAccount(parsed); // skip picker — remembered from session
+            return;
+          }
+        } catch {}
+      }
+      // No saved account → picker screen will show
+    };
+
+    const cachedList = sessionStorage.getItem("bing_accounts_list");
+    if (cachedList) {
+      try { loadAccounts(JSON.parse(cachedList)); setAccountsLoading(false); return; } catch {}
+    }
+
     setAccountsLoading(true);
     fetch("/api/bing-accounts")
       .then((r) => r.json())
       .then((d) => {
         const list = d.accounts || [];
-        setAccounts(list);
-        if (list.length > 0) setSelectedAccount(list[0]);
+        sessionStorage.setItem("bing_accounts_list", JSON.stringify(list));
+        loadAccounts(list);
       })
       .catch(() => {
-        // API failed entirely — still allow using the dashboard via env defaults
         const fallback = [{ accountId: null, customerId: null, name: "Default Account", currency: "USD" }];
         setAccounts(fallback);
-        setSelectedAccount(fallback[0]);
       })
       .finally(() => setAccountsLoading(false));
   }, [status]);
@@ -337,24 +356,17 @@ export default function BingDashboard() {
               <p className="text-sm text-gray-400">Bing Ads Dashboard</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <AccountPicker
-              accounts={accounts}
-              selected={selectedAccount}
-              onChange={(a) => { setSelectedAccount(a); setData(null); }}
-              loading={accountsLoading}
-            />
-            {data && (
-              <span className="text-xs text-gray-400 hidden sm:block">
-                {data.startDate} → {data.endDate}
-              </span>
-            )}
-          </div>
+          <AccountPicker
+            accounts={accounts}
+            selected={selectedAccount}
+            onChange={(a) => { sessionStorage.setItem("bing_selected_account", JSON.stringify(a)); setSelectedAccount(a); setData(null); }}
+            loading={accountsLoading}
+          />
         </div>
       </header>
 
-      {/* ── Date range bar ── */}
-      <div className="bg-customPurple-dark border-b border-white/10 px-6 py-3">
+      {/* ── Date range bar — only shown once an account is selected ── */}
+      <div className={`bg-customPurple-dark border-b border-white/10 px-6 py-3 ${!selectedAccount ? "hidden" : ""}`}>
         <div className="mx-auto max-w-7xl flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-gray-400 mr-1">Date range:</span>
           {PRESETS.map((p) => (
@@ -388,6 +400,57 @@ export default function BingDashboard() {
       {/* ── Body ── */}
       <div className="bg-gray-50 min-h-[calc(100vh-73px)]">
         <div className="mx-auto max-w-7xl px-6 py-8">
+
+          {/* ── Account selection screen ── */}
+          {!selectedAccount && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-full max-w-lg">
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm border border-gray-100 mb-4">
+                    <MicrosoftAdsIcon size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-1">Select an Account</h2>
+                  <p className="text-sm text-gray-500">Choose which Microsoft Advertising account to view</p>
+                </div>
+
+                {accountsLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-16 rounded-2xl bg-white border border-gray-100 animate-pulse" />
+                    ))}
+                  </div>
+                ) : accounts.length === 0 ? (
+                  <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center shadow-sm">
+                    <p className="text-gray-400 text-sm">No accounts found. Check your Bing Ads credentials.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {accounts.map((a) => (
+                      <button
+                        key={a.accountId}
+                        onClick={() => { sessionStorage.setItem("bing_selected_account", JSON.stringify(a)); setSelectedAccount(a); }}
+                        className="w-full flex items-center gap-4 rounded-2xl bg-white border border-gray-100 px-5 py-4 shadow-sm hover:border-blue-300 hover:shadow-md transition text-left group"
+                      >
+                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 group-hover:bg-blue-100 transition flex-shrink-0">
+                          <MicrosoftAdsIcon size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">{a.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">Account ID: {a.accountId} · {a.currency}</p>
+                        </div>
+                        <svg className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                          <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Dashboard content (only shown when account is selected) ── */}
+          {selectedAccount && (<>
 
           {/* Loading notice */}
           {loading && (
@@ -467,6 +530,7 @@ export default function BingDashboard() {
             <CampaignTable campaigns={data?.campaigns} loading={loading && !data} />
           </div>
 
+          </>)}
         </div>
       </div>
     </div>

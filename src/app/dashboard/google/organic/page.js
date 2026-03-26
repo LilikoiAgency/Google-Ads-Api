@@ -239,17 +239,33 @@ export default function OrganicPage() {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/google/organic");
   }, [status, router]);
 
-  // ── load GSC sites ────────────────────────────────────────────────────────
+  // ── load GSC sites + check sessionStorage ─────────────────────────────────
   useEffect(() => {
     if (status !== "authenticated") return;
+
+    const loadSites = (list) => {
+      setSites(list);
+      setGscConnected(true);
+      // Restore previously selected site if it still exists in the list
+      const savedUrl = sessionStorage.getItem("gsc_selected_site");
+      if (savedUrl && list.some((s) => s.url === savedUrl)) {
+        setSelectedSite(savedUrl); // skip picker — remembered from session
+      }
+      // Otherwise selectedSite stays "" → picker screen will show
+    };
+
+    const cached = sessionStorage.getItem("gsc_sites_list");
+    if (cached) {
+      try { loadSites(JSON.parse(cached)); return; } catch {}
+    }
+
     fetch("/api/gsc-sites")
       .then((r) => r.json())
       .then((d) => {
         if (!d.connected) { setGscConnected(false); return; }
         const list = d.sites || [];
-        setSites(list);
-        setGscConnected(true);
-        if (list.length > 0) setSelectedSite(list[0].url);
+        sessionStorage.setItem("gsc_sites_list", JSON.stringify(list));
+        loadSites(list);
       })
       .catch(() => setGscConnected(false));
   }, [status]);
@@ -339,23 +355,28 @@ export default function OrganicPage() {
       <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Home">←</Link>
-            <img src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png" alt="Lilikoi" className="h-10 w-10 rounded-full" />
+            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Back to Dashboard">←</Link>
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white flex-shrink-0">
+              <svg viewBox="0 0 48 48" className="w-6 h-6"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            </div>
             <div>
               <p className="text-lg font-semibold text-white">Google Search Organic</p>
-              <p className="text-sm text-gray-400">Search Console</p>
+              <p className="text-sm text-gray-400">Search Console Performance</p>
             </div>
           </div>
 
           {/* Site picker */}
-          {gscConnected && sites.length > 0 && (
-            <SitePicker sites={sites} selectedSite={selectedSite} onChange={setSelectedSite} />
+          {gscConnected && sites.length > 0 && selectedSite && (
+            <SitePicker sites={sites} selectedSite={selectedSite} onChange={(url) => {
+              sessionStorage.setItem("gsc_selected_site", url);
+              setSelectedSite(url);
+            }} />
           )}
         </div>
       </header>
 
-      {/* ── Date range bar ── */}
-      {gscConnected && (
+      {/* ── Date range bar — only shown once a site is selected ── */}
+      {gscConnected && selectedSite && (
         <div className="bg-customPurple-dark border-b border-white/10 px-6 py-3">
           <div className="mx-auto max-w-7xl flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium text-gray-400 mr-1">Date range:</span>
@@ -396,6 +417,51 @@ export default function OrganicPage() {
       <div className="bg-gray-50 min-h-[calc(100vh-73px)]">
         <div className="mx-auto max-w-7xl px-6 py-8">
 
+          {/* ── Site picker screen (connected but no site chosen yet) ── */}
+          {gscConnected && !selectedSite && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-full max-w-lg">
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm border border-gray-100 mb-4">
+                    <svg viewBox="0 0 48 48" className="w-8 h-8"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-1">Select a Search Console Property</h2>
+                  <p className="text-sm text-gray-500">Your selection will be remembered for this session</p>
+                </div>
+                {sites.length === 0 ? (
+                  <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center shadow-sm">
+                    <p className="text-gray-400 text-sm">No properties found in your Search Console account.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {sites.map((s) => {
+                      const domain = s.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+                      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+                      return (
+                        <button key={s.url} onClick={() => {
+                          sessionStorage.setItem("gsc_selected_site", s.url);
+                          setSelectedSite(s.url);
+                        }}
+                          className="w-full flex items-center gap-4 rounded-2xl bg-white border border-gray-100 px-5 py-4 shadow-sm hover:border-purple-300 hover:shadow-md transition text-left group"
+                        >
+                          <img src={faviconUrl} alt="" className="w-10 h-10 rounded-xl flex-shrink-0"
+                            onError={(e) => { e.target.style.display = "none"; }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 truncate">{domain}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{s.url}</p>
+                          </div>
+                          <svg className="w-5 h-5 text-gray-300 group-hover:text-purple-500 transition flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                            <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* GSC not connected */}
           {!gscConnected && (
             <div className="rounded-2xl border border-white/10 bg-white p-12 text-center shadow-sm">
@@ -410,7 +476,7 @@ export default function OrganicPage() {
             </div>
           )}
 
-          {gscConnected && (
+          {gscConnected && selectedSite && (
             <>
               {/* Error */}
               {error && (
