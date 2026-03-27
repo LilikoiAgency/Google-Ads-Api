@@ -118,6 +118,21 @@ const TILES = [
     tag: "Segments",
     tagColor: "#a855f7",
   },
+  {
+    href: "/dashboard/admin/clients",
+    Icon: () => (
+      <svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="16" r="7" fill="#6d28d9" opacity="0.9"/>
+        <circle cx="33" cy="16" r="5" fill="#a78bfa" opacity="0.8"/>
+        <ellipse cx="18" cy="34" rx="12" ry="7" fill="#6d28d9" opacity="0.85"/>
+        <ellipse cx="34" cy="34" rx="9" ry="6" fill="#a78bfa" opacity="0.7"/>
+      </svg>
+    ),
+    title: "Client Portals",
+    description: "Set up and manage client-facing portals with ad performance and audience data.",
+    tag: "Admin",
+    tagColor: "#6d28d9",
+  },
 ];
 
 export default function DashboardHub() {

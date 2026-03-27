@@ -179,10 +179,12 @@ export async function GET() {
       }
     }
 
-    accounts.sort((a, b) => a.name.localeCompare(b.name));
-    console.log(`[bing-accounts] Total unique accounts: ${accounts.length}`);
+    // Only keep Active accounts — filter out Inactive, Suspended, Paused, etc.
+    const activeAccounts = accounts.filter((a) => (a.status || "").toLowerCase() === "active");
+    activeAccounts.sort((a, b) => a.name.localeCompare(b.name));
+    console.log(`[bing-accounts] Total unique accounts: ${accounts.length}, active: ${activeAccounts.length}`);
 
-    return NextResponse.json({ accounts: accounts.length > 0 ? accounts : envFallback() });
+    return NextResponse.json({ accounts: activeAccounts.length > 0 ? activeAccounts : envFallback() });
   } catch (err) {
     console.error("[bing-accounts] Fatal error:", err.message);
     return NextResponse.json({ accounts: envFallback() });

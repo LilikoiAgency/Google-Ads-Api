@@ -373,7 +373,7 @@ export default function BingDashboard() {
       // No saved account → picker screen will show
     };
 
-    const cachedList = sessionStorage.getItem("bing_accounts_list");
+    const cachedList = sessionStorage.getItem("bing_accounts_list_v2");
     if (cachedList) {
       try { loadAccounts(JSON.parse(cachedList)); setAccountsLoading(false); return; } catch {}
     }
@@ -383,7 +383,7 @@ export default function BingDashboard() {
       .then((r) => r.json())
       .then((d) => {
         const list = d.accounts || [];
-        sessionStorage.setItem("bing_accounts_list", JSON.stringify(list));
+        sessionStorage.setItem("bing_accounts_list_v2", JSON.stringify(list));
         loadAccounts(list);
       })
       .catch(() => {

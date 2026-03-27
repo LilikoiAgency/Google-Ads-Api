@@ -388,19 +388,13 @@ function buildDashboardData(budgetMap, rows) {
     });
   }
 
-  // Also add campaigns from budgetMap with no report data (zero spend)
-  for (const [id, meta] of budgetMap.entries()) {
-    if (!campaignAgg.has(id)) {
-      campaigns.push({
-        id, name: meta.name, status: meta.status,
-        budget: meta.budget ? parseFloat(meta.budget) : null,
-        budgetType: meta.budgetType,
-        clicks: 0, impressions: 0, spend: 0, conversions: 0, revenue: 0, ctr: 0, cpc: 0, roas: 0,
-      });
-    }
-  }
+  // Campaigns with no rows in the report had $0 spend — skip them entirely.
 
-  campaigns.sort((a, b) => b.spend - a.spend);
+  // Filter to only campaigns with spend > 0 and sort by spend descending
+  const activeWithSpend = campaigns.filter((c) => c.spend > 0);
+  activeWithSpend.sort((a, b) => b.spend - a.spend);
+  campaigns.length = 0;
+  campaigns.push(...activeWithSpend);
 
   // Trend sorted by date
   const trend = [...trendAgg.entries()]

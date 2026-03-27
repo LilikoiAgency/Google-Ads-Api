@@ -134,6 +134,7 @@ export async function GET(request) {
             ...metrics,
           };
         })
+        .filter((s) => s.spend > 0)
         .sort((a, b) => b.spend - a.spend);
 
       return NextResponse.json({ adsets });
@@ -193,7 +194,7 @@ export async function GET(request) {
     const totals       = parseInsightRow(totalsRow)     || { ...ZERO_METRICS };
     const prevTotals   = parseInsightRow(prevTotalsRow) || { ...ZERO_METRICS };
 
-    // ── Parse campaigns ────────────────────────────────────────────────────
+    // ── Parse campaigns — exclude $0 spend in the selected period ─────────
     const campaigns = (campaignsRes.data || [])
       .map((c) => {
         const insightData = c.insights?.data?.[0] || null;
@@ -206,6 +207,7 @@ export async function GET(request) {
           ...metrics,
         };
       })
+      .filter((c) => c.spend > 0)
       .sort((a, b) => b.spend - a.spend);
 
     // ── Parse daily trend ──────────────────────────────────────────────────
