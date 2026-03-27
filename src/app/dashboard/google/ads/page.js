@@ -6,6 +6,21 @@ import Link from "next/link";
 import "../../../globals.css";
 import ContentArea from "../../components/ContentArea";
 
+// Priority clients — shown first in every account list (order matters)
+const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf", "cmk"];
+function priorityIndex(name) {
+  const lower = (name || "").toLowerCase();
+  const idx = PRIORITY_KEYWORDS.findIndex((kw) => lower.includes(kw));
+  return idx === -1 ? PRIORITY_KEYWORDS.length : idx;
+}
+function prioritySort(list, nameKey = "name") {
+  return [...list].sort((a, b) => {
+    const pa = priorityIndex(a[nameKey]), pb = priorityIndex(b[nameKey]);
+    if (pa !== pb) return pa - pb;
+    return (a[nameKey] || "").localeCompare(b[nameKey] || "");
+  });
+}
+
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
   { value: "LAST_30_DAYS", label: "Last 30 days" },
@@ -378,13 +393,13 @@ export default function GoogleAdsDashboard() {
       setPickerLoading(true);
       const cached = sessionStorage.getItem("gads_customers_list");
       if (cached) {
-        try { setPickerCustomers(JSON.parse(cached)); } catch {}
+        try { setPickerCustomers(prioritySort(JSON.parse(cached))); } catch {}
         setPickerLoading(false);
       } else {
         fetch("/api/customers")
           .then((r) => r.json())
           .then((d) => {
-            const list = d.customers || [];
+            const list = prioritySort(d.customers || []);
             setPickerCustomers(list);
             sessionStorage.setItem("gads_customers_list", JSON.stringify(list));
           })

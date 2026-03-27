@@ -10,6 +10,22 @@ import {
 } from "recharts";
 import "../../globals.css";
 
+// ─── priority sort ────────────────────────────────────────────────────────────
+
+const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf", "cmk"];
+function priorityIndex(name) {
+  const lower = (name || "").toLowerCase();
+  const idx = PRIORITY_KEYWORDS.findIndex((kw) => lower.includes(kw));
+  return idx === -1 ? PRIORITY_KEYWORDS.length : idx;
+}
+function prioritySort(list, nameKey = "name") {
+  return [...list].sort((a, b) => {
+    const pa = priorityIndex(a[nameKey]), pb = priorityIndex(b[nameKey]);
+    if (pa !== pb) return pa - pb;
+    return (a[nameKey] || "").localeCompare(b[nameKey] || "");
+  });
+}
+
 // ─── formatters ───────────────────────────────────────────────────────────────
 
 const fmt  = (n) => n == null ? "—" : Number(n).toLocaleString("en-US");
@@ -343,7 +359,7 @@ export default function BingDashboard() {
     if (status !== "authenticated") return;
 
     const loadAccounts = (list) => {
-      setAccounts(list);
+      setAccounts(prioritySort(list));
       const saved = sessionStorage.getItem("bing_selected_account");
       if (saved) {
         try {

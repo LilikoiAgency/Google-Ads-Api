@@ -60,6 +60,15 @@ function AudienceLabIcon() {
   );
 }
 
+function MetaAdsIcon() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="8" fill="#1877F2"/>
+      <path d="M26 12c-1.1 0-2 .45-2.7 1.2C21.95 11.44 20.1 10 18 10c-2.1 0-3.95 1.44-5.3 3.2C11.99 12.45 11.1 12 10 12c-2.2 0-4 1.8-4 4 0 .9.3 1.72.8 2.38C8.1 21.66 12.8 26 18 26s9.9-4.34 11.2-7.62c.5-.66.8-1.48.8-2.38 0-2.2-1.8-4-4-4zm-8 11.5c-3.58 0-7.5-3.8-7.5-7.5 0-1.38 1.12-2.5 2.5-2.5.78 0 1.47.36 1.94.92C14.51 15.37 16.15 16.5 18 16.5s3.49-1.13 4.06-2.08c.47-.56 1.16-.92 1.94-.92 1.38 0 2.5 1.12 2.5 2.5 0 3.7-3.92 7.5-7.5 7.5z" fill="white"/>
+    </svg>
+  );
+}
+
 const TILES = [
   {
     href: "/dashboard/google/ads",
@@ -89,9 +98,17 @@ const TILES = [
     href: "/report",
     Icon: ReportIcon,
     title: "Paid vs. Organic Report",
-    description: "Cross-reference paid keywords with organic queries to find overlap and opportunities.",
+    description: "Side-by-side comparison of Google Ads (paid) and Google Search Console (organic) — find keyword overlap, gaps, and opportunities.",
     tag: "Report",
     tagColor: "#f59e0b",
+  },
+  {
+    href: "/dashboard/meta",
+    Icon: MetaAdsIcon,
+    title: "Meta Ads",
+    description: "Facebook & Instagram campaign performance — spend, clicks, reach, conversions, and ROAS.",
+    tag: "Paid",
+    tagColor: "#1877F2",
   },
   {
     href: "/dashboard/audience-lab",
