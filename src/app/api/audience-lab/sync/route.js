@@ -409,10 +409,10 @@ function toBigQueryRow(rawRow, segmentName, batchTimestamp) {
         rawRow?.DIRECT_NUMBER ||
         rawRow?.VALID_PHONES
     ),
-    address: rawRow?.PERSONAL_ADDRESS || null,
-    city: rawRow?.PERSONAL_CITY || null,
-    state: rawRow?.PERSONAL_STATE || null,
-    zip: splitFirstValue(rawRow?.PERSONAL_ZIP || rawRow?.SKIPTRACE_ZIP) || null,
+    address: rawRow?.PERSONAL_ADDRESS || rawRow?.ADDRESS || null,
+    city:    rawRow?.PERSONAL_CITY    || rawRow?.CITY    || rawRow?.HOME_CITY    || rawRow?.MAILING_CITY    || null,
+    state:   rawRow?.PERSONAL_STATE   || rawRow?.STATE   || rawRow?.HOME_STATE   || rawRow?.MAILING_STATE   || null,
+    zip:     splitFirstValue(rawRow?.PERSONAL_ZIP || rawRow?.ZIP || rawRow?.HOME_ZIP || rawRow?.MAILING_ZIP || rawRow?.SKIPTRACE_ZIP) || null,
     country: "US",
   };
 }

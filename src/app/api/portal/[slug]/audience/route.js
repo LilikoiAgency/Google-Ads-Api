@@ -58,6 +58,7 @@ export async function GET(request, { params }) {
   const token            = searchParams.get("token");
   const page             = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const period           = searchParams.get("period") || "latest"; // "latest" | "week" | "mtd"
+  const segmentParam     = searchParams.get("segment") || "";      // comma-separated keys, empty = all
   const pageSize         = 50;
 
   const client = await validateClientAccess(slug, token);
@@ -69,20 +70,51 @@ export async function GET(request, { params }) {
   }
 
   // Look up table IDs for the segment keys
-  const allSegments = await getSegments();
-  const segments    = allSegments.filter((s) => segmentKeys.includes(s.key) && s.tableId);
+  const allSegments      = await getSegments();
+  const clientSegments   = allSegments.filter((s) => segmentKeys.includes(s.key) && s.tableId);
+
+  console.log("[portal/audience] client segmentKeys:", segmentKeys);
+  console.log("[portal/audience] matched segments:", clientSegments.map((s) => ({ key: s.key, name: s.name, tableId: s.tableId })));
+  console.log("[portal/audience] unmatched keys:", segmentKeys.filter((k) => !allSegments.find((s) => s.key === k)));
+
+  if (clientSegments.length === 0) {
+    return NextResponse.json({ total: 0, byState: [], records: [], lastUpdated: null, page, pageSize, availableSegments: [] });
+  }
+
+  // Filter to only the requested segment(s) — validate keys against client's allowed list
+  const requestedKeys = segmentParam
+    ? segmentParam.split(",").map((k) => k.trim()).filter((k) => segmentKeys.includes(k))
+    : [];
+  const segments = requestedKeys.length > 0
+    ? clientSegments.filter((s) => requestedKeys.includes(s.key))
+    : clientSegments;
+
+  const availableSegments = clientSegments.map((s) => ({ key: s.key, name: s.name }));
 
   if (segments.length === 0) {
-    return NextResponse.json({ total: 0, byState: [], records: [], lastUpdated: null, page, pageSize });
+    return NextResponse.json({ total: 0, byState: [], records: [], lastUpdated: null, page, pageSize, availableSegments });
   }
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const datasetId = process.env.BQ_DATASET_ID;
 
   try {
-    // Build UNION ALL — no date filter here, applied in outer query so the
-    // cutoff date is consistent across all segments
-    const tableParts = segments.map((s) =>
+    // "Latest" UNION — each table pre-filtered to its own MAX date so every
+    // segment contributes its most recent sync even if they ran on different weeks
+    const latestTableParts = segments.map((s) =>
+      `SELECT
+        first_name, last_name, city, state, zip,
+        DATE(date) AS sync_date,
+        CAST(DATE(date) AS STRING) AS synced_at,
+        '${s.key}' AS segment_key,
+        '${s.name}' AS segment_name
+       FROM \`${projectId}.${datasetId}.${s.tableId}\`
+       WHERE DATE(date) = (SELECT MAX(DATE(date)) FROM \`${projectId}.${datasetId}.${s.tableId}\`)`
+    );
+    const latestUnionSql = latestTableParts.join("\nUNION ALL\n");
+
+    // "Period" UNION — no per-table date filter; outer WHERE applies the cutoff
+    const periodTableParts = segments.map((s) =>
       `SELECT
         first_name, last_name, city, state, zip,
         DATE(date) AS sync_date,
@@ -91,62 +123,63 @@ export async function GET(request, { params }) {
         '${s.name}' AS segment_name
        FROM \`${projectId}.${datasetId}.${s.tableId}\``
     );
+    const periodUnionSql = periodTableParts.join("\nUNION ALL\n");
 
-    const unionSql = tableParts.join("\nUNION ALL\n");
-
-    // Determine the date filter — always fall back to latest sync if period
-    // returns no rows (e.g. sync ran last Monday, not yet this Monday)
+    // Choose which union + where to use
     const periodWhere =
-      period === "mtd"  ? `AND sync_date >= DATE_TRUNC(CURRENT_DATE(), MONTH)`
-      : period === "week" ? `AND sync_date >= DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY))`
-      : null; // null = latest only
+      period === "mtd"  ? `WHERE sync_date >= DATE_TRUNC(CURRENT_DATE(), MONTH)`
+      : period === "week" ? `WHERE sync_date >= DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY))`
+      : null;
 
-    // Check whether the period filter has any data; if not, fall back to latest
-    const latestWhere = `AND sync_date = (SELECT MAX(sync_date) FROM combined)`;
+    let unionSql  = latestUnionSql;
+    let outerWhere = ""; // latestUnionSql already pre-filtered per segment
 
-    let dateWhere = latestWhere; // default: latest sync
     if (periodWhere) {
+      // Check if the period has any rows across all segments
       const checkRows = await runQuery(`
-        WITH combined AS (${unionSql})
-        SELECT COUNT(*) AS n FROM combined WHERE TRUE ${periodWhere}
+        WITH combined AS (${periodUnionSql})
+        SELECT COUNT(*) AS n FROM combined ${periodWhere}
       `);
       const hasRows = parseInt(checkRows[0]?.n || "0", 10) > 0;
-      dateWhere = hasRows ? periodWhere : latestWhere;
+      if (hasRows) {
+        unionSql   = periodUnionSql;
+        outerWhere = periodWhere;
+      }
+      // else fall back to latestUnionSql with no outerWhere
     }
 
-    // Get summary stats (count + state breakdown + last sync)
-    const [summaryRows, detailRows] = await Promise.all([
+    // Get total count, state breakdown, and detail records in parallel
+    const [totalRows, summaryRows, detailRows] = await Promise.all([
+      // Total count — no state filter so everyone is counted
       runQuery(`
         WITH combined AS (${unionSql})
-        SELECT
-          state,
-          COUNT(*) AS count,
-          MAX(synced_at) AS last_synced
+        SELECT COUNT(*) AS total, MAX(synced_at) AS last_synced
+        FROM combined ${outerWhere}
+      `),
+      // State breakdown — only rows that have a state value
+      runQuery(`
+        WITH combined AS (${unionSql})
+        SELECT state, COUNT(*) AS count
         FROM combined
-        WHERE state IS NOT NULL AND state != ''
-          ${dateWhere}
+        ${outerWhere ? outerWhere + " AND state IS NOT NULL AND state != ''" : "WHERE state IS NOT NULL AND state != ''"}
         GROUP BY state
         ORDER BY count DESC
       `),
       runQuery(`
         WITH combined AS (${unionSql})
         SELECT
-          first_name,
-          last_name,
-          city,
-          state,
-          zip,
-          segment_name,
-          synced_at
-        FROM combined
-        WHERE TRUE ${dateWhere}
+          first_name, last_name, city, state, zip,
+          segment_name, synced_at
+        FROM combined ${outerWhere}
         ORDER BY state, city, last_name
         LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
       `),
     ]);
 
-    const total       = summaryRows.reduce((s, r) => s + parseInt(r.count || 0, 10), 0);
-    const lastUpdated = summaryRows.reduce((max, r) => (r.last_synced > max ? r.last_synced : max), "");
+    console.log("[portal/audience] totalRows raw:", JSON.stringify(totalRows));
+    console.log("[portal/audience] detailRows count:", detailRows.length);
+    const total       = parseInt(totalRows[0]?.total || "0", 10);
+    const lastUpdated = totalRows[0]?.last_synced || "";
 
     const byState = summaryRows.map((r) => ({
       state: r.state,
@@ -163,7 +196,7 @@ export async function GET(request, { params }) {
       syncedAt:    r.synced_at    || "",
     }));
 
-    return NextResponse.json({ total, byState, records, lastUpdated, page, pageSize, totalPages: Math.ceil(total / pageSize), period });
+    return NextResponse.json({ total, byState, records, lastUpdated, page, pageSize, totalPages: Math.ceil(total / pageSize), period, availableSegments });
 
   } catch (err) {
     console.error("[portal/audience] BigQuery error:", err.message);

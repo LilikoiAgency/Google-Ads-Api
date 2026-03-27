@@ -82,11 +82,12 @@ function ClientPortalInner() {
   const [perfLoading, setPerfLoading] = useState(true);
 
   // Audience data
-  const [audience,    setAudience]    = useState(null);
-  const [audLoading,  setAudLoading]  = useState(true);
-  const [audError,    setAudError]    = useState(null);
-  const [audPage,     setAudPage]     = useState(1);
-  const [showDetails, setShowDetails] = useState(false);
+  const [audience,         setAudience]         = useState(null);
+  const [audLoading,       setAudLoading]        = useState(true);
+  const [audError,         setAudError]          = useState(null);
+  const [audPage,          setAudPage]           = useState(1);
+  const [showDetails,      setShowDetails]       = useState(false);
+  const [selectedSegment,  setSelectedSegment]   = useState(""); // "" = all
 
   // ── load performance ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -114,9 +115,9 @@ function ClientPortalInner() {
   }, [slug, token]);
 
   // ── load audience ─────────────────────────────────────────────────────────
-  const loadAudience = (page = 1, p = period) => {
+  const loadAudience = (page = 1, p = period, seg = selectedSegment) => {
     if (!slug || !token) return;
-    const CACHE_KEY = `portal_aud_${slug}_${p}_p${page}_v1`;
+    const CACHE_KEY = `portal_aud_${slug}_${p}_${seg}_p${page}_v2`;
     const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
     if (page === 1) {
       try {
@@ -131,7 +132,8 @@ function ClientPortalInner() {
     }
     setAudLoading(true);
     setAudError(null);
-    fetch(`/api/portal/${slug}/audience?token=${token}&page=${page}&period=${p}`)
+    const segParam = seg ? `&segment=${encodeURIComponent(seg)}` : "";
+    fetch(`/api/portal/${slug}/audience?token=${token}&page=${page}&period=${p}${segParam}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.error) { setAudError(d.error); return; }
@@ -145,7 +147,7 @@ function ClientPortalInner() {
       .finally(() => setAudLoading(false));
   };
 
-  useEffect(() => { if (!error) loadAudience(1, period); }, [slug, token, error, period]);
+  useEffect(() => { if (!error) loadAudience(1, period, selectedSegment); }, [slug, token, error, period, selectedSegment]);
 
   if (error) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -243,7 +245,7 @@ function ClientPortalInner() {
             ].map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => { setPeriod(key); setAudience(null); }}
+                onClick={() => { setPeriod(key); setAudience(null); setSelectedSegment(""); }}
                 className={`px-5 py-2.5 transition ${period === key ? "bg-purple-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}
               >
                 {label}
@@ -358,11 +360,34 @@ function ClientPortalInner() {
               </div>
             ) : audience ? (
               <>
+                {/* Segment filter */}
+                {audience.availableSegments?.length > 1 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <button
+                      onClick={() => setSelectedSegment("")}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${selectedSegment === "" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                    >
+                      All Segments
+                    </button>
+                    {audience.availableSegments.map((s) => (
+                      <button
+                        key={s.key}
+                        onClick={() => setSelectedSegment(s.key)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${selectedSegment === s.key ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* Big count */}
                 <div className="flex items-baseline gap-3 mb-5">
                   <p className="text-5xl font-black text-purple-700">{fmt(audience.total)}</p>
                   <p className="text-sm text-gray-500 font-medium">
-                    {period === "week" ? "people targeted this week" : "people targeted this month"}
+                    {selectedSegment
+                      ? `people in ${audience.availableSegments?.find((s) => s.key === selectedSegment)?.name || "this segment"}`
+                      : period === "week" ? "people targeted this week" : "people targeted this month"}
                   </p>
                 </div>
 
