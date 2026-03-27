@@ -539,7 +539,7 @@ function AiInsightsPanel() {
         </div>
         <p className="text-sm font-semibold text-gray-700">AI-powered campaign analysis</p>
         <p className="text-xs text-gray-400 max-w-xs">
-          Get automatic insights like "3 campaigns have frequency above 5 — consider refreshing creatives" or "Spend is up 34% but ROAS dropped 18%."
+          Get automatic insights like &ldquo;3 campaigns have frequency above 5 — consider refreshing creatives&rdquo; or &ldquo;Spend is up 34% but ROAS dropped 18%.&rdquo;
         </p>
         <div className="flex flex-wrap gap-2 mt-2 justify-center">
           {["Ad fatigue detection", "Budget pacing", "ROAS anomalies", "Audience overlap"].map((tag) => (
