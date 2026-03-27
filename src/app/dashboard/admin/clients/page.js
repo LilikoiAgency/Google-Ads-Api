@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import "../../../globals.css";
 
-const ADMIN_EMAILS = ["frank@lilikoiagency.com"];
 
 const EMPTY_FORM = {
   name: "", slug: "", logo: "",
@@ -174,8 +173,7 @@ export default function AdminClientsPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  const userEmail  = session?.user?.email || "";
-  const isAdminUser = ADMIN_EMAILS.includes(userEmail.toLowerCase());
+  const isAdminUser = status === "authenticated";
 
   const [clients,  setClients]   = useState([]);
   const [loading,  setLoading]   = useState(true);
@@ -196,7 +194,6 @@ export default function AdminClientsPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/admin/clients");
-    if (status === "authenticated" && !isAdminUser) router.replace("/dashboard");
   }, [status, isAdminUser, router]);
 
   const load = async () => {
@@ -305,7 +302,6 @@ export default function AdminClientsPage() {
     </div>
   );
 
-  if (!isAdminUser) return null;
 
   return (
     <div className="min-h-screen bg-customPurple-dark">
