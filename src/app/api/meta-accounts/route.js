@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCredentials } from "../../../../lib/dbFunctions";
+import { getCredentials } from "../../../lib/dbFunctions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
