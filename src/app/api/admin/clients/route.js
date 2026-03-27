@@ -6,14 +6,9 @@ import {
   deleteClient, regenerateToken,
 } from "../../../../lib/clientPortal";
 
-const ADMIN_EMAILS = ["frank@lilikoiagency.com"];
-function isAdmin(email) {
-  return ADMIN_EMAILS.includes((email || "").toLowerCase());
-}
-
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email || !isAdmin(session.user.email)) return null;
+  if (!session?.user?.email) return null;
   return session;
 }
 
