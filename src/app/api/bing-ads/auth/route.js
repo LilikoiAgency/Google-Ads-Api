@@ -1,14 +1,17 @@
+import { getBingCreds } from "../../../../lib/bingReporting";
+
 const TENANT = process.env.BING_ADS_TENANT || "consumers";
-const CLIENT_ID = process.env.BING_ADS_CLIENT_ID;
 const REDIRECT_URI =
   process.env.BING_ADS_REDIRECT_URI ||
   "http://localhost:3000/api/bing-ads/callback";
 const AUTH_ENDPOINT = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize`;
 
 export async function GET(request) {
-  if (!CLIENT_ID) {
+  const { clientId } = await getBingCreds();
+
+  if (!clientId) {
     return new Response(
-      JSON.stringify({ error: "Missing BING_ADS_CLIENT_ID in environment." }),
+      JSON.stringify({ error: "Missing BING_ADS_CLIENT_ID in environment or MongoDB." }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -18,7 +21,7 @@ export async function GET(request) {
   const domainHint = searchParams.get("domain_hint");
 
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
+    client_id: clientId,
     response_type: "code",
     redirect_uri: REDIRECT_URI,
     response_mode: "query",

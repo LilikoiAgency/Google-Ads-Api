@@ -81,6 +81,9 @@ function ClientPortalInner() {
   const [perfData,    setPerfData]    = useState(null);
   const [perfLoading, setPerfLoading] = useState(true);
 
+  // Channel filter
+  const [selectedChannel, setSelectedChannel] = useState(""); // "" = all, or "google"/"bing"/"meta"
+
   // Audience data
   const [audience,         setAudience]         = useState(null);
   const [audLoading,       setAudLoading]        = useState(true);
@@ -92,7 +95,7 @@ function ClientPortalInner() {
   // ── load performance ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!slug || !token) { setError("Invalid link."); return; }
-    const CACHE_KEY = `portal_perf_${slug}_v1`;
+    const CACHE_KEY = `portal_perf_${slug}_v2`;
     const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
     try {
       const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "null");
@@ -163,7 +166,7 @@ function ClientPortalInner() {
   const platforms = perfData?.connectedPlatforms || {};
   const activePlats = Object.entries(platforms).filter(([, v]) => v).map(([k]) => k);
 
-  // Aggregate performance data for the selected period
+  // Aggregate performance data for the selected period (all-channel totals)
   const currentWeek = (() => {
     if (!weekly.length) return null;
     if (period === "week") return weekly[weekly.length - 1];
@@ -183,16 +186,41 @@ function ClientPortalInner() {
     return { spend, conversions, byPlatform, cpl: conversions > 0 ? parseFloat((spend / conversions).toFixed(2)) : null };
   })();
 
-  // Chart data — filtered to match the selected period
-  const chartData = (() => {
-    if (!weekly.length) return [];
+  // KPI values — filtered to selectedChannel when one is active
+  const displayWeek = (() => {
+    if (!currentWeek) return null;
+    if (!selectedChannel) return currentWeek;
+    const pd = currentWeek.byPlatform?.[selectedChannel];
+    if (!pd) return currentWeek;
+    return {
+      spend:       pd.spend,
+      conversions: pd.conversions,
+      cpl:         pd.conversions > 0 ? parseFloat((pd.spend / pd.conversions).toFixed(2)) : null,
+      byPlatform:  currentWeek.byPlatform,
+    };
+  })();
+
+  // Chart data — MTD uses day-by-day daily array, weekly view uses last 8 weeks
+  const chartDisplayData = (() => {
+    const monthPrefix = new Date().toISOString().slice(0, 7);
     if (period === "mtd") {
-      const monthPrefix = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-      const inMonth = weekly.filter((w) => (w.weekStart || "").startsWith(monthPrefix));
-      return inMonth.length ? inMonth : weekly.slice(-4); // fallback if month just started
+      const allDaily = perfData?.daily || [];
+      const inMonth  = allDaily.filter((d) => (d.date || "").startsWith(monthPrefix));
+      const src      = inMonth.length ? inMonth : allDaily.slice(-30);
+      return src.map((d) => ({
+        ...d,
+        weekStart:   d.date,  // reuse XAxis dataKey
+        spend:       selectedChannel ? (d.byPlatform?.[selectedChannel]?.spend || 0) : d.spend,
+        conversions: selectedChannel ? (d.byPlatform?.[selectedChannel]?.conversions || 0) : d.conversions,
+      }));
     }
-    // "week" — show last 8 weeks for trend context, current week is the rightmost bar
-    return weekly.slice(-8);
+    // weekly — last 8 weeks, filtered to channel
+    const src = weekly.slice(-8);
+    return src.map((w) => ({
+      ...w,
+      spend:       selectedChannel ? (w.byPlatform?.[selectedChannel]?.spend || 0) : w.spend,
+      conversions: selectedChannel ? (w.byPlatform?.[selectedChannel]?.conversions || 0) : w.conversions,
+    }));
   })();
 
   return (
@@ -245,7 +273,7 @@ function ClientPortalInner() {
             ].map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => { setPeriod(key); setAudience(null); setSelectedSegment(""); }}
+                onClick={() => { setPeriod(key); setAudience(null); setSelectedSegment(""); setSelectedChannel(""); }}
                 className={`px-5 py-2.5 transition ${period === key ? "bg-purple-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}
               >
                 {label}
@@ -261,25 +289,46 @@ function ClientPortalInner() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <KpiCard label="Total Spend"   value={fmtD(currentWeek?.spend)}       color="#6d28d9" icon="💰" sub="Combined across all platforms" />
-            <KpiCard label="Conversions"   value={fmt(currentWeek?.conversions)}   color="#059669" icon="✅" sub="Leads, purchases & sign-ups" />
-            <KpiCard label="Cost Per Lead" value={currentWeek?.cpl ? fmtD(currentWeek.cpl) : "—"} color="#d97706" icon="🎯" sub="Average cost per conversion" />
+            <KpiCard label="Total Spend"   value={fmtD(displayWeek?.spend)}       color="#6d28d9" icon="💰" sub={selectedChannel ? `${PLATFORM_STYLES[selectedChannel]?.label || selectedChannel} only` : "Combined across all platforms"} />
+            <KpiCard label="Conversions"   value={fmt(displayWeek?.conversions)}   color="#059669" icon="✅" sub="Leads, purchases & sign-ups" />
+            <KpiCard label="Cost Per Lead" value={displayWeek?.cpl ? fmtD(displayWeek.cpl) : "—"} color="#d97706" icon="🎯" sub="Average cost per conversion" />
           </div>
         )}
 
         {/* ── Channel Breakdown ── */}
         {!perfLoading && currentWeek?.byPlatform && activePlats.length > 0 && (
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5 mb-6">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Spend by Channel</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Spend by Channel</p>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                {selectedChannel && (
+                  <button
+                    onClick={() => setSelectedChannel("")}
+                    className="rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold px-3 py-1 transition"
+                  >
+                    ✕ All Channels
+                  </button>
+                )}
+                <span className="text-gray-300 hidden sm:inline">Click a channel to filter</span>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-4">
               {activePlats.map((p) => {
                 const pd = currentWeek.byPlatform[p];
                 if (!pd || pd.spend === 0) return null;
-                const pct = currentWeek.spend > 0 ? Math.round((pd.spend / currentWeek.spend) * 100) : 0;
-                const styles = PLATFORM_STYLES[p] || { label: p, bg: "bg-gray-100", text: "text-gray-600" };
+                const pct       = currentWeek.spend > 0 ? Math.round((pd.spend / currentWeek.spend) * 100) : 0;
+                const styles    = PLATFORM_STYLES[p] || { label: p, bg: "bg-gray-100", text: "text-gray-600" };
                 const barColors = { google: "#4285F4", bing: "#00809D", meta: "#1877F2" };
+                const isActive  = selectedChannel === p;
+                const isDimmed  = selectedChannel && !isActive;
                 return (
-                  <div key={p} className="flex-1 min-w-[140px]">
+                  <button
+                    key={p}
+                    onClick={() => setSelectedChannel(isActive ? "" : p)}
+                    className={`flex-1 min-w-[140px] text-left rounded-xl p-2 -m-2 transition cursor-pointer
+                      ${isActive ? "ring-2 ring-purple-500 bg-purple-50" : "hover:bg-gray-50"}
+                      ${isDimmed ? "opacity-40" : ""}`}
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <span className={`text-xs font-semibold ${styles.text}`}>{styles.label}</span>
                       <span className="text-xs font-bold text-gray-700">{fmtD(pd.spend)}</span>
@@ -291,29 +340,47 @@ function ClientPortalInner() {
                       <span className="text-xs text-gray-400">{pct}% of total</span>
                       {pd.conversions > 0 && <span className="text-xs text-gray-400">{fmt(pd.conversions)} conv.</span>}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* ── 12-Week Trend Chart ── */}
+        {/* ── Trend Chart ── */}
         <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5 mb-6">
-          <p className="text-sm font-bold text-gray-800 mb-4">{period === "week" ? "This Week · Daily Trend" : "Month to Date · Weekly Trend"}</p>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <p className="text-sm font-bold text-gray-800">
+              {period === "week"
+                ? `8-Week Performance Trend${selectedChannel ? ` · ${PLATFORM_STYLES[selectedChannel]?.label || selectedChannel}` : ""}`
+                : `Month to Date · Daily${selectedChannel ? ` · ${PLATFORM_STYLES[selectedChannel]?.label || selectedChannel}` : ""}`}
+            </p>
+            {period === "mtd" && !perfData?.daily?.length && !perfLoading && (
+              <span className="text-xs text-gray-400">Daily data loading…</span>
+            )}
+          </div>
           {perfLoading ? (
             <div className="h-52 bg-gray-50 rounded-xl animate-pulse" />
-          ) : chartData.length > 0 ? (
+          ) : chartDisplayData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <BarChart data={chartDisplayData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="weekStart" tick={{ fontSize: 10 }} tickFormatter={(v) => new Date(v + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} />
+                <XAxis
+                  dataKey="weekStart"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => new Date(v + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+                  interval={period === "mtd" ? Math.floor(chartDisplayData.length / 6) : 0}
+                />
                 <YAxis yAxisId="spend" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
                 <YAxis yAxisId="conv"  tick={{ fontSize: 10 }} orientation="right" />
                 <Tooltip
                   contentStyle={{ fontSize: 12 }}
                   formatter={(v, name) => [name === "spend" ? fmtD(v) : fmt(v), name === "spend" ? "Spend" : "Conversions"]}
-                  labelFormatter={(v) => fmtDate(v)}
+                  labelFormatter={(v) => {
+                    if (period === "mtd") return fmtDate(v);
+                    const w = chartDisplayData.find((d) => d.weekStart === v);
+                    return w?.weekEnd ? fmtWeek(v, w.weekEnd) : fmtDate(v);
+                  }}
                 />
                 <Legend formatter={(v) => v === "spend" ? "Spend" : "Conversions"} />
                 <Bar yAxisId="spend" dataKey="spend"       fill="#6d28d9" radius={[4, 4, 0, 0]} opacity={0.85} />

@@ -170,6 +170,9 @@ export async function GET(request, { params }) {
   // Build empty weekly buckets
   const buckets = buildWeekBuckets(weeks);
 
+  // Daily accumulator (for MTD day-by-day chart)
+  const dailyMap = {};
+
   function addToBuckets(rows, platform) {
     for (const row of rows) {
       const ws = weekStart(row.date);
@@ -182,6 +185,28 @@ export async function GET(request, { params }) {
           buckets[ws].platforms.push(platform);
         }
       }
+    }
+  }
+
+  function addToDaily(rows, platform) {
+    for (const row of rows) {
+      const d = row.date;
+      if (!d) continue;
+      if (!dailyMap[d]) {
+        dailyMap[d] = {
+          date: d,
+          spend: 0, conversions: 0,
+          byPlatform: {
+            google: { spend: 0, conversions: 0 },
+            bing:   { spend: 0, conversions: 0 },
+            meta:   { spend: 0, conversions: 0 },
+          },
+        };
+      }
+      dailyMap[d].spend       += row.spend;
+      dailyMap[d].conversions += row.conversions;
+      dailyMap[d].byPlatform[platform].spend       += row.spend;
+      dailyMap[d].byPlatform[platform].conversions += row.conversions;
     }
   }
 
@@ -203,6 +228,9 @@ export async function GET(request, { params }) {
   addToBuckets(googleRows, "google");
   addToBuckets(bingRows,   "bing");
   addToBuckets(metaRows,   "meta");
+  addToDaily(googleRows, "google");
+  addToDaily(bingRows,   "bing");
+  addToDaily(metaRows,   "meta");
 
   // Round spend
   const weekly = Object.values(buckets).map((b) => ({
@@ -219,8 +247,22 @@ export async function GET(request, { params }) {
   // Totals for current (most recent complete) week
   const current = weekly[weekly.length - 1] || {};
 
+  // Build sorted daily array for MTD day-by-day chart
+  const daily = Object.values(dailyMap)
+    .map((d) => ({
+      ...d,
+      spend: parseFloat(d.spend.toFixed(2)),
+      byPlatform: {
+        google: { spend: parseFloat(d.byPlatform.google.spend.toFixed(2)), conversions: d.byPlatform.google.conversions },
+        bing:   { spend: parseFloat(d.byPlatform.bing.spend.toFixed(2)),   conversions: d.byPlatform.bing.conversions   },
+        meta:   { spend: parseFloat(d.byPlatform.meta.spend.toFixed(2)),   conversions: d.byPlatform.meta.conversions   },
+      },
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return NextResponse.json({
     weekly,
+    daily,
     current,
     clientName: client.name,
     clientLogo: client.logo || null,

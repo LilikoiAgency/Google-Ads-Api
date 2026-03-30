@@ -1,4 +1,5 @@
 import { inflateRawSync } from "zlib";
+import { getBingCreds } from "../../../lib/bingReporting";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -313,10 +314,11 @@ function firstNonEmptyValue(row, keys) {
 }
 
 async function fetchAccessToken() {
+  const { clientId, clientSecret, refreshToken } = await getBingCreds();
   const body = new URLSearchParams({
-    client_id: process.env.BING_ADS_CLIENT_ID,
-    client_secret: process.env.BING_ADS_CLIENT_SECRET,
-    refresh_token: process.env.BING_ADS_REFRESH_TOKEN,
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
     grant_type: "refresh_token",
     scope: "https://ads.microsoft.com/msads.manage offline_access",
   });
@@ -340,7 +342,8 @@ async function fetchAccessToken() {
 async function fetchCampaignBudgetMap(accessToken, clientContext) {
   const accountId = escapeXml(clientContext.accountId);
   const customerId = escapeXml(clientContext.customerId);
-  const developerToken = escapeXml(process.env.BING_ADS_DEVELOPER_TOKEN);
+  const { devToken } = await getBingCreds();
+  const developerToken = escapeXml(devToken);
 
   const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
@@ -401,6 +404,7 @@ async function fetchCampaignBudgetMap(accessToken, clientContext) {
 async function submitCampaignPerformanceReport(accessToken, dateRange, clientContext) {
   const { start, end } = dateRange;
   const accountId = escapeXml(clientContext.accountId);
+  const { devToken: rawDevToken } = await getBingCreds();
 
   const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
@@ -413,9 +417,7 @@ async function submitCampaignPerformanceReport(accessToken, dateRange, clientCon
     <CustomerId i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(
       clientContext.customerId
     )}</CustomerId>
-    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(
-      process.env.BING_ADS_DEVELOPER_TOKEN
-    )}</DeveloperToken>
+    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(rawDevToken)}</DeveloperToken>
   </s:Header>
   <s:Body>
     <SubmitGenerateReportRequest xmlns="https://bingads.microsoft.com/Reporting/v13">
@@ -480,6 +482,7 @@ async function submitCampaignPerformanceReport(accessToken, dateRange, clientCon
 }
 
 async function pollReportDownloadUrl(accessToken, reportRequestId, clientContext) {
+  const { devToken: rawDevToken } = await getBingCreds();
   for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
     const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
@@ -494,9 +497,7 @@ async function pollReportDownloadUrl(accessToken, reportRequestId, clientContext
     <CustomerId i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(
       clientContext.customerId
     )}</CustomerId>
-    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(
-      process.env.BING_ADS_DEVELOPER_TOKEN
-    )}</DeveloperToken>
+    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(rawDevToken)}</DeveloperToken>
   </s:Header>
   <s:Body>
     <PollGenerateReportRequest xmlns="https://bingads.microsoft.com/Reporting/v13">

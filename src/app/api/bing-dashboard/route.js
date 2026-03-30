@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { inflateRawSync } from "zlib";
+import { getBingCreds } from "../../../lib/bingReporting";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -137,10 +138,11 @@ function firstVal(row, keys) {
 // ─── api calls ────────────────────────────────────────────────────────────────
 
 async function fetchAccessToken() {
+  const { clientId, clientSecret, refreshToken } = await getBingCreds();
   const body = new URLSearchParams({
-    client_id:     process.env.BING_ADS_CLIENT_ID,
-    client_secret: process.env.BING_ADS_CLIENT_SECRET,
-    refresh_token: process.env.BING_ADS_REFRESH_TOKEN,
+    client_id:     clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
     grant_type:    "refresh_token",
     scope:         "https://ads.microsoft.com/msads.manage offline_access",
   });
@@ -156,7 +158,8 @@ async function fetchAccessToken() {
 async function fetchCampaignBudgetMap(accessToken, accountId, customerId) {
   accountId  = escapeXml(accountId  || process.env.BING_ADS_ACCOUNT_ID);
   customerId = escapeXml(customerId || process.env.BING_ADS_CUSTOMER_ID);
-  const devToken    = escapeXml(process.env.BING_ADS_DEVELOPER_TOKEN);
+  const { devToken: rawDevToken } = await getBingCreds();
+  const devToken = escapeXml(rawDevToken);
 
   const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
@@ -205,6 +208,7 @@ async function submitReport(accessToken, range, accountIdParam, customerIdParam)
   const { startParts: s, endParts: e } = range;
   const accountId  = escapeXml(accountIdParam  || process.env.BING_ADS_ACCOUNT_ID);
   const customerId = escapeXml(customerIdParam || process.env.BING_ADS_CUSTOMER_ID);
+  const { devToken: rawDevToken } = await getBingCreds();
 
   const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
@@ -213,7 +217,7 @@ async function submitReport(accessToken, range, accountIdParam, customerIdParam)
     <AuthenticationToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(accessToken)}</AuthenticationToken>
     <CustomerAccountId i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${accountId}</CustomerAccountId>
     <CustomerId i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${customerId}</CustomerId>
-    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(process.env.BING_ADS_DEVELOPER_TOKEN)}</DeveloperToken>
+    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(rawDevToken)}</DeveloperToken>
   </s:Header>
   <s:Body>
     <SubmitGenerateReportRequest xmlns="https://bingads.microsoft.com/Reporting/v13">
@@ -265,6 +269,7 @@ async function submitReport(accessToken, range, accountIdParam, customerIdParam)
 async function pollReport(accessToken, reportRequestId, accountIdParam, customerIdParam) {
   const accountId  = escapeXml(accountIdParam  || process.env.BING_ADS_ACCOUNT_ID);
   const customerId = escapeXml(customerIdParam || process.env.BING_ADS_CUSTOMER_ID);
+  const { devToken: rawDevToken } = await getBingCreds();
 
   for (let i = 1; i <= MAX_POLL_ATTEMPTS; i++) {
     const envelope = `<?xml version="1.0" encoding="utf-8"?>
@@ -274,7 +279,7 @@ async function pollReport(accessToken, reportRequestId, accountIdParam, customer
     <AuthenticationToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(accessToken)}</AuthenticationToken>
     <CustomerAccountId i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${accountId}</CustomerAccountId>
     <CustomerId i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${customerId}</CustomerId>
-    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(process.env.BING_ADS_DEVELOPER_TOKEN)}</DeveloperToken>
+    <DeveloperToken i:nil="false" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">${escapeXml(rawDevToken)}</DeveloperToken>
   </s:Header>
   <s:Body>
     <PollGenerateReportRequest xmlns="https://bingads.microsoft.com/Reporting/v13">

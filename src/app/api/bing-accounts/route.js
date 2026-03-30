@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getBingCreds } from "../../../lib/bingReporting";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +32,11 @@ function allXmlTags(xml, tag) {
 }
 
 async function fetchAccessToken() {
+  const { clientId, clientSecret, refreshToken } = await getBingCreds();
   const body = new URLSearchParams({
-    client_id:     process.env.BING_ADS_CLIENT_ID,
-    client_secret: process.env.BING_ADS_CLIENT_SECRET,
-    refresh_token: process.env.BING_ADS_REFRESH_TOKEN,
+    client_id:     clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
     grant_type:    "refresh_token",
     scope:         "https://ads.microsoft.com/msads.manage offline_access",
   });
@@ -47,8 +49,9 @@ async function fetchAccessToken() {
   return (await res.json()).access_token;
 }
 
-function soapHeaders(accessToken, accountId, customerId) {
-  const devToken = escapeXml(process.env.BING_ADS_DEVELOPER_TOKEN);
+async function soapHeaders(accessToken, accountId, customerId) {
+  const { devToken: rawDevToken } = await getBingCreds();
+  const devToken = escapeXml(rawDevToken);
   return `
     <Action mustUnderstand="1">PLACEHOLDER</Action>
     <AuthenticationToken>${escapeXml(accessToken)}</AuthenticationToken>
@@ -59,7 +62,7 @@ function soapHeaders(accessToken, accountId, customerId) {
 }
 
 async function soapCall(action, accessToken, bodyXml, accountId, customerId) {
-  const headers = soapHeaders(accessToken, accountId, customerId).replace("PLACEHOLDER", action);
+  const headers = (await soapHeaders(accessToken, accountId, customerId)).replace("PLACEHOLDER", action);
   const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Header xmlns="https://bingads.microsoft.com/Customer/v13">${headers}</s:Header>
