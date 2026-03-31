@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { validateClientAccess } from "../../../../../lib/clientPortal";
 import { getSegments } from "../../../../../lib/audienceLabSegments";
+import { getCached, setCached } from "../../../../../lib/serverCache";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,33 @@ export async function GET(request, { params }) {
 
   const client = await validateClientAccess(slug, token);
   if (!client) return NextResponse.json({ error: "Invalid or expired link." }, { status: 401 });
+
+  // ── Server-side cache — expires next Monday (matches weekly sync schedule) ──
+  // Audience data only changes on Mondays. Key by the current week's Monday date
+  // so the cache is shared all week and naturally busts when a new week starts.
+  function getMondayKey() {
+    const now  = new Date();
+    const day  = now.getUTCDay(); // 0=Sun ... 6=Sat
+    const diff = day === 0 ? -6 : 1 - day; // days back to Monday
+    const mon  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + diff));
+    return mon.toISOString().slice(0, 10); // "YYYY-MM-DD" of this week's Monday
+  }
+  function msUntilNextMonday() {
+    const now  = new Date();
+    const day  = now.getUTCDay();
+    const daysUntil = day === 1 ? 7 : (8 - day) % 7; // always go forward to next Monday
+    const nextMon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntil));
+    return nextMon.getTime() - now.getTime();
+  }
+
+  const weekKey  = getMondayKey(); // same value all week, changes every Monday
+  const cacheKey = `portal_aud_${slug}_${period}_${segmentParam || "all"}_p${page}_w${weekKey}`;
+  const forceRefresh = searchParams.get("refresh") === "1";
+
+  if (!forceRefresh) {
+    const cached = await getCached(cacheKey);
+    if (cached) return NextResponse.json({ ...cached, _cached: true });
+  }
 
   const segmentKeys = client.audienceLabSegments || [];
   if (segmentKeys.length === 0) {
@@ -196,7 +224,12 @@ export async function GET(request, { params }) {
       syncedAt:    r.synced_at    || "",
     }));
 
-    return NextResponse.json({ total, byState, records, lastUpdated, page, pageSize, totalPages: Math.ceil(total / pageSize), period, availableSegments });
+    const payload = { total, byState, records, lastUpdated, page, pageSize, totalPages: Math.ceil(total / pageSize), period, availableSegments };
+
+    // Cache until next Monday — audience data only syncs weekly
+    setCached(cacheKey, payload, msUntilNextMonday()).catch(() => {});
+
+    return NextResponse.json(payload);
 
   } catch (err) {
     console.error("[portal/audience] BigQuery error:", err.message);

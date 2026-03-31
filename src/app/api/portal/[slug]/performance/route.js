@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { validateClientAccess } from "../../../../../lib/clientPortal";
 import { getCredentials } from "../../../../../lib/dbFunctions";
 import { fetchAccessToken, submitReport, pollReport, downloadReport, normalizeDate, toDateParts } from "../../../../../lib/bingReporting";
+import { getCached, setCached } from "../../../../../lib/serverCache";
 
 export const dynamic    = "force-dynamic";
 export const maxDuration = 60;
@@ -160,9 +161,21 @@ export async function GET(request, { params }) {
   const { searchParams } = new URL(request.url);
   const token          = searchParams.get("token");
   const weeks          = Math.min(parseInt(searchParams.get("weeks") || "12", 10), 52);
+  const forceRefresh   = searchParams.get("refresh") === "1";
 
   const client = await validateClientAccess(slug, token);
   if (!client) return NextResponse.json({ error: "Invalid or expired link." }, { status: 401 });
+
+  // ── Server-side cache (1-hour TTL, keyed by slug + weeks + today's date) ──
+  // Include today's date so data always refreshes at midnight and stays
+  // fresh as the current day's spend accumulates.
+  const today      = fmt(new Date()); // "YYYY-MM-DD"
+  const cacheKey   = `portal_perf_${slug}_w${weeks}_${today}`;
+
+  if (!forceRefresh) {
+    const cached = await getCached(cacheKey);
+    if (cached) return NextResponse.json({ ...cached, _cached: true });
+  }
 
   const since = weeksAgo(weeks);
   const until = fmt(new Date());
@@ -260,7 +273,7 @@ export async function GET(request, { params }) {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return NextResponse.json({
+  const payload = {
     weekly,
     daily,
     current,
@@ -271,5 +284,10 @@ export async function GET(request, { params }) {
       bing:   bingAccounts.length   > 0,
       meta:   metaAccounts.length   > 0,
     },
-  });
+  };
+
+  // Cache for 1 hour — fire-and-forget so it doesn't slow down the response
+  setCached(cacheKey, payload, 60 * 60 * 1000).catch(() => {});
+
+  return NextResponse.json(payload);
 }

@@ -265,6 +265,22 @@ function ClientPortalInner() {
           <div>
             <p className="text-2xl font-bold text-gray-900">Performance Report</p>
             <p className="text-sm text-gray-400 mt-0.5">Market Domination · Overview</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {(() => {
+                const now = new Date();
+                if (period === "week") {
+                  const day  = now.getUTCDay();
+                  const mon  = new Date(now);
+                  mon.setUTCDate(now.getUTCDate() + (day === 0 ? -6 : 1 - day));
+                  const sun  = new Date(mon);
+                  sun.setUTCDate(mon.getUTCDate() + 6);
+                  return fmtWeek(mon.toISOString().slice(0, 10), sun.toISOString().slice(0, 10));
+                }
+                // MTD
+                const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+                return `${monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })} · through today`;
+              })()}
+            </p>
           </div>
           <div className="flex rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-sm font-semibold">
             {[
