@@ -119,6 +119,22 @@ const TILES = [
     tagColor: "#a855f7",
   },
   {
+    href: "/dashboard/streaming",
+    Icon: () => (
+      <svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="12" width="44" height="28" rx="4" fill="#0ea5e9" opacity="0.15"/>
+        <rect x="2" y="12" width="44" height="28" rx="4" stroke="#0ea5e9" strokeWidth="2.5"/>
+        <path d="M16 8l-4 4M32 8l4 4" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="24" cy="26" r="7" fill="#0ea5e9" opacity="0.3"/>
+        <polygon points="21,22 21,30 30,26" fill="#0ea5e9"/>
+      </svg>
+    ),
+    title: "Targeted Streaming",
+    description: "Upload Trade Desk Path-to-Conversion CSVs to visualize multi-touch attribution — devices, sites, campaigns, and user journeys.",
+    tag: "Streaming",
+    tagColor: "#0ea5e9",
+  },
+  {
     href: "/dashboard/admin/clients",
     Icon: () => (
       <svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">

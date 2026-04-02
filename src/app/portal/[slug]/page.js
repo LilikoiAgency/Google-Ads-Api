@@ -92,6 +92,13 @@ function ClientPortalInner() {
   const [showDetails,      setShowDetails]       = useState(false);
   const [selectedSegment,  setSelectedSegment]   = useState(""); // "" = all
 
+  // Streaming / PTC reports
+  const [streamReports,      setStreamReports]      = useState([]);
+  const [streamLoading,      setStreamLoading]      = useState(true);
+  const [selectedStreamId,   setSelectedStreamId]   = useState(null);
+  const [streamDetail,       setStreamDetail]       = useState(null);
+  const [streamDetailLoading, setStreamDetailLoading] = useState(false);
+
   // ── load performance ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!slug || !token) { setError("Invalid link."); return; }
@@ -151,6 +158,33 @@ function ClientPortalInner() {
   };
 
   useEffect(() => { if (!error) loadAudience(1, period, selectedSegment); }, [slug, token, error, period, selectedSegment]);
+
+  // ── load streaming reports list ───────────────────────────────────────────
+  useEffect(() => {
+    if (!slug || !token || error) { setStreamLoading(false); return; }
+    fetch(`/api/portal/${slug}/streaming?token=${token}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.error && d.reports?.length) {
+          setStreamReports(d.reports);
+          setSelectedStreamId(d.reports[0]._id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setStreamLoading(false));
+  }, [slug, token, error]);
+
+  // ── load streaming report detail when selection changes ───────────────────
+  useEffect(() => {
+    if (!selectedStreamId || !slug || !token) return;
+    setStreamDetailLoading(true);
+    setStreamDetail(null);
+    fetch(`/api/portal/${slug}/streaming?token=${token}&id=${selectedStreamId}`)
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setStreamDetail(d.report); })
+      .catch(() => {})
+      .finally(() => setStreamDetailLoading(false));
+  }, [selectedStreamId, slug, token]);
 
   if (error) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -222,6 +256,15 @@ function ClientPortalInner() {
       conversions: selectedChannel ? (w.byPlatform?.[selectedChannel]?.conversions || 0) : w.conversions,
     }));
   })();
+
+  // ── streaming helpers ─────────────────────────────────────────────────────
+  const fmtDateRange = (dr) => {
+    if (!dr?.start) return "";
+    const s = new Date(dr.start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+    const e = dr.end ? new Date(dr.end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
+    return e && e !== s ? `${s} – ${e}` : s;
+  };
+  const n2ptc = (v, d = 2) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: d });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -566,6 +609,144 @@ function ClientPortalInner() {
             )}
           </div>
         </div>
+
+        {/* ── Streaming / PTC Report ── */}
+        {!streamLoading && streamReports.length > 0 && (
+          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden mt-6">
+            <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-sky-50 to-white">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-sm font-bold text-gray-900">📺 Targeted Streaming</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Path-to-Conversion attribution report</p>
+                </div>
+                {streamReports.length > 1 && (
+                  <select
+                    value={selectedStreamId || ""}
+                    onChange={(e) => setSelectedStreamId(e.target.value)}
+                    className="rounded-lg border border-gray-200 text-xs px-3 py-2 text-gray-700 bg-white"
+                  >
+                    {streamReports.map((r) => (
+                      <option key={r._id} value={r._id}>
+                        {r.fileName} {r.reportData?.dateRange ? `· ${fmtDateRange(r.reportData.dateRange)}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {/* Date range badge */}
+              {streamReports[0]?.reportData?.dateRange && (
+                <p className="text-xs text-sky-600 font-semibold mt-2">
+                  Report period: {fmtDateRange(
+                    streamReports.find((r) => r._id === selectedStreamId)?.reportData?.dateRange ||
+                    streamReports[0].reportData.dateRange
+                  )}
+                </p>
+              )}
+            </div>
+
+            <div className="px-5 py-5">
+              {streamDetailLoading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, i) => <div key={i} className="h-8 rounded-xl bg-gray-100 animate-pulse" />)}
+                </div>
+              ) : streamDetail ? (() => {
+                const rd = streamDetail.reportData;
+                // Summary stats
+                const summaryEntries = Object.entries(rd.summary || {});
+
+                // Device chart data
+                const deviceData = Object.entries(rd.deviceResults?.["Breakdown Data"] || {}).map(([k, v]) => ({
+                  name: k,
+                  "First Touch": v["Conversions-FirstImp"] || 0,
+                  "Last Touch":  v["Conversions-LastImp"]  || 0,
+                }));
+
+                // Site chart data (shorten names)
+                const siteData = Object.entries(rd.siteResults || {}).map(([k, v]) => ({
+                  name: k.length > 22 ? k.slice(0, 22) + "…" : k,
+                  Conversions: v.Conversions || 0,
+                })).sort((a, b) => b.Conversions - a.Conversions).slice(0, 8);
+
+                // Campaign chart data
+                const campaignData = Object.entries(rd.campaignResults?.["Breakdown Data"] || {}).map(([k, v]) => ({
+                  name: k.length > 22 ? k.slice(0, 22) + "…" : k,
+                  "First Touch": v["Conversions-FirstImp"] || 0,
+                  "Last Touch":  v["Conversions-LastImp"]  || 0,
+                }));
+
+                return (
+                  <>
+                    {/* Summary stat cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                      {summaryEntries.map(([label, val]) => (
+                        <div key={label} className="rounded-xl bg-sky-50 border border-sky-100 p-3">
+                          <p className="text-lg font-black text-sky-700">{n2ptc(val)}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 leading-tight">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Device paths chart */}
+                    {deviceData.length > 0 && (
+                      <div className="mb-6">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Cross-Device Paths</p>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={deviceData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={{ fontSize: 12 }} />
+                            <Legend formatter={(v) => v} wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="First Touch" fill="#0ea5e9" radius={[3,3,0,0]} opacity={0.85} />
+                            <Bar dataKey="Last Touch"  fill="#0369a1" radius={[3,3,0,0]} opacity={0.85} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+
+                    {/* Top sites chart */}
+                    {siteData.length > 0 && (
+                      <div className="mb-6">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Sites by Conversions</p>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={siteData} margin={{ top: 4, right: 16, left: 0, bottom: 40 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" interval={0} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={{ fontSize: 12 }} />
+                            <Bar dataKey="Conversions" fill="#0ea5e9" radius={[3,3,0,0]} opacity={0.85} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+
+                    {/* Campaign chart */}
+                    {campaignData.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Campaign Conversion Paths</p>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={campaignData} margin={{ top: 4, right: 16, left: 0, bottom: 40 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" interval={0} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={{ fontSize: 12 }} />
+                            <Legend formatter={(v) => v} wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="First Touch" fill="#0ea5e9" radius={[3,3,0,0]} opacity={0.85} />
+                            <Bar dataKey="Last Touch"  fill="#0369a1" radius={[3,3,0,0]} opacity={0.85} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </>
+                );
+              })() : (
+                <div className="text-center py-6">
+                  <p className="text-sm text-gray-400">Select a report to view</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="mt-8 text-center">

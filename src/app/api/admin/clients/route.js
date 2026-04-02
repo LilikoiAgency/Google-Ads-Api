@@ -5,6 +5,7 @@ import {
   getClients, createClient, updateClient,
   deleteClient, regenerateToken,
 } from "../../../../lib/clientPortal";
+import dbConnect from "../../../../lib/mongoose";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -12,10 +13,22 @@ async function requireAdmin() {
   return session;
 }
 
-// GET /api/admin/clients — list all clients
+// GET /api/admin/clients — list all clients with streaming report counts
 export async function GET() {
   if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const clients = await getClients();
+
+  // Attach streaming report counts
+  try {
+    const dbClient = await dbConnect();
+    const db = dbClient.db("tokensApi");
+    const counts = await db.collection("PtcReports").aggregate([
+      { $group: { _id: "$slug", count: { $sum: 1 } } },
+    ]).toArray();
+    const countMap = Object.fromEntries(counts.map((c) => [c._id, c.count]));
+    clients.forEach((c) => { c.streamingReportCount = countMap[c.slug] || 0; });
+  } catch (_) {}
+
   return NextResponse.json({ clients });
 }
 

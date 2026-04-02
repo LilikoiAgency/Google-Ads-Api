@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \":*)",
+      "Bash(ls \"C:\\\\Users\\\\frank\\\\Documents\\\\GitHub\\\\Google-Ads-Api\\\\src\\\\app\\\\api\\\\portal\\\\[slug]\\\\streaming\"\" 2>&1 && ls \"C:UsersfrankDocumentsGitHubGoogle-Ads-Apisrcappportal[slug]\"\")",
+      "Bash(npm run:*)",
+      "Bash(npx next:*)"
     ]
   }
 }

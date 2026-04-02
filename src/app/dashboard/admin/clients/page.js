@@ -11,6 +11,8 @@ const EMPTY_FORM = {
   name: "", slug: "", logo: "",
   adAccounts: { google: [], bing: [], meta: [] },
   audienceLabSegments: [],
+  targetedStreamingEnabled: false,
+  targetedStreamingReportIds: [],
   active: true,
 };
 
@@ -183,6 +185,11 @@ export default function AdminClientsPage() {
   const [saveErr,  setSaveErr]   = useState(null);
   const [copiedSlug, setCopiedSlug] = useState(null);
 
+  // Streaming reports for the currently open edit modal
+  const [streamReports,  setStreamReports]  = useState([]);
+  const [streamLoading,  setStreamLoading]  = useState(false);
+  const [deletingReport, setDeletingReport] = useState(null);
+
   // Available accounts for pickers
   const [googleAccounts, setGoogleAccounts] = useState([]);
   const [bingAccounts,   setBingAccounts]   = useState([]);
@@ -249,14 +256,32 @@ export default function AdminClientsPage() {
         meta:   client.adAccounts?.meta   || [],
       },
       audienceLabSegments: client.audienceLabSegments || [],
+      targetedStreamingEnabled: client.targetedStreamingEnabled || false,
+      targetedStreamingReportIds: client.targetedStreamingReportIds || [],
       active: client.active !== false,
     });
     setSaveErr(null);
     setModal({ mode: "edit", client });
     loadAccounts();
+    // Load streaming reports for this client
+    setStreamReports([]);
+    setStreamLoading(true);
+    fetch(`/api/streaming/ptc?slug=${client.slug}`)
+      .then((r) => r.json())
+      .then((d) => setStreamReports(d.reports || []))
+      .catch(() => {})
+      .finally(() => setStreamLoading(false));
   };
 
-  const closeModal = () => { setModal(null); setSaveErr(null); };
+  const deleteStreamReport = async (id) => {
+    if (!confirm("Delete this report? This cannot be undone.")) return;
+    setDeletingReport(id);
+    await fetch(`/api/streaming/ptc?id=${id}`, { method: "DELETE" });
+    setStreamReports((prev) => prev.filter((r) => r._id !== id));
+    setDeletingReport(null);
+  };
+
+  const closeModal = () => { setModal(null); setSaveErr(null); setStreamReports([]); };
 
   const handleSave = async () => {
     setSaving(true); setSaveErr(null);
@@ -343,10 +368,11 @@ export default function AdminClientsPage() {
           ) : (
             <div className="grid gap-4">
               {clients.map((client) => {
-                const googleCount = client.adAccounts?.google?.length || 0;
-                const bingCount   = client.adAccounts?.bing?.length   || 0;
-                const metaCount   = client.adAccounts?.meta?.length   || 0;
-                const segCount    = client.audienceLabSegments?.length || 0;
+                const googleCount  = client.adAccounts?.google?.length || 0;
+                const bingCount    = client.adAccounts?.bing?.length   || 0;
+                const metaCount    = client.adAccounts?.meta?.length   || 0;
+                const segCount     = client.audienceLabSegments?.length || 0;
+                const streamCount  = client.streamingReportCount || 0;
 
                 return (
                   <div key={client.slug} className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
@@ -374,6 +400,11 @@ export default function AdminClientsPage() {
                           {segCount > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 text-xs font-semibold">
                               🎯 {segCount} segment{segCount !== 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {streamCount > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-xs font-semibold">
+                              📺 {streamCount} streaming report{streamCount !== 1 ? "s" : ""}
                             </span>
                           )}
                         </div>
@@ -495,6 +526,95 @@ export default function AdminClientsPage() {
                   segments={allSegments}
                   onChange={(v) => setForm((f) => ({ ...f, audienceLabSegments: v }))}
                 />
+              </div>
+
+              {/* Targeted Streaming */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Targeted Streaming</p>
+                  {modal.mode === "edit" && (
+                    <Link
+                      href="/dashboard/streaming"
+                      className="text-xs font-semibold text-sky-600 hover:text-sky-800 transition"
+                      onClick={closeModal}
+                    >
+                      + Upload New Report ↗
+                    </Link>
+                  )}
+                </div>
+
+                {/* Enable toggle */}
+                <label
+                  className="flex items-center gap-3 cursor-pointer mb-3"
+                  onClick={() => setForm((f) => ({ ...f, targetedStreamingEnabled: !f.targetedStreamingEnabled }))}
+                >
+                  <div className={`relative w-10 h-6 rounded-full transition ${form.targetedStreamingEnabled ? "bg-sky-500" : "bg-gray-200"}`}>
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${form.targetedStreamingEnabled ? "left-5" : "left-1"}`} />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {form.targetedStreamingEnabled ? "Shown in client portal" : "Hidden from client portal"}
+                  </span>
+                </label>
+
+                {/* Report selector — edit mode only */}
+                {modal.mode === "edit" && form.targetedStreamingEnabled && (
+                  streamLoading ? (
+                    <div className="space-y-2">
+                      {[...Array(2)].map((_, i) => <div key={i} className="h-10 rounded-xl bg-gray-100 animate-pulse" />)}
+                    </div>
+                  ) : streamReports.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-1">No reports saved yet. Upload a PTC CSV from the Targeted Streaming tool and select this client.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {streamReports.map((r) => {
+                        const dr       = r.reportData?.dateRange;
+                        const dateRange = dr?.start
+                          ? `${new Date(dr.start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}${dr.end && dr.end !== dr.start ? ` – ${new Date(dr.end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` : ""}`
+                          : null;
+                        const selected = form.targetedStreamingReportIds.includes(r._id);
+                        const toggle   = () => setForm((f) => ({
+                          ...f,
+                          targetedStreamingReportIds: selected
+                            ? f.targetedStreamingReportIds.filter((id) => id !== r._id)
+                            : [...f.targetedStreamingReportIds, r._id],
+                        }));
+                        return (
+                          <div
+                            key={r._id}
+                            className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition ${selected ? "bg-sky-50 border-sky-300" : "bg-white border-gray-200 hover:border-sky-200"}`}
+                            onClick={toggle}
+                          >
+                            {/* Checkbox */}
+                            <div className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition ${selected ? "bg-sky-500 border-sky-500" : "border-gray-300"}`}>
+                              {selected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 10"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            </div>
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-800 truncate">📺 {r.fileName}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {dateRange && <span className="text-sky-600 font-medium">{dateRange} · </span>}
+                                Uploaded {fmtDate(r.uploadedAt)}
+                              </p>
+                            </div>
+                            {/* Delete */}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); deleteStreamReport(r._id); }}
+                              disabled={deletingReport === r._id}
+                              className="flex-shrink-0 rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 disabled:opacity-40 transition"
+                            >
+                              {deletingReport === r._id ? "…" : "Delete"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+
+                {modal.mode === "add" && form.targetedStreamingEnabled && (
+                  <p className="text-xs text-gray-400">Save this client first, then upload reports and select which ones to include.</p>
+                )}
               </div>
 
               {/* Active toggle */}
