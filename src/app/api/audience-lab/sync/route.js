@@ -1,18 +1,20 @@
 import { google } from "googleapis";
-import { getSegmentBySlot, updateSyncStatus, writeSyncLog, seedFromEnvIfEmpty } from "../../../../lib/audienceLabSegments";
+import { getSegmentBySlot, updateSyncStatus, writeSyncLog, seedFromEnvIfEmpty, saveCheckpoint, getCheckpoint, clearCheckpoint } from "../../../../lib/audienceLabSegments";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const DEFAULT_BASE_URL = "https://api.audiencelab.io";
-const DEFAULT_PAGE_SIZE = 500;
+const DEFAULT_PAGE_SIZE = 1000;
 const DEFAULT_TEST_ROW_LIMIT = 10;
-const MAX_PAGE_SIZE = 500;
+const MAX_PAGE_SIZE = 1000;
 const MAX_TEST_ROW_LIMIT = 100;
 const MIN_FALLBACK_PAGE_SIZE = 100;
 const BIGQUERY_INSERT_BATCH_SIZE = 500;
 const AUDIENCE_LAB_MAX_FETCH_ATTEMPTS = 8;
-const AUDIENCE_LAB_RETRY_DELAY_MS = 1000;
+const AUDIENCE_LAB_RETRY_DELAY_MS = 3000;   // base delay for retries (ms)
+const AUDIENCE_LAB_RATE_LIMIT_DELAY_MS = 15000; // extra wait on 429 before retry
+const INTER_PAGE_DELAY_MS = 800;             // pause between pages to stay under ~40 req/min rate limit
 const NO_STORE_HEADERS = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -227,7 +229,11 @@ async function fetchAudienceLabJson(url, headers, logRetry) {
               ...errorDetails,
             });
           }
-          await sleep(AUDIENCE_LAB_RETRY_DELAY_MS * attempt);
+          // 429 rate limit: wait longer before retrying
+          const delay = response.status === 429
+            ? AUDIENCE_LAB_RATE_LIMIT_DELAY_MS + AUDIENCE_LAB_RETRY_DELAY_MS * attempt
+            : AUDIENCE_LAB_RETRY_DELAY_MS * attempt;
+          await sleep(delay);
           continue;
         }
 
@@ -664,6 +670,7 @@ async function syncSingleTarget({
   projectId,
   datasetId,
   logState,
+  checkpointFn,   // optional async (offset) => void — called after each successful page write
 }) {
   const result = {
     tableId: target.tableId,
@@ -724,7 +731,8 @@ async function syncSingleTarget({
 
   while (hasMore) {
     const page = Math.floor(rowOffset / activePageSize) + 1;
-    const segmentUrl = new URL(`${baseUrl}/segments/${target.segmentId}`);
+    const apiCollection = target.entityType === "audience" ? "audiences" : "segments";
+    const segmentUrl = new URL(`${baseUrl}/${apiCollection}/${target.segmentId}`);
     segmentUrl.searchParams.set("page", String(page));
     segmentUrl.searchParams.set("page_size", String(activePageSize));
 
@@ -787,6 +795,9 @@ async function syncSingleTarget({
     result.segmentName = payload?.segment_name || result.segmentName;
     result.pagesFetched += 1;
     result.sourceRecords += dataRows.length;
+    if (payload?.total_records != null) {
+      result.totalRecords = Number(payload.total_records);
+    }
     result.lastCompletedPage = page;
     result.lastCompletedPageSize = activePageSize;
     if (!result.preview) {
@@ -857,6 +868,16 @@ async function syncSingleTarget({
     if (dataRows.length === 0) {
       hasMore = false;
     }
+
+    // Save checkpoint after every successful page so a timeout/restart can resume
+    if (writeEnabled && checkpointFn) {
+      await checkpointFn(rowOffset).catch(() => {});
+    }
+
+    // Small inter-page delay to avoid rate limiting on large audiences
+    if (hasMore) {
+      await sleep(INTER_PAGE_DELAY_MS);
+    }
   }
 
   logInfo(logState, "target.complete", {
@@ -864,6 +885,7 @@ async function syncSingleTarget({
     tableId: target.tableId,
     pagesFetched: result.pagesFetched,
     sourceRecords: result.sourceRecords,
+    totalRecords: result.totalRecords ?? null,
     rowsPrepared: result.rowsPrepared,
     rowsInserted: result.rowsInserted,
   });
@@ -934,7 +956,7 @@ export async function GET(request) {
     MAX_TEST_ROW_LIMIT
   );
   const writesAllowed = isWriteEnabledByEnv();
-  const dryRunMaxPages = toPositiveInt(searchParams.get("dry_run_pages"), 1, 3);
+  const dryRunMaxPages = toPositiveInt(searchParams.get("dry_run_pages"), 100, 500);
   const pageSize = toPositiveInt(
     searchParams.get("page_size"),
     DEFAULT_PAGE_SIZE,
@@ -1004,7 +1026,7 @@ export async function GET(request) {
     }
 
     // Build a single target from the MongoDB document
-    const slotTarget = { key: segDoc.key, tableId: segDoc.tableId, segmentId: segDoc.segmentId, source: "mongodb" };
+    const slotTarget = { key: segDoc.key, tableId: segDoc.tableId, segmentId: segDoc.segmentId, entityType: segDoc.entityType || "segment", source: "mongodb" };
     logInfo(logState, "slot.resolved", { slot, key: segDoc.key, tableId: segDoc.tableId });
 
     const auth = new google.auth.GoogleAuth({
@@ -1020,16 +1042,28 @@ export async function GET(request) {
     const baseUrl    = trimTrailingSlash(process.env.AUDIENCE_LAB_BASE_URL || DEFAULT_BASE_URL);
     const apiKey     = process.env.AUDIENCE_LAB_API_KEY;
     const headers    = { "x-api-key": apiKey, "Content-Type": "application/json" };
-    const batchTimestamp = new Date().toISOString();
+    const batchTimestamp = new Date().toISOString(); // full ISO string for BigQuery TIMESTAMP field
+    const batchDate      = batchTimestamp.slice(0, 10); // "YYYY-MM-DD" — used only as checkpoint key
 
     const syncStarted = Date.now();
     const triggeredBy = searchParams.get("triggered_by") || (writeEnabled ? "cron" : "manual");
+
+    // Resume from checkpoint if this is a write run that was previously interrupted
+    let effectiveStartOffset = startOffset;
+    if (writeEnabled) {
+      const checkpoint = await getCheckpoint(segDoc.key, batchDate).catch(() => null);
+      if (checkpoint?.offset > 0) {
+        effectiveStartOffset = checkpoint.offset;
+        logInfo(logState, "slot.resuming", { slot, key: segDoc.key, resumeOffset: effectiveStartOffset });
+      }
+    }
 
     let syncResult;
     try {
       syncResult = await syncSingleTarget({
         target:             slotTarget,
-        baseUrl, headers, pageSize, startOffset,
+        baseUrl, headers, pageSize,
+        startOffset:        effectiveStartOffset,
         writeEnabled,
         maxPages:           dryRunMaxPages,
         includePreviewRows: isTestMode,
@@ -1039,10 +1073,18 @@ export async function GET(request) {
         projectId,
         datasetId,
         logState,
+        checkpointFn: writeEnabled
+          ? (offset) => saveCheckpoint(segDoc.key, { offset, batchTimestamp: batchDate })
+          : null,
       });
 
       const syncStatus = syncResult.failed ? "error" : "success";
       const durationMs = Date.now() - syncStarted;
+
+      // Clear checkpoint on successful completion so next week starts fresh
+      if (writeEnabled && !syncResult.failed) {
+        await clearCheckpoint(segDoc.key).catch(() => {});
+      }
 
       // Update segment's last-sync fields
       await updateSyncStatus(segDoc.key, {

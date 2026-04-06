@@ -123,6 +123,9 @@ function ActivityItem({ log }) {
 
 const EMPTY_FORM = { key: "", name: "", segmentId: "", tableId: "", active: true, slot: "" };
 
+// Slots 0–9 = segments, 10–19 = audiences
+const AUDIENCE_SLOT_START = 10;
+
 export default function AudienceLabPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -130,19 +133,20 @@ export default function AudienceLabPage() {
   const userEmail = session?.user?.email || "";
   const isAdminUser = ADMIN_EMAILS.includes(userEmail.toLowerCase());
 
-  const [slots, setSlots]             = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(null);
-  const [modal, setModal]             = useState(null);
-  const [form, setForm]               = useState(EMPTY_FORM);
-  const [saving, setSaving]           = useState(false);
-  const [saveError, setSaveError]     = useState(null);
-  const [running, setRunning]         = useState({});
-  const [runResult, setRunResult]     = useState({});
+  const [activeTab, setActiveTab]         = useState("segments"); // "segments" | "audiences"
+  const [slots, setSlots]                 = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState(null);
+  const [modal, setModal]                 = useState(null);
+  const [form, setForm]                   = useState(EMPTY_FORM);
+  const [saving, setSaving]               = useState(false);
+  const [saveError, setSaveError]         = useState(null);
+  const [running, setRunning]             = useState({});
+  const [runResult, setRunResult]         = useState({});
   const [expandedLogs, setExpandedLogs]   = useState({});
   const [activityLogs, setActivityLogs]   = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
-  const [openMenu, setOpenMenu]           = useState(null); // segment key or null
+  const [openMenu, setOpenMenu]           = useState(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/audience-lab");
@@ -173,15 +177,24 @@ export default function AudienceLabPage() {
     if (status === "authenticated") { load(); loadActivity(); }
   }, [status]);
 
-  const openAdd  = (slot) => { setForm({ ...EMPTY_FORM, slot: slot !== null ? String(slot) : "" }); setSaveError(null); setModal({ mode: "add", slot }); };
-  const openEdit = (seg)  => { setForm({ key: seg.key, name: seg.name, segmentId: seg.segmentId, tableId: seg.tableId, active: seg.active, slot: String(seg.slot) }); setSaveError(null); setModal({ mode: "edit", segment: seg }); };
+  const openAdd  = (slot) => {
+    setForm({ ...EMPTY_FORM, slot: slot !== null ? String(slot) : "", entityType: activeTab === "audiences" ? "audience" : "segment" });
+    setSaveError(null);
+    setModal({ mode: "add", slot, entityType: activeTab === "audiences" ? "audience" : "segment" });
+  };
+  const openEdit = (seg)  => {
+    setForm({ key: seg.key, name: seg.name, segmentId: seg.segmentId, tableId: seg.tableId, active: seg.active, slot: String(seg.slot), entityType: seg.entityType || "segment" });
+    setSaveError(null);
+    setModal({ mode: "edit", segment: seg, entityType: seg.entityType || "segment" });
+  };
   const closeModal = ()   => { setModal(null); setSaveError(null); };
 
   const handleSave = async () => {
     setSaving(true); setSaveError(null);
     try {
       if (modal.mode === "add") {
-        const res  = await fetch("/api/audience-lab/segments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, slot: form.slot !== "" ? Number(form.slot) : undefined }) });
+        const payload = { ...form, slot: form.slot !== "" ? Number(form.slot) : undefined, entityType: form.entityType || "segment" };
+        const res  = await fetch("/api/audience-lab/segments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Failed to create");
       } else {
@@ -194,8 +207,9 @@ export default function AudienceLabPage() {
     finally     { setSaving(false); }
   };
 
-  const handleDelete = async (key) => {
-    if (!confirm(`Delete segment "${key}"? This cannot be undone.`)) return;
+  const handleDelete = async (key, entityType = "segment") => {
+    const typeLabel = entityType === "audience" ? "audience" : "segment";
+    if (!confirm(`Delete ${typeLabel} "${key}"? This cannot be undone.`)) return;
     const res  = await fetch(`/api/audience-lab/segments?key=${key}`, { method: "DELETE" });
     const json = await res.json();
     if (!res.ok) { alert(json.error || "Delete failed"); return; }
@@ -261,7 +275,17 @@ export default function AudienceLabPage() {
     try {
       const res  = await fetch(`/api/audience-lab/sync?mode=dry-run&slot=${seg.slot}&triggered_by=manual`);
       const json = await res.json();
-      setRunResult((r) => ({ ...r, [seg.key]: json.result ? `✅ ${(json.result.sourceRecords ?? 0).toLocaleString()} records found` : json.message || json.error || "Done" }));
+      setRunResult((r) => {
+        let msg = json.message || json.error || "Done";
+        if (json.result) {
+          const fetched = (json.result.sourceRecords ?? 0).toLocaleString();
+          const total   = json.result.totalRecords != null ? json.result.totalRecords.toLocaleString() : null;
+          msg = total && total !== fetched
+            ? `✅ ${fetched} / ${total} records fetched`
+            : `✅ ${fetched} records found`;
+        }
+        return { ...r, [seg.key]: msg };
+      });
       // Auto-open logs so user can see the dry-run entry
       setExpandedLogs((l) => ({ ...l, [seg.key]: "loading" }));
       const res2  = await fetch(`/api/audience-lab/logs?type=sync&key=${seg.key}&limit=20`);
@@ -280,7 +304,14 @@ export default function AudienceLabPage() {
     </div>
   );
 
-  const occupied = slots.filter((s) => s.occupied).length;
+  const isAudienceTab    = activeTab === "audiences";
+  const tabSlots         = slots.filter((s) =>
+    isAudienceTab ? s.slot >= AUDIENCE_SLOT_START : s.slot < AUDIENCE_SLOT_START
+  );
+  const tabOccupied      = tabSlots.filter((s) => s.occupied).length;
+  const tabMax           = 10;
+  const allSegmentCount  = slots.filter((s) => s.occupied && (s.segment?.entityType || "segment") === "segment").length;
+  const allAudienceCount = slots.filter((s) => s.occupied && s.segment?.entityType === "audience").length;
 
   return (
     <div className="min-h-screen bg-customPurple-dark">
@@ -299,18 +330,47 @@ export default function AudienceLabPage() {
               </svg>
             </div>
             <div>
-              <p className="text-lg font-semibold text-white">Audience Lab Segments</p>
+              <p className="text-lg font-semibold text-white">Audience Lab</p>
               <p className="text-sm text-gray-400">
-                {occupied} of 10 slots used · Syncs every Monday
+                {tabOccupied} of {tabMax} {isAudienceTab ? "audience" : "segment"} slots used · Syncs every Monday
                 {isAdminUser && <span className="ml-2 rounded-full bg-purple-500/20 px-2 py-0.5 text-xs font-semibold text-purple-300">Admin</span>}
               </p>
             </div>
           </div>
           {isAdminUser && (
             <button onClick={() => openAdd(null)} className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 transition px-4 py-2 text-sm font-semibold text-white">
-              <span className="text-base leading-none">+</span> Add Segment
+              <span className="text-base leading-none">+</span> Add {isAudienceTab ? "Audience" : "Segment"}
             </button>
           )}
+        </div>
+
+        {/* ── Tabs ── */}
+        <div className="mx-auto max-w-6xl mt-4">
+          <div className="flex gap-1 bg-white/5 rounded-xl p-1 w-fit">
+            <button
+              onClick={() => setActiveTab("segments")}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === "segments" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
+            >
+              {/* Bullseye icon */}
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+              </svg>
+              Segments
+              {allSegmentCount > 0 && <span className="ml-1 rounded-full bg-purple-100 text-purple-700 px-1.5 py-0.5 text-xs font-bold">{allSegmentCount}</span>}
+            </button>
+            <button
+              onClick={() => setActiveTab("audiences")}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === "audiences" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
+            >
+              {/* People group icon */}
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              Audiences
+              {allAudienceCount > 0 && <span className="ml-1 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-xs font-bold">{allAudienceCount}</span>}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -322,17 +382,21 @@ export default function AudienceLabPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
 
-            {/* ── Segment slots ── */}
+            {/* ── Slot cards ── */}
             <div className="grid gap-3">
               {loading ? (
                 [...Array(7)].map((_, i) => <div key={i} className="h-20 rounded-2xl bg-white border border-gray-100 animate-pulse" />)
+              ) : tabSlots.length === 0 ? (
+                <div className="rounded-2xl bg-white border border-dashed border-gray-200 px-6 py-10 text-center">
+                  <p className="text-sm text-gray-400">No {isAudienceTab ? "audiences" : "segments"} added yet.</p>
+                </div>
               ) : (
-                slots.map(({ slot, schedule, occupied: occ, segment }) => (
+                tabSlots.map(({ slot, schedule, occupied: occ, segment }) => (
                   <div key={slot} className={`rounded-2xl bg-white shadow-sm transition ${occ ? "border border-gray-100" : "border border-dashed border-gray-200"}`}>
 
                     {/* Row */}
                     <div className="flex items-center gap-3 px-4 py-3.5">
-                      <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold ${occ ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-400"}`}>
+                      <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold ${occ ? (isAudienceTab ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700") : "bg-gray-100 text-gray-400"}`}>
                         {slot}
                       </div>
 
@@ -351,7 +415,7 @@ export default function AudienceLabPage() {
                               Last sync: {fmtDateShort(segment.lastSyncedAt)}
                               {segment.lastSyncCount != null && ` · ${segment.lastSyncCount.toLocaleString()} rows`}
                             </p>
-                            {runResult[segment.key] && <p className="mt-0.5 text-xs font-medium text-purple-700">{runResult[segment.key]}</p>}
+                            {runResult[segment.key] && <p className={`mt-0.5 text-xs font-medium ${isAudienceTab ? "text-blue-700" : "text-purple-700"}`}>{runResult[segment.key]}</p>}
                           </div>
 
                           <div className="hidden sm:block text-right flex-shrink-0">
@@ -367,7 +431,7 @@ export default function AudienceLabPage() {
 
                             {/* Logs toggle */}
                             <button onClick={() => toggleLogs(segment)}
-                              className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${expandedLogs[segment.key] ? "border-purple-300 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                              className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${expandedLogs[segment.key] ? (isAudienceTab ? "border-blue-300 bg-blue-50 text-blue-700" : "border-purple-300 bg-purple-50 text-purple-700") : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                               {expandedLogs[segment.key] === "loading" ? "…" : "Logs"}
                             </button>
 
@@ -410,7 +474,7 @@ export default function AudienceLabPage() {
                                         </button>
                                         <div className="border-t border-gray-100" />
                                         <button
-                                          onClick={() => { setOpenMenu(null); handleDelete(segment.key); }}
+                                          onClick={() => { setOpenMenu(null); handleDelete(segment.key, segment.entityType); }}
                                           className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
                                         >
                                           <span>✕</span> Delete
@@ -431,7 +495,7 @@ export default function AudienceLabPage() {
                           </div>
                           {isAdminUser && (
                             <button onClick={() => openAdd(slot)}
-                              className="rounded-lg border border-dashed border-purple-300 px-3 py-1.5 text-xs font-semibold text-purple-500 hover:bg-purple-50 transition">
+                              className={`rounded-lg border border-dashed px-3 py-1.5 text-xs font-semibold transition ${isAudienceTab ? "border-blue-300 text-blue-500 hover:bg-blue-50" : "border-purple-300 text-purple-500 hover:bg-purple-50"}`}>
                               + Assign
                             </button>
                           )}
@@ -484,62 +548,86 @@ export default function AudienceLabPage() {
       </div>
 
       {/* ── Modal ── */}
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h2 className="text-base font-bold text-gray-900">
-                {modal.mode === "add" ? "Add Segment" : `Edit — ${modal.segment.name}`}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              {modal.mode === "add" && (
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Slot (0–9, blank = auto)</span>
-                  <input type="number" min="0" max="9" value={form.slot} onChange={(e) => setForm((f) => ({ ...f, slot: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-purple-400" placeholder="Auto-assign" />
-                </label>
-              )}
-              <label className="block">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Display Name</span>
-                <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-purple-400" placeholder="e.g. Ranger Electric" />
-              </label>
-              {modal.mode === "add" && (
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Key (unique ID)</span>
-                  <input type="text" value={form.key} onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none focus:border-purple-400" placeholder="e.g. ranger_electric" />
-                </label>
-              )}
-              <label className="block">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Audience Lab Segment ID</span>
-                <input type="text" value={form.segmentId} onChange={(e) => setForm((f) => ({ ...f, segmentId: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none focus:border-purple-400" placeholder="Segment ID from Audience Lab" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">BigQuery Table ID</span>
-                <input type="text" value={form.tableId} onChange={(e) => setForm((f) => ({ ...f, tableId: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none focus:border-purple-400" placeholder="e.g. ranger_interested_electric_segment" />
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer" onClick={() => setForm((f) => ({ ...f, active: !f.active }))}>
-                <div className={`relative w-10 h-6 rounded-full transition ${form.active ? "bg-purple-600" : "bg-gray-200"}`}>
-                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${form.active ? "left-5" : "left-1"}`} />
+      {modal && (() => {
+        const isAud      = modal.entityType === "audience";
+        const typeLabel  = isAud ? "Audience" : "Segment";
+        const accentSave = isAud ? "bg-blue-600 hover:bg-blue-500" : "bg-purple-600 hover:bg-purple-500";
+        const accentFocus = isAud ? "focus:border-blue-400" : "focus:border-purple-400";
+        const accentToggle = isAud ? "bg-blue-600" : "bg-purple-600";
+        const slotMin    = isAud ? 10 : 0;
+        const slotMax    = isAud ? 19 : 9;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">
+                    {modal.mode === "add" ? `Add ${typeLabel}` : `Edit — ${modal.segment.name}`}
+                  </h2>
+                  {modal.mode === "add" && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {isAud ? "Broad audience list · slots 10–19" : "Behavior-based segment · slots 0–9"}
+                    </p>
+                  )}
                 </div>
-                <span className="text-sm font-medium text-gray-700">{form.active ? "Active" : "Paused"}</span>
-              </label>
-              {saveError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">⚠️ {saveError}</p>}
-            </div>
-            <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-              <button onClick={closeModal} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 px-5 py-2 text-sm font-semibold text-white transition">
-                {saving ? "Saving…" : modal.mode === "add" ? "Add Segment" : "Save Changes"}
-              </button>
+                <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                {modal.mode === "add" && (
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Slot ({slotMin}–{slotMax}, blank = auto)
+                    </span>
+                    <input type="number" min={slotMin} max={slotMax} value={form.slot} onChange={(e) => setForm((f) => ({ ...f, slot: e.target.value }))}
+                      className={`mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none ${accentFocus}`} placeholder="Auto-assign" />
+                  </label>
+                )}
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Display Name</span>
+                  <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    className={`mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none ${accentFocus}`}
+                    placeholder={isAud ? "e.g. Southwest Homeowners" : "e.g. Ranger Electric"} />
+                </label>
+                {modal.mode === "add" && (
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Key (unique ID)</span>
+                    <input type="text" value={form.key} onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
+                      className={`mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none ${accentFocus}`}
+                      placeholder={isAud ? "e.g. southwest_homeowners" : "e.g. ranger_electric"} />
+                  </label>
+                )}
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Audience Lab {typeLabel} ID
+                  </span>
+                  <input type="text" value={form.segmentId} onChange={(e) => setForm((f) => ({ ...f, segmentId: e.target.value }))}
+                    className={`mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none ${accentFocus}`}
+                    placeholder={`UUID from Audience Lab`} />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">BigQuery Table ID</span>
+                  <input type="text" value={form.tableId} onChange={(e) => setForm((f) => ({ ...f, tableId: e.target.value }))}
+                    className={`mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none ${accentFocus}`}
+                    placeholder={isAud ? "e.g. audience_southwest_homeowners" : "e.g. ranger_interested_electric_segment"} />
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer" onClick={() => setForm((f) => ({ ...f, active: !f.active }))}>
+                  <div className={`relative w-10 h-6 rounded-full transition ${form.active ? accentToggle : "bg-gray-200"}`}>
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${form.active ? "left-5" : "left-1"}`} />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{form.active ? "Active" : "Paused"}</span>
+                </label>
+                {saveError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">⚠️ {saveError}</p>}
+              </div>
+              <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                <button onClick={closeModal} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition">Cancel</button>
+                <button onClick={handleSave} disabled={saving} className={`rounded-xl ${accentSave} disabled:opacity-50 px-5 py-2 text-sm font-semibold text-white transition`}>
+                  {saving ? "Saving…" : modal.mode === "add" ? `Add ${typeLabel}` : "Save Changes"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

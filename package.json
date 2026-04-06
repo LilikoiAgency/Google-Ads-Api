@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node -e \"const{rmSync}=require('fs');try{rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "node -e \"const{rmSync}=require('fs');try{rmSync('.next',{recursive:true,force:true})}catch(e){}\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

@@ -2,19 +2,32 @@
   "functions": {
     "src/app/api/*": {
       "maxDuration": 60
+    },
+    "src/app/api/audience-lab/sync/route.js": {
+      "maxDuration": 800
     }
   },
   "crons": [
-    { "path": "/api/audience-lab/sync?mode=write&slot=0", "schedule": "0 12 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=1", "schedule": "10 12 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=2", "schedule": "20 12 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=3", "schedule": "30 12 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=4", "schedule": "40 12 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=5", "schedule": "50 12 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=6", "schedule": "0 13 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=7", "schedule": "10 13 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=8", "schedule": "20 13 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=9", "schedule": "30 13 * * 1" }
+    { "path": "/api/audience-lab/sync?mode=write&slot=0", "schedule": "0 10 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=1", "schedule": "10 10 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=2", "schedule": "20 10 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=3", "schedule": "30 10 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=4", "schedule": "40 10 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=5", "schedule": "50 10 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=6", "schedule": "0 11 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=7", "schedule": "10 11 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=8", "schedule": "20 11 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=9", "schedule": "30 11 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=10", "schedule": "40 11 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=11", "schedule": "50 11 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=12", "schedule": "0 12 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=13", "schedule": "10 12 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=14", "schedule": "20 12 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=15", "schedule": "30 12 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=16", "schedule": "40 12 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=17", "schedule": "50 12 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=18", "schedule": "0 13 * * 1" },
+    { "path": "/api/audience-lab/sync?mode=write&slot=19", "schedule": "10 13 * * 1" }
   ]
 }
  

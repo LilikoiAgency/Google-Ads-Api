@@ -6,7 +6,11 @@
       "Bash(node -e \":*)",
       "Bash(ls \"C:\\\\Users\\\\frank\\\\Documents\\\\GitHub\\\\Google-Ads-Api\\\\src\\\\app\\\\api\\\\portal\\\\[slug]\\\\streaming\"\" 2>&1 && ls \"C:UsersfrankDocumentsGitHubGoogle-Ads-Apisrcappportal[slug]\"\")",
       "Bash(npm run:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(npx acorn:*)",
+      "Bash(rm -rf .next/cache)",
+      "Bash(rm -rf .next/server)",
+      "Bash(rm -rf .next/static)"
     ]
   }
 }

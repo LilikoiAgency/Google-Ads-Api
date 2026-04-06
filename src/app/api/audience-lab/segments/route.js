@@ -10,6 +10,9 @@ import {
   writeActivityLog,
   isAdmin,
   TOTAL_SLOTS,
+  SEGMENT_SLOT_COUNT,
+  AUDIENCE_SLOT_START,
+  AUDIENCE_SLOT_COUNT,
 } from "../../../../lib/audienceLabSegments";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +25,15 @@ async function getUser(request) {
   };
 }
 
-// GET /api/audience-lab/segments
-export async function GET() {
+// GET /api/audience-lab/segments?entityType=segment|audience
+export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const filterType = searchParams.get("entityType"); // "segment" | "audience" | null (all)
+
     await seedFromEnvIfEmpty();
-    const segments = await getSegments();
-    const occupied = new Set(segments.map((s) => s.slot));
+    const allDocs = await getSegments();
+    const occupied = new Set(allDocs.map((s) => s.slot));
 
     const slots = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
       const utcMinutes  = i * 10 + 720;
@@ -37,15 +43,32 @@ export async function GET() {
       const ampm        = hours >= 12 ? "PM" : "AM";
       const displayHour = hours % 12 === 0 ? 12 : hours % 12;
       const label       = `Mon ${displayHour}:${String(minutes).padStart(2, "0")} ${ampm} PT`;
+      const doc         = allDocs.find((s) => s.slot === i) || null;
       return {
-        slot:     i,
-        schedule: label,
-        occupied: occupied.has(i),
-        segment:  segments.find((s) => s.slot === i) || null,
+        slot:       i,
+        schedule:   label,
+        occupied:   occupied.has(i),
+        segment:    doc,
+        entityType: doc?.entityType || (i < AUDIENCE_SLOT_START ? "segment" : "audience"),
       };
     });
 
-    return NextResponse.json({ slots, total: segments.length, maxSlots: TOTAL_SLOTS });
+    // Filter to specific type if requested
+    const filtered = filterType
+      ? slots.filter((s) => {
+          if (s.occupied) return (s.segment.entityType || "segment") === filterType;
+          // Empty slots belong to their natural range
+          return filterType === "audience" ? s.slot >= AUDIENCE_SLOT_START : s.slot < AUDIENCE_SLOT_START;
+        })
+      : slots;
+
+    return NextResponse.json({
+      slots:    filtered,
+      total:    allDocs.length,
+      maxSlots: TOTAL_SLOTS,
+      segmentCount:  allDocs.filter((d) => (d.entityType || "segment") === "segment").length,
+      audienceCount: allDocs.filter((d) => d.entityType === "audience").length,
+    });
   } catch (err) {
     console.error("[segments] GET error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -60,14 +83,14 @@ export async function POST(request) {
     if (!isAdmin(user.email)) return NextResponse.json({ error: "Only admins can add segments." }, { status: 403 });
 
     const body = await request.json();
-    const { slot, key, name, segmentId, tableId, active } = body;
+    const { slot, key, name, segmentId, tableId, active, entityType } = body;
 
     if (!key || !name || !segmentId || !tableId)
       return NextResponse.json({ error: "Missing required fields: key, name, segmentId, tableId" }, { status: 400 });
     if (slot !== undefined && (slot < 0 || slot >= TOTAL_SLOTS))
       return NextResponse.json({ error: `Slot must be 0–${TOTAL_SLOTS - 1}` }, { status: 400 });
 
-    const doc = await createSegment({ slot, key, name, segmentId, tableId, active });
+    const doc = await createSegment({ slot, key, name, segmentId, tableId, active, entityType });
 
     await writeActivityLog({
       action: "created", segmentKey: doc.key, segmentName: doc.name,

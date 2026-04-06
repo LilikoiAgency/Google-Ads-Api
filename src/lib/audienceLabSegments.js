@@ -3,14 +3,24 @@ import dbConnect from "./mongoose";
 const DB   = "tokensApi";
 const COLL = "AudienceLabSegments";
 
-// Slot → cron schedule mapping (10 slots, Monday 12:00–13:30 UTC)
+// Slot → cron schedule mapping
+// Slots 0–9:  Segments  (Mon 5:00–6:30 AM PT)
+// Slots 10–19: Audiences (Mon 6:40–8:10 AM PT)
 export const SLOT_SCHEDULES = [
+  // Segment slots (0–9)
   "Mon 5:00 AM PT", "Mon 5:10 AM PT", "Mon 5:20 AM PT", "Mon 5:30 AM PT",
   "Mon 5:40 AM PT", "Mon 5:50 AM PT", "Mon 6:00 AM PT", "Mon 6:10 AM PT",
   "Mon 6:20 AM PT", "Mon 6:30 AM PT",
+  // Audience slots (10–19)
+  "Mon 6:40 AM PT", "Mon 6:50 AM PT", "Mon 7:00 AM PT", "Mon 7:10 AM PT",
+  "Mon 7:20 AM PT", "Mon 7:30 AM PT", "Mon 7:40 AM PT", "Mon 7:50 AM PT",
+  "Mon 8:00 AM PT", "Mon 8:10 AM PT",
 ];
 
-export const TOTAL_SLOTS = SLOT_SCHEDULES.length;
+export const TOTAL_SLOTS          = SLOT_SCHEDULES.length; // 20
+export const SEGMENT_SLOT_COUNT   = 10;  // slots 0–9
+export const AUDIENCE_SLOT_START  = 10;  // slots 10–19
+export const AUDIENCE_SLOT_COUNT  = 10;
 
 async function col() {
   const client = await dbConnect();
@@ -35,17 +45,23 @@ export async function getOccupiedSlots() {
   return new Set(segments.map((s) => s.slot));
 }
 
-/** Insert a new segment. Auto-assigns next free slot if slot not specified. */
-export async function createSegment({ slot, key, name, segmentId, tableId, active = true }) {
+/** Insert a new segment or audience. Auto-assigns next free slot in the correct range. */
+export async function createSegment({ slot, key, name, segmentId, tableId, active = true, entityType = "segment" }) {
   const c = await col();
 
-  // Auto-assign slot if not provided
+  const isAudience  = entityType === "audience";
+  const slotMin     = isAudience ? AUDIENCE_SLOT_START : 0;
+  const slotMax     = isAudience ? TOTAL_SLOTS - 1 : AUDIENCE_SLOT_START - 1;
+  const typeLabel   = isAudience ? "audience" : "segment";
+  const maxForType  = isAudience ? AUDIENCE_SLOT_COUNT : SEGMENT_SLOT_COUNT;
+
+  // Auto-assign slot within the correct range if not provided
   if (slot === undefined || slot === null) {
     const occupied = await getOccupiedSlots();
-    for (let i = 0; i < TOTAL_SLOTS; i++) {
+    for (let i = slotMin; i <= slotMax; i++) {
       if (!occupied.has(i)) { slot = i; break; }
     }
-    if (slot === undefined) throw new Error("All slots are occupied (max 10 segments).");
+    if (slot === undefined) throw new Error(`All ${typeLabel} slots are occupied (max ${maxForType}).`);
   }
 
   const now = new Date();
@@ -55,6 +71,7 @@ export async function createSegment({ slot, key, name, segmentId, tableId, activ
     name:            name.trim(),
     segmentId:       segmentId.trim(),
     tableId:         tableId.trim(),
+    entityType:      isAudience ? "audience" : "segment",
     active:          Boolean(active),
     createdAt:       now,
     lastSyncedAt:    null,
@@ -67,10 +84,10 @@ export async function createSegment({ slot, key, name, segmentId, tableId, activ
   return doc;
 }
 
-/** Update a segment by its key */
+/** Update a segment or audience by its key */
 export async function updateSegment(key, updates) {
   const c = await col();
-  const allowed = ["name", "segmentId", "tableId", "active", "slot"];
+  const allowed = ["name", "segmentId", "tableId", "active", "slot", "entityType"];
   const $set = {};
   for (const field of allowed) {
     if (updates[field] !== undefined) $set[field] = updates[field];
@@ -89,6 +106,42 @@ export async function updateSyncStatus(key, { status, message, count }) {
       lastSyncMessage: message || null,
       lastSyncCount:   count   ?? null,
     },
+  });
+}
+
+/**
+ * Save a resume checkpoint — the next row offset to start from.
+ * Called after each successful BigQuery page write so a timed-out run
+ * can pick up where it left off rather than starting over.
+ */
+export async function saveCheckpoint(key, { offset, batchTimestamp }) {
+  const c = await col();
+  return c.updateOne({ key }, {
+    $set: {
+      resumeOffset:     offset,
+      resumeBatch:      batchTimestamp,
+      resumeSavedAt:    new Date(),
+    },
+  });
+}
+
+/**
+ * Return the saved checkpoint for a key, or null if none.
+ * Only valid if the saved batchTimestamp matches the current run's batchTimestamp
+ * (ensures we don't resume from a stale previous week's checkpoint).
+ */
+export async function getCheckpoint(key, batchTimestamp) {
+  const c = await col();
+  const doc = await c.findOne({ key }, { projection: { resumeOffset: 1, resumeBatch: 1 } });
+  if (!doc?.resumeOffset || doc.resumeBatch !== batchTimestamp) return null;
+  return { offset: doc.resumeOffset };
+}
+
+/** Clear the resume checkpoint after a successful full sync */
+export async function clearCheckpoint(key) {
+  const c = await col();
+  return c.updateOne({ key }, {
+    $unset: { resumeOffset: "", resumeBatch: "", resumeSavedAt: "" },
   });
 }
 
