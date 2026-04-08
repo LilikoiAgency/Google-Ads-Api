@@ -143,6 +143,8 @@ export default function AudienceLabPage() {
   const [saveError, setSaveError]         = useState(null);
   const [running, setRunning]             = useState({});
   const [runResult, setRunResult]         = useState({});
+  const [runPreview, setRunPreview]       = useState({});
+  const [previewExpanded, setPreviewExpanded] = useState({});
   const [expandedLogs, setExpandedLogs]   = useState({});
   const [activityLogs, setActivityLogs]   = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -272,6 +274,8 @@ export default function AudienceLabPage() {
   const handleRunNow = async (seg) => {
     setRunning((r) => ({ ...r, [seg.key]: true }));
     setRunResult((r) => ({ ...r, [seg.key]: null }));
+    setRunPreview((p) => ({ ...p, [seg.key]: null }));
+    setPreviewExpanded((e) => ({ ...e, [seg.key]: false }));
     try {
       const res  = await fetch(`/api/audience-lab/sync?mode=dry-run&slot=${seg.slot}&triggered_by=manual`);
       const json = await res.json();
@@ -286,6 +290,9 @@ export default function AudienceLabPage() {
         }
         return { ...r, [seg.key]: msg };
       });
+      if (json.result?.preview) {
+        setRunPreview((p) => ({ ...p, [seg.key]: json.result.preview }));
+      }
       // Auto-open logs so user can see the dry-run entry
       setExpandedLogs((l) => ({ ...l, [seg.key]: "loading" }));
       const res2  = await fetch(`/api/audience-lab/logs?type=sync&key=${seg.key}&limit=20`);
@@ -294,7 +301,11 @@ export default function AudienceLabPage() {
     } catch (e) { setRunResult((r) => ({ ...r, [seg.key]: `❌ ${e.message}` })); }
     finally {
       setRunning((r) => ({ ...r, [seg.key]: false }));
-      setTimeout(() => setRunResult((r) => ({ ...r, [seg.key]: null })), 10000);
+      setTimeout(() => {
+        setRunResult((r) => ({ ...r, [seg.key]: null }));
+        setRunPreview((p) => ({ ...p, [seg.key]: null }));
+        setPreviewExpanded((e) => ({ ...e, [seg.key]: false }));
+      }, 30000);
     }
   };
 
@@ -415,7 +426,55 @@ export default function AudienceLabPage() {
                               Last sync: {fmtDateShort(segment.lastSyncedAt)}
                               {segment.lastSyncCount != null && ` · ${segment.lastSyncCount.toLocaleString()} rows`}
                             </p>
-                            {runResult[segment.key] && <p className={`mt-0.5 text-xs font-medium ${isAudienceTab ? "text-blue-700" : "text-purple-700"}`}>{runResult[segment.key]}</p>}
+                            {runResult[segment.key] && (
+                              <div className="mt-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className={`text-xs font-medium ${isAudienceTab ? "text-blue-700" : "text-purple-700"}`}>{runResult[segment.key]}</p>
+                                  {runPreview[segment.key]?.rawRows?.length > 0 && (
+                                    <button
+                                      onClick={() => setPreviewExpanded((e) => ({ ...e, [segment.key]: !e[segment.key] }))}
+                                      className="text-xs font-medium text-amber-600 hover:text-amber-700 underline underline-offset-2 transition"
+                                    >
+                                      Fields {previewExpanded[segment.key] ? "▲" : "▾"}
+                                    </button>
+                                  )}
+                                </div>
+                                {previewExpanded[segment.key] && runPreview[segment.key]?.rawRows?.length > 0 && (() => {
+                                  const ADDRESS_FIELDS = new Set([
+                                    "PERSONAL_ADDRESS","ADDRESS","SKIPTRACE_ADDRESS",
+                                    "PERSONAL_CITY","CITY","HOME_CITY","MAILING_CITY","SKIPTRACE_CITY",
+                                    "PERSONAL_STATE","STATE","HOME_STATE","MAILING_STATE","SKIPTRACE_STATE",
+                                    "PERSONAL_ZIP","ZIP","HOME_ZIP","MAILING_ZIP","SKIPTRACE_ZIP",
+                                  ]);
+                                  const sampleRow = runPreview[segment.key].rawRows[0];
+                                  const fields = runPreview[segment.key].previewFields || Object.keys(sampleRow);
+                                  return (
+                                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+                                      <p className="px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-100 border-b border-amber-200">
+                                        Raw API fields · 1 sample row
+                                      </p>
+                                      <div className="divide-y divide-amber-100 max-h-64 overflow-y-auto">
+                                        {fields.map((field) => {
+                                          const val = sampleRow[field];
+                                          const isAddr = ADDRESS_FIELDS.has(field);
+                                          const display = val == null ? <span className="text-gray-400 italic">null</span>
+                                            : Array.isArray(val) ? val.join(", ")
+                                            : String(val);
+                                          return (
+                                            <div key={field} className={`flex items-start gap-2 px-3 py-1.5 text-xs ${isAddr ? "bg-amber-50" : ""}`}>
+                                              <span className={`font-mono font-semibold flex-shrink-0 ${isAddr ? "text-amber-700" : "text-gray-600"}`}>
+                                                {field}{isAddr ? " ★" : ""}
+                                              </span>
+                                              <span className="text-gray-500 break-all">{display}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
                           </div>
 
                           <div className="hidden sm:block text-right flex-shrink-0">

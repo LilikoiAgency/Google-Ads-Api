@@ -415,10 +415,10 @@ function toBigQueryRow(rawRow, segmentName, batchTimestamp) {
         rawRow?.DIRECT_NUMBER ||
         rawRow?.VALID_PHONES
     ),
-    address: rawRow?.PERSONAL_ADDRESS || rawRow?.ADDRESS || null,
-    city:    rawRow?.PERSONAL_CITY    || rawRow?.CITY    || rawRow?.HOME_CITY    || rawRow?.MAILING_CITY    || null,
-    state:   rawRow?.PERSONAL_STATE   || rawRow?.STATE   || rawRow?.HOME_STATE   || rawRow?.MAILING_STATE   || null,
-    zip:     splitFirstValue(rawRow?.PERSONAL_ZIP || rawRow?.ZIP || rawRow?.HOME_ZIP || rawRow?.MAILING_ZIP || rawRow?.SKIPTRACE_ZIP) || null,
+    address: rawRow?.SKIPTRACE_ADDRESS || rawRow?.PERSONAL_ADDRESS || rawRow?.ADDRESS || null,
+    city:    rawRow?.SKIPTRACE_CITY    || rawRow?.PERSONAL_CITY    || rawRow?.CITY    || rawRow?.HOME_CITY    || rawRow?.MAILING_CITY    || null,
+    state:   rawRow?.SKIPTRACE_STATE   || rawRow?.PERSONAL_STATE   || rawRow?.STATE   || rawRow?.HOME_STATE   || rawRow?.MAILING_STATE   || null,
+    zip:     splitFirstValue(rawRow?.SKIPTRACE_ZIP || rawRow?.PERSONAL_ZIP || rawRow?.ZIP || rawRow?.HOME_ZIP || rawRow?.MAILING_ZIP) || null,
     country: "US",
   };
 }
@@ -591,15 +591,16 @@ function summarizeDryRunPayload(payload) {
   const rows = Array.isArray(payload?.data) ? payload.data : [];
   const first = rows[0] || null;
   return {
-    segmentId: payload?.segment_id || null,
-    segmentName: payload?.segment_name || null,
-    page: payload?.page ?? null,
-    pageSize: payload?.page_size ?? null,
-    totalPages: payload?.total_pages ?? null,
-    totalRecords: payload?.total_records ?? null,
-    hasMore: payload?.has_more ?? null,
+    segmentId:       payload?.segment_id    || null,
+    segmentName:     payload?.segment_name  || null,
+    page:            payload?.page          ?? null,
+    pageSize:        payload?.page_size     ?? null,
+    totalPages:      payload?.total_pages   ?? null,
+    totalRecords:    payload?.total_records ?? null,
+    hasMore:         payload?.has_more      ?? null,
     previewRowCount: rows.length,
-    previewFields: first ? Object.keys(first) : [],
+    previewFields:   first ? Object.keys(first) : [],
+    rawRows:         rows.slice(0, 3),
   };
 }
 
