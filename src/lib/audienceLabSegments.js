@@ -4,17 +4,17 @@ const DB   = "tokensApi";
 const COLL = "AudienceLabSegments";
 
 // Slot → cron schedule mapping
-// Slots 0–9:  Segments  (Mon 5:00–6:30 AM PT)
-// Slots 10–19: Audiences (Mon 6:40–8:10 AM PT)
+// Slots 0–9:  Segments  (Mon 3:00–4:30 AM PT)
+// Slots 10–19: Audiences (Mon 4:40–6:10 AM PT)
 export const SLOT_SCHEDULES = [
   // Segment slots (0–9)
-  "Mon 5:00 AM PT", "Mon 5:10 AM PT", "Mon 5:20 AM PT", "Mon 5:30 AM PT",
-  "Mon 5:40 AM PT", "Mon 5:50 AM PT", "Mon 6:00 AM PT", "Mon 6:10 AM PT",
-  "Mon 6:20 AM PT", "Mon 6:30 AM PT",
+  "Mon 3:00 AM PT", "Mon 3:10 AM PT", "Mon 3:20 AM PT", "Mon 3:30 AM PT",
+  "Mon 3:40 AM PT", "Mon 3:50 AM PT", "Mon 4:00 AM PT", "Mon 4:10 AM PT",
+  "Mon 4:20 AM PT", "Mon 4:30 AM PT",
   // Audience slots (10–19)
-  "Mon 6:40 AM PT", "Mon 6:50 AM PT", "Mon 7:00 AM PT", "Mon 7:10 AM PT",
-  "Mon 7:20 AM PT", "Mon 7:30 AM PT", "Mon 7:40 AM PT", "Mon 7:50 AM PT",
-  "Mon 8:00 AM PT", "Mon 8:10 AM PT",
+  "Mon 4:40 AM PT", "Mon 4:50 AM PT", "Mon 5:00 AM PT", "Mon 5:10 AM PT",
+  "Mon 5:20 AM PT", "Mon 5:30 AM PT", "Mon 5:40 AM PT", "Mon 5:50 AM PT",
+  "Mon 6:00 AM PT", "Mon 6:10 AM PT",
 ];
 
 export const TOTAL_SLOTS          = SLOT_SCHEDULES.length; // 20
