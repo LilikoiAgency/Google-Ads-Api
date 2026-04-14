@@ -16,6 +16,24 @@ export async function middleware(request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // ── Fire-and-forget page view logging ──────────────────────────────────
+  // Skip Next.js internal requests (prefetches, RSC, static assets)
+  const pathname = request.nextUrl.pathname;
+  const isPageVisit =
+    !request.nextUrl.search.includes("_rsc") &&
+    !pathname.includes("_next") &&
+    !pathname.startsWith("/api/") &&
+    request.method === "GET";
+
+  if (isPageVisit && email) {
+    const logUrl = new URL("/api/admin/usage", request.url);
+    fetch(logUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, path: pathname }),
+    }).catch(() => {}); // non-blocking — never delay page load
+  }
+
   return NextResponse.next();
 }
 

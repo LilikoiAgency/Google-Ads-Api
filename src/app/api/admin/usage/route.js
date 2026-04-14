@@ -1,0 +1,187 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions, allowedEmailDomain } from "../../../../lib/auth";
+import dbConnect from "../../../../lib/mongoose";
+
+const DB = "tokensApi";
+const COLLECTION = "PageViews";
+
+// ── Map paths to human-readable tool names ───────────────────────────────────
+
+const TOOL_MAP = {
+  "/dashboard":                "Dashboard Hub",
+  "/dashboard/google/ads":     "Google Ads",
+  "/dashboard/google/organic": "Search Console",
+  "/dashboard/bing":           "Bing Ads",
+  "/dashboard/meta":           "Meta Ads",
+  "/dashboard/seo-audit":      "SEO Audit",
+  "/dashboard/audience-lab":   "Audience Lab",
+  "/dashboard/streaming":      "Streaming",
+  "/dashboard/admin/clients":  "Client Portals",
+  "/dashboard/admin/usage":    "Usage Analytics",
+  "/report":                   "Paid vs Organic Report",
+};
+
+function pathToTool(path) {
+  // Try exact match first, then strip trailing segments for nested paths
+  if (TOOL_MAP[path]) return TOOL_MAP[path];
+  const segments = path.replace(/\/$/, "").split("/");
+  while (segments.length > 1) {
+    segments.pop();
+    const parent = segments.join("/");
+    if (TOOL_MAP[parent]) return TOOL_MAP[parent];
+  }
+  return path; // fallback to raw path
+}
+
+// ── POST — Log a page view (called from middleware) ──────────────────────────
+
+export async function POST(request) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+
+  const { email, path } = body;
+  if (!email || !path) {
+    return NextResponse.json({ error: "email and path required" }, { status: 400 });
+  }
+
+  try {
+    const client = await dbConnect();
+    await client.db(DB).collection(COLLECTION).insertOne({
+      email: email.toLowerCase(),
+      path,
+      tool: pathToTool(path),
+      timestamp: new Date(),
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[usage/log]", err.message);
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+}
+
+// ── GET — Aggregated usage stats (admin only) ────────────────────────────────
+
+export async function GET(request) {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email?.toLowerCase() || "";
+
+  if (!email.endsWith(`@${allowedEmailDomain}`)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const client = await dbConnect();
+  const col = client.db(DB).collection(COLLECTION);
+
+  const now = new Date();
+  const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
+  const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
+
+  try {
+    // 1. By tool — all time + 7d + 30d
+    const [byToolAll, byTool7d, byTool30d] = await Promise.all([
+      col.aggregate([
+        { $group: { _id: "$tool", visits: { $sum: 1 }, lastVisit: { $max: "$timestamp" } } },
+        { $sort: { visits: -1 } },
+      ]).toArray(),
+      col.aggregate([
+        { $match: { timestamp: { $gte: d7 } } },
+        { $group: { _id: "$tool", visits: { $sum: 1 } } },
+        { $sort: { visits: -1 } },
+      ]).toArray(),
+      col.aggregate([
+        { $match: { timestamp: { $gte: d30 } } },
+        { $group: { _id: "$tool", visits: { $sum: 1 } } },
+        { $sort: { visits: -1 } },
+      ]).toArray(),
+    ]);
+
+    // Merge into single tool array
+    const tool7dMap = Object.fromEntries(byTool7d.map((t) => [t._id, t.visits]));
+    const tool30dMap = Object.fromEntries(byTool30d.map((t) => [t._id, t.visits]));
+    const byTool = byToolAll.map((t) => ({
+      tool: t._id,
+      visitsAll: t.visits,
+      visits7d: tool7dMap[t._id] || 0,
+      visits30d: tool30dMap[t._id] || 0,
+      lastVisit: t.lastVisit,
+    }));
+
+    // 2. By user — 7d + 30d + last active + most used tool
+    const byUser = await col.aggregate([
+      { $match: { timestamp: { $gte: d30 } } },
+      {
+        $group: {
+          _id: "$email",
+          visits30d: { $sum: 1 },
+          lastActive: { $max: "$timestamp" },
+          tools: { $push: "$tool" },
+        },
+      },
+      { $sort: { visits30d: -1 } },
+    ]).toArray();
+
+    // Compute 7d visits and most used tool per user
+    const user7dCounts = await col.aggregate([
+      { $match: { timestamp: { $gte: d7 } } },
+      { $group: { _id: "$email", visits7d: { $sum: 1 } } },
+    ]).toArray();
+    const user7dMap = Object.fromEntries(user7dCounts.map((u) => [u._id, u.visits7d]));
+
+    const users = byUser.map((u) => {
+      // Find most used tool
+      const toolCounts = {};
+      for (const t of u.tools) { toolCounts[t] = (toolCounts[t] || 0) + 1; }
+      const topTool = Object.entries(toolCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+
+      return {
+        email: u._id,
+        visits30d: u.visits30d,
+        visits7d: user7dMap[u._id] || 0,
+        lastActive: u.lastActive,
+        topTool,
+      };
+    });
+
+    // 3. Daily trend — last 30 days
+    const dailyTrend = await col.aggregate([
+      { $match: { timestamp: { $gte: d30 } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          visits: { $sum: 1 },
+          uniqueUsers: { $addToSet: "$email" },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          date: "$_id",
+          visits: 1,
+          uniqueUsers: { $size: "$uniqueUsers" },
+          _id: 0,
+        },
+      },
+    ]).toArray();
+
+    // 4. Summary KPIs
+    const total7d = byTool.reduce((s, t) => s + t.visits7d, 0);
+    const uniqueUsers7d = new Set(user7dCounts.map((u) => u._id)).size;
+    const topTool7d = byTool.sort((a, b) => b.visits7d - a.visits7d)[0]?.tool || "—";
+    const topUser7d = users.sort((a, b) => b.visits7d - a.visits7d)[0]?.email || "—";
+
+    return NextResponse.json({
+      kpis: { total7d, uniqueUsers7d, topTool7d, topUser7d },
+      byTool,
+      users,
+      dailyTrend,
+    });
+  } catch (err) {
+    console.error("[usage/stats]", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

@@ -1,0 +1,214 @@
+import { NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import { getServerSession } from "next-auth";
+import { authOptions, allowedEmailDomain } from "../../../../lib/auth";
+import { getCredentials } from "../../../../lib/dbFunctions";
+import dbConnect from "../../../../lib/mongoose";
+import { SEO_AUDIT_SYSTEM_PROMPT } from "../../../../lib/seoAuditPrompt";
+import { ADMIN_EMAILS } from "../../../../lib/admins";
+
+const DAILY_LIMIT = 5;
+const DB = "tokensApi";
+const COLLECTION = "SeoAudits";
+
+async function checkAndIncrementUsage(email) {
+  const mongoClient = await dbConnect();
+  const db = mongoClient.db(DB);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const doc = await db.collection("UsageLimits").findOneAndUpdate(
+    { email, date: today },
+    { $inc: { seoAuditCount: 1 }, $setOnInsert: { email, date: today } },
+    { upsert: true, returnDocument: "before" }
+  );
+
+  return doc?.seoAuditCount ?? 0;
+}
+
+export async function POST(request) {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email?.toLowerCase() || "";
+
+  if (!email.endsWith(`@${allowedEmailDomain}`)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
+
+  const { crawlData, gscData, adsData, seoToolData, forceRerun } = body;
+
+  if (!crawlData || !crawlData.pages_crawled?.length) {
+    return NextResponse.json(
+      { error: "crawlData with pages_crawled is required" },
+      { status: 400 }
+    );
+  }
+
+  const domain = crawlData.domain?.toLowerCase().replace(/^www\./, "") || "";
+
+  // ── Check if this domain was already audited today ─────────────────────
+  const mongoClient = await dbConnect();
+  const db = mongoClient.db(DB);
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  if (!forceRerun) {
+    const existing = await db.collection(COLLECTION).findOne({
+      domain,
+      createdAt: { $gte: todayStart },
+    });
+
+    if (existing) {
+      // Return the cached audit — no Claude call, no rate-limit charge
+      return NextResponse.json({
+        audit: existing.auditResult,
+        auditId: existing._id.toString(),
+        remainingToday: null,
+        fromHistory: true,
+      });
+    }
+  }
+
+  // ── Rate limit check (admins are exempt) ────────────────────────────────
+  const isAdmin = ADMIN_EMAILS.includes(email);
+  const usedToday = await checkAndIncrementUsage(email);
+  if (!isAdmin && usedToday >= DAILY_LIMIT) {
+    return NextResponse.json(
+      {
+        error: `Daily limit reached — you've used all ${DAILY_LIMIT} SEO audits for today. Resets at midnight.`,
+      },
+      { status: 429 }
+    );
+  }
+
+  const credentials = await getCredentials();
+  const apiKey = credentials.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      {
+        error:
+          "Anthropic API key not configured — add ANTHROPIC_API_KEY to your MongoDB Tokens document.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  const auditRequest = {
+    audit_request: {
+      domain,
+      audit_type: crawlData.audit_type || "full",
+      audit_date: crawlData.audit_date || new Date().toISOString().split("T")[0],
+      pages_crawled: crawlData.pages_crawled,
+      site_wide: crawlData.site_wide || null,
+      google_search_console: gscData || null,
+      google_ads: adsData || null,
+      seo_tool_data: seoToolData || null,
+    },
+  };
+
+  const userPrompt = `Analyze this website data and return the structured JSON audit:\n\n${JSON.stringify(auditRequest, null, 2)}`;
+
+  // ── Call Claude with retry on 529 overloaded ────────────────────────────
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [5_000, 15_000, 30_000]; // 5s, 15s, 30s
+
+  async function callClaudeWithRetry() {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await client.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 8000,
+          system: SEO_AUDIT_SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userPrompt }],
+        });
+      } catch (err) {
+        const isOverloaded = err.status === 529 || err.error?.type === "overloaded_error";
+        if (isOverloaded && attempt < MAX_RETRIES) {
+          console.warn(`[seo-audit/analyze] 529 overloaded — retry ${attempt + 1}/${MAX_RETRIES} in ${RETRY_DELAYS[attempt] / 1000}s`);
+          await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  try {
+    const message = await callClaudeWithRetry();
+
+    const responseText = message.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("");
+
+    // Parse JSON response — handle potential markdown fences
+    let audit;
+    try {
+      audit = JSON.parse(responseText);
+    } catch {
+      const cleaned = responseText
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+      try {
+        audit = JSON.parse(cleaned);
+      } catch (parseErr) {
+        console.error("[seo-audit/analyze] JSON parse failed:", parseErr.message);
+        return NextResponse.json(
+          {
+            error: "Failed to parse audit response as JSON",
+            rawResponse: responseText.substring(0, 500),
+          },
+          { status: 502 }
+        );
+      }
+    }
+
+    // ── Save audit to SeoAudits collection ─────────────────────────────
+    let auditId = null;
+    try {
+      const insertResult = await db.collection(COLLECTION).insertOne({
+        email,
+        domain,
+        auditType: crawlData.audit_type || "full",
+        scores: {
+          seo: audit.audit_summary?.scores?.seo?.score ?? null,
+          geo: audit.audit_summary?.scores?.geo?.score ?? null,
+          aeo: audit.audit_summary?.scores?.aeo?.score ?? null,
+          combined: audit.audit_summary?.scores?.combined?.score ?? null,
+        },
+        pagesCrawled: crawlData.pages_crawled?.length || 0,
+        crawlData,
+        auditResult: audit,
+        createdAt: new Date(),
+      });
+      auditId = insertResult.insertedId.toString();
+    } catch (saveErr) {
+      // Non-fatal — audit still returned even if save fails
+      console.error("[seo-audit/analyze] Failed to save audit:", saveErr.message);
+    }
+
+    return NextResponse.json({
+      audit,
+      auditId,
+      remainingToday: DAILY_LIMIT - usedToday - 1,
+    });
+  } catch (err) {
+    console.error("[seo-audit/analyze] Claude error:", err);
+    return NextResponse.json(
+      { error: err.message || "Analysis failed" },
+      { status: 500 }
+    );
+  }
+}

@@ -396,6 +396,7 @@ export default function ContentArea({
   const accountSearchTerms = customerData?.searchTerms || [];
   const accountLandingPages = customerData?.landingPages || [];
   const accountDevices = customerData?.devices || [];
+  const audiences = customerData?.audiences || [];
   const spend = (selectedCampaign?.cost || 0) / 1_000_000;
   const clicks = selectedCampaign?.clicks || 0;
   const conversions = Number(selectedCampaign?.conversions || 0);
@@ -1178,6 +1179,104 @@ export default function ContentArea({
               </p>
             )}
           </div>
+
+          {/* ── Customer Match Lists ─────────────────────────────────── */}
+          <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-customPurple">
+                  Customer Match Lists
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  CRM-based user lists in this account with their most recent offline upload job status.{" "}
+                  <span className="italic text-gray-400">
+                    Note: does not reflect new &ldquo;Data Connections&rdquo; (BigQuery confidential matching) — those aren&rsquo;t exposed by the Google Ads API.
+                  </span>
+                </p>
+              </div>
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                {audiences.length} {audiences.length === 1 ? "list" : "lists"}
+              </span>
+            </div>
+            {audiences.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                      <th className="pb-3 pr-4 font-medium">Name</th>
+                      <th className="pb-3 pr-4 font-medium">Type</th>
+                      <th className="pb-3 pr-4 font-medium">Size</th>
+                      <th className="pb-3 font-medium">Last Upload Job</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audiences.map((audience) => {
+                      // Status chip colors
+                      const s = audience.lastSyncStatus;
+                      const isSuccess = s === "SUCCESS" || s === "COMPLETE";
+                      const isFailed = s === "FAILED";
+                      const isRunning = s === "PENDING" || s === "RUNNING";
+                      const chipClass = isSuccess
+                        ? "bg-green-100 text-green-800"
+                        : isFailed
+                        ? "bg-red-100 text-red-800"
+                        : isRunning
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-700";
+                      const chipLabel = isSuccess
+                        ? "Completed"
+                        : isFailed
+                        ? "Failed"
+                        : isRunning
+                        ? s === "PENDING" ? "Pending" : "Running"
+                        : s || "No recent upload";
+
+                      // Prefer display size, then search size, else "—"
+                      const size =
+                        audience.sizeForDisplay != null && audience.sizeForDisplay > 0
+                          ? Number(audience.sizeForDisplay).toLocaleString()
+                          : audience.sizeForSearch != null && audience.sizeForSearch > 0
+                          ? Number(audience.sizeForSearch).toLocaleString()
+                          : "—";
+
+                      const typeLabel =
+                        audience.type === "CRM_BASED" ? "Customer Match" : audience.type;
+
+                      return (
+                        <tr
+                          key={audience.id}
+                          className="border-b border-gray-100 align-top last:border-b-0"
+                        >
+                          <td className="py-3 pr-4 font-medium text-gray-900">
+                            {audience.name}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-600">{typeLabel}</td>
+                          <td className="py-3 pr-4 text-blue-600">{size}</td>
+                          <td className="py-3">
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${chipClass}`}
+                            >
+                              {chipLabel}
+                            </span>
+                            {audience.failureReason && (
+                              <p className="mt-1 text-xs text-red-500">
+                                {audience.failureReason}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                No audience lists found for this account.
+              </p>
+            )}
+          </div>
+
           <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4">
             <button
               className="flex w-full items-center justify-between gap-4 text-left"

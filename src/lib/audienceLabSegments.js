@@ -197,15 +197,13 @@ export async function getRecentLogs(limit = 50) {
 // ─── Activity Logs ────────────────────────────────────────────────────────────
 
 const ACTIVITY_COLL = "AudienceLabActivityLogs";
-export const ADMIN_EMAILS = ["frank@lilikoiagency.com"];
+
+// Re-export from standalone file so client components can import without MongoDB
+export { ADMIN_EMAILS, isAdmin } from "./admins";
 
 async function actCol() {
   const client = await dbConnect();
   return client.db(DB).collection(ACTIVITY_COLL);
-}
-
-export function isAdmin(email) {
-  return ADMIN_EMAILS.includes((email || "").toLowerCase());
 }
 
 /**

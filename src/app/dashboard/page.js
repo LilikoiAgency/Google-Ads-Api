@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
+import { ADMIN_EMAILS } from "../../lib/admins";
 import "../globals.css";
 
 // ─── Google product SVG icons ──────────────────────────────────────────────
@@ -69,85 +70,161 @@ function MetaAdsIcon() {
   );
 }
 
-const TILES = [
+// ─── Tile icon components ───────────────────────────────────────────────
+function SEOAuditIcon() {
+  return (
+    <svg viewBox="0 0 48 48" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="22" cy="22" r="13" stroke="#0d9488" strokeWidth="3" fill="#0d9488" opacity="0.08"/>
+      <circle cx="22" cy="22" r="13" stroke="#0d9488" strokeWidth="2.5"/>
+      <line x1="31.5" y1="31.5" x2="42" y2="42" stroke="#0d9488" strokeWidth="3.5" strokeLinecap="round"/>
+      <rect x="15" y="24" width="3.5" height="7" rx="1" fill="#f59e0b"/>
+      <rect x="20.25" y="20" width="3.5" height="11" rx="1" fill="#0d9488"/>
+      <rect x="25.5" y="16" width="3.5" height="15" rx="1" fill="#6366f1"/>
+    </svg>
+  );
+}
+
+function StreamingIcon() {
+  return (
+    <svg viewBox="0 0 48 48" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="12" width="44" height="28" rx="4" fill="#0ea5e9" opacity="0.15"/>
+      <rect x="2" y="12" width="44" height="28" rx="4" stroke="#0ea5e9" strokeWidth="2.5"/>
+      <path d="M16 8l-4 4M32 8l4 4" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="24" cy="26" r="7" fill="#0ea5e9" opacity="0.3"/>
+      <polygon points="21,22 21,30 30,26" fill="#0ea5e9"/>
+    </svg>
+  );
+}
+
+function ClientPortalsIcon() {
+  return (
+    <svg viewBox="0 0 48 48" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="18" cy="16" r="7" fill="#6d28d9" opacity="0.9"/>
+      <circle cx="33" cy="16" r="5" fill="#a78bfa" opacity="0.8"/>
+      <ellipse cx="18" cy="34" rx="12" ry="7" fill="#6d28d9" opacity="0.85"/>
+      <ellipse cx="34" cy="34" rx="9" ry="6" fill="#a78bfa" opacity="0.7"/>
+    </svg>
+  );
+}
+
+function UsageAnalyticsIcon() {
+  return (
+    <svg viewBox="0 0 48 48" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="6" y="28" width="7" height="14" rx="1.5" fill="#ec4899" opacity="0.9"/>
+      <rect x="16" y="20" width="7" height="22" rx="1.5" fill="#ec4899"/>
+      <rect x="26" y="12" width="7" height="30" rx="1.5" fill="#ec4899" opacity="0.8"/>
+      <rect x="36" y="24" width="7" height="18" rx="1.5" fill="#ec4899" opacity="0.6"/>
+      <circle cx="9.5" cy="10" r="2.5" fill="#f472b6"/>
+    </svg>
+  );
+}
+
+// ─── Tile categories ────────────────────────────────────────────────────
+const SECTIONS = [
   {
-    href: "/dashboard/google/ads",
-    Icon: GoogleAdsIcon,
-    title: "Google Ads",
-    description: "Campaign performance, keyword spend, conversions, and ROAS across all accounts.",
-    tag: "Paid",
-    tagColor: "#a855f7",
+    title: "Paid Media",
+    description: "Ad platform dashboards",
+    tiles: [
+      {
+        href: "/dashboard/google/ads",
+        Icon: GoogleAdsIcon,
+        title: "Google Ads",
+        description: "Campaigns, keyword spend, conversions, ROAS.",
+        tag: "Paid",
+        tagColor: "#a855f7",
+      },
+      {
+        href: "/dashboard/meta",
+        Icon: MetaAdsIcon,
+        title: "Meta Ads",
+        description: "Facebook & Instagram spend, reach, conversions, ROAS.",
+        tag: "Paid",
+        tagColor: "#1877F2",
+      },
+      {
+        href: "/dashboard/bing",
+        Icon: MicrosoftAdsIcon,
+        title: "Microsoft Advertising",
+        description: "Bing Ads spend, clicks, CTR, CPC, conversions.",
+        tag: "Paid",
+        tagColor: "#0078D4",
+      },
+    ],
   },
   {
-    href: "/dashboard/google/organic",
-    Icon: SearchConsoleIcon,
-    title: "Google Search Organic",
-    description: "Search Console queries, clicks, impressions, CTR, and average position.",
-    tag: "Organic",
-    tagColor: "#22c55e",
+    title: "Organic & Reports",
+    description: "Search performance and cross-channel analysis",
+    tiles: [
+      {
+        href: "/dashboard/google/organic",
+        Icon: SearchConsoleIcon,
+        title: "Google Search Organic",
+        description: "Search Console queries, clicks, impressions, CTR, position.",
+        tag: "Organic",
+        tagColor: "#22c55e",
+      },
+      {
+        href: "/report",
+        Icon: ReportIcon,
+        title: "Paid vs. Organic Report",
+        description: "Cross-channel comparison — keyword overlap, gaps, opportunities.",
+        tag: "Report",
+        tagColor: "#f59e0b",
+      },
+      {
+        href: "/dashboard/seo-audit",
+        Icon: SEOAuditIcon,
+        title: "SEO / GEO / AEO Audit",
+        description: "AI-powered site audit with prioritized fixes.",
+        tag: "AI Audit",
+        tagColor: "#0d9488",
+      },
+      {
+        href: "/dashboard/admin/clients",
+        Icon: ClientPortalsIcon,
+        title: "Client Portals",
+        description: "Manage client-facing portals with ad and audience data.",
+        tag: "Portals",
+        tagColor: "#6d28d9",
+      },
+    ],
   },
   {
-    href: "/dashboard/bing",
-    Icon: MicrosoftAdsIcon,
-    title: "Microsoft Advertising",
-    description: "Bing Ads campaign spend, clicks, impressions, CTR, CPC, and conversions.",
-    tag: "Paid",
-    tagColor: "#0078D4",
+    title: "Data Tools",
+    description: "Audience and attribution tools",
+    tiles: [
+      {
+        href: "/dashboard/audience-lab",
+        Icon: AudienceLabIcon,
+        title: "Audience Lab",
+        description: "Manage segment syncs to BigQuery.",
+        tag: "Segments",
+        tagColor: "#a855f7",
+      },
+      {
+        href: "/dashboard/streaming",
+        Icon: StreamingIcon,
+        title: "Targeted Streaming",
+        description: "Trade Desk path-to-conversion attribution.",
+        tag: "Streaming",
+        tagColor: "#0ea5e9",
+      },
+    ],
   },
   {
-    href: "/report",
-    Icon: ReportIcon,
-    title: "Paid vs. Organic Report",
-    description: "Side-by-side comparison of Google Ads (paid) and Google Search Console (organic) — find keyword overlap, gaps, and opportunities.",
-    tag: "Report",
-    tagColor: "#f59e0b",
-  },
-  {
-    href: "/dashboard/meta",
-    Icon: MetaAdsIcon,
-    title: "Meta Ads",
-    description: "Facebook & Instagram campaign performance — spend, clicks, reach, conversions, and ROAS.",
-    tag: "Paid",
-    tagColor: "#1877F2",
-  },
-  {
-    href: "/dashboard/audience-lab",
-    Icon: AudienceLabIcon,
-    title: "Audience Lab",
-    description: "Manage segment syncs to BigQuery. Add, pause, or test Audience Lab segments.",
-    tag: "Segments",
-    tagColor: "#a855f7",
-  },
-  {
-    href: "/dashboard/streaming",
-    Icon: () => (
-      <svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="12" width="44" height="28" rx="4" fill="#0ea5e9" opacity="0.15"/>
-        <rect x="2" y="12" width="44" height="28" rx="4" stroke="#0ea5e9" strokeWidth="2.5"/>
-        <path d="M16 8l-4 4M32 8l4 4" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="24" cy="26" r="7" fill="#0ea5e9" opacity="0.3"/>
-        <polygon points="21,22 21,30 30,26" fill="#0ea5e9"/>
-      </svg>
-    ),
-    title: "Targeted Streaming",
-    description: "Upload Trade Desk Path-to-Conversion CSVs to visualize multi-touch attribution — devices, sites, campaigns, and user journeys.",
-    tag: "Streaming",
-    tagColor: "#0ea5e9",
-  },
-  {
-    href: "/dashboard/admin/clients",
-    Icon: () => (
-      <svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="18" cy="16" r="7" fill="#6d28d9" opacity="0.9"/>
-        <circle cx="33" cy="16" r="5" fill="#a78bfa" opacity="0.8"/>
-        <ellipse cx="18" cy="34" rx="12" ry="7" fill="#6d28d9" opacity="0.85"/>
-        <ellipse cx="34" cy="34" rx="9" ry="6" fill="#a78bfa" opacity="0.7"/>
-      </svg>
-    ),
-    title: "Client Portals",
-    description: "Set up and manage client-facing portals with ad performance and audience data.",
-    tag: "Admin",
-    tagColor: "#6d28d9",
+    title: "Admin",
+    description: "Internal management",
+    adminOnly: true,
+    tiles: [
+      {
+        href: "/dashboard/admin/usage",
+        Icon: UsageAnalyticsIcon,
+        title: "Usage Analytics",
+        description: "Dashboard tool adoption — who's using what.",
+        tag: "Admin",
+        tagColor: "#ec4899",
+      },
+    ],
   },
 ];
 
@@ -206,51 +283,71 @@ export default function DashboardHub() {
       </header>
 
       {/* Hero */}
-      <div className="mx-auto max-w-5xl px-6 pt-16 pb-8 text-center">
+      <div className="mx-auto max-w-6xl px-6 pt-12 pb-6 text-center">
         <h1 className="text-3xl font-bold text-white sm:text-4xl">
-          What would you like to do today?
+          {session?.user?.name ? `Welcome, ${session.user.name.split(" ")[0]}` : "What would you like to do today?"}
         </h1>
         <p className="mt-3 text-gray-400 text-base">
           Choose a tool below to get started.
         </p>
       </div>
 
-      {/* Tiles */}
-      <div className="mx-auto max-w-5xl px-6 pb-16">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {TILES.map((tile) => (
-            <Link
-              key={tile.href}
-              href={tile.href}
-              className="group relative flex flex-col rounded-2xl border border-gray-200 bg-white p-7 transition duration-200 hover:border-gray-300 hover:scale-[1.02] hover:shadow-xl"
-            >
-              {/* Tag */}
-              <span
-                className="mb-4 inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold"
-                style={{ background: tile.tagColor + "22", color: tile.tagColor }}
-              >
-                {tile.tag}
-              </span>
-
-              {/* Icon */}
-              <span className="mb-3"><tile.Icon /></span>
-
-              {/* Title */}
-              <h2 className="text-xl font-bold text-gray-900 mb-2">{tile.title}</h2>
-
-              {/* Description */}
-              <p className="text-sm text-gray-500 leading-relaxed flex-1">{tile.description}</p>
-
-              {/* Arrow */}
-              <div className="mt-6 flex items-center text-sm font-medium text-gray-400 group-hover:text-gray-700 transition">
-                Open
-                <svg className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+      {/* Sectioned Tiles */}
+      <div className="mx-auto max-w-6xl px-6 pb-16 space-y-10">
+        {SECTIONS.filter((s) => !s.adminOnly || ADMIN_EMAILS.includes((session?.user?.email || "").toLowerCase())).map((section) => (
+          <section key={section.title}>
+            {/* Section header */}
+            <div className="mb-4 flex items-baseline justify-between border-b border-white/10 pb-3">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-white">
+                  {section.title}
+                </h2>
+                <p className="mt-1 text-xs text-gray-500">{section.description}</p>
               </div>
-            </Link>
-          ))}
-        </div>
+              <span className="text-xs text-gray-600">{section.tiles.length} {section.tiles.length === 1 ? "tool" : "tools"}</span>
+            </div>
+
+            {/* Tile grid — 3 columns on desktop, 2 on tablet, 1 on mobile */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {section.tiles.map((tile) => (
+                <Link
+                  key={tile.href}
+                  href={tile.href}
+                  className="group relative flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition duration-200 hover:border-gray-300 hover:scale-[1.02] hover:shadow-xl"
+                >
+                  {/* Top row: icon + tag */}
+                  <div className="mb-3 flex items-start justify-between">
+                    <span className="flex-shrink-0"><tile.Icon /></span>
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      style={{ background: tile.tagColor + "22", color: tile.tagColor }}
+                    >
+                      {tile.tag}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="mb-1.5 text-base font-bold text-gray-900 leading-tight">
+                    {tile.title}
+                  </h3>
+
+                  {/* Description */}
+                  <p className="flex-1 text-xs leading-relaxed text-gray-500">
+                    {tile.description}
+                  </p>
+
+                  {/* Arrow */}
+                  <div className="mt-4 flex items-center text-xs font-semibold text-gray-400 transition group-hover:text-gray-700">
+                    Open
+                    <svg className="ml-1 h-3.5 w-3.5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

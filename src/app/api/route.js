@@ -216,6 +216,8 @@ export async function GET(request) {
                 let searchTermRows = [];
                 let landingPageRows = [];
                 let deviceRows = [];
+                let userListRows = [];
+                let offlineJobRows = [];
 
                 try {
                     const customerSummary = await customer.query(`
@@ -361,6 +363,49 @@ export async function GET(request) {
                     );
                 }
 
+                // ── Audience sync status (BigQuery customer match lists) ────
+                try {
+                    userListRows = await customer.query(`
+                        SELECT
+                            user_list.resource_name,
+                            user_list.id,
+                            user_list.name,
+                            user_list.type,
+                            user_list.size_for_display,
+                            user_list.size_for_search,
+                            user_list.membership_status
+                        FROM user_list
+                        WHERE user_list.type IN ('CRM_BASED')
+                            AND user_list.membership_status = 'OPEN'
+                    `);
+                } catch (error) {
+                    console.error(
+                        `Error fetching user lists for customer ID ${customerId}:`,
+                        error.message
+                    );
+                }
+
+                try {
+                    offlineJobRows = await customer.query(`
+                        SELECT
+                            offline_user_data_job.resource_name,
+                            offline_user_data_job.id,
+                            offline_user_data_job.status,
+                            offline_user_data_job.type,
+                            offline_user_data_job.failure_reason,
+                            offline_user_data_job.customer_match_user_list_metadata.user_list
+                        FROM offline_user_data_job
+                        WHERE offline_user_data_job.type = 'CUSTOMER_MATCH_USER_LIST'
+                        ORDER BY offline_user_data_job.id DESC
+                        LIMIT 200
+                    `);
+                } catch (error) {
+                    console.error(
+                        `Error fetching offline user data jobs for customer ID ${customerId}:`,
+                        error.message
+                    );
+                }
+
                 // Fetch the campaigns for the selected customer
                 const campaignQuery = `
                     SELECT
@@ -393,6 +438,50 @@ export async function GET(request) {
                 }
 
                 // console.log(`Campaign details for customer ID ${customerId}:`, campaigns);
+
+                // ── Build audience sync status by joining user_list → latest offline_user_data_job ──
+                // google-ads-api returns enums as integers, not strings. Map them here.
+                const USER_LIST_TYPE = {
+                    0: "UNSPECIFIED", 1: "UNKNOWN", 2: "REMARKETING", 3: "LOGICAL",
+                    4: "EXTERNAL_REMARKETING", 5: "RULE_BASED", 6: "SIMILAR", 7: "CRM_BASED",
+                };
+                const JOB_STATUS = {
+                    0: "UNSPECIFIED", 1: "UNKNOWN", 2: "PENDING", 3: "RUNNING",
+                    4: "SUCCESS", 5: "FAILED",
+                };
+                const mapType = (v) => (typeof v === "number" ? USER_LIST_TYPE[v] || String(v) : v);
+                const mapStatus = (v) => (typeof v === "number" ? JOB_STATUS[v] || String(v) : v);
+
+                const latestJobByUserList = new Map();
+                offlineJobRows.forEach((row) => {
+                    const job = row.offline_user_data_job;
+                    const userListResourceName = job?.customer_match_user_list_metadata?.user_list;
+                    if (!userListResourceName) return;
+                    // Rows come back ordered by id DESC, so first occurrence is latest
+                    if (!latestJobByUserList.has(userListResourceName)) {
+                        latestJobByUserList.set(userListResourceName, {
+                            jobId: job.id,
+                            status: mapStatus(job.status),
+                            failureReason: job.failure_reason || null,
+                        });
+                    }
+                });
+
+                const audiences = userListRows.map((row) => {
+                    const ul = row.user_list;
+                    const latestJob = latestJobByUserList.get(ul.resource_name) || null;
+                    return {
+                        id: ul.id,
+                        name: ul.name || "Unnamed List",
+                        type: mapType(ul.type),
+                        sizeForDisplay: ul.size_for_display ?? null,
+                        sizeForSearch: ul.size_for_search ?? null,
+                        membershipStatus: ul.membership_status || null,
+                        lastSyncStatus: latestJob?.status || null,
+                        lastSyncJobId: latestJob?.jobId || null,
+                        failureReason: latestJob?.failureReason || null,
+                    };
+                });
 
                 if (campaigns && campaigns.length > 0) {
                     let optimizationDetailsByCampaignId = {};
@@ -764,6 +853,7 @@ export async function GET(request) {
                         trend: Array.from(customerTrendMap.values()).sort((a, b) =>
                             a.date.localeCompare(b.date)
                         ),
+                        audiences,
                         campaigns: adsData
                     };
                 } else {
@@ -777,6 +867,7 @@ export async function GET(request) {
                         landingPages: [],
                         devices: [],
                         trend: [],
+                        audiences,
                         campaigns: [],
                     };
                 }
