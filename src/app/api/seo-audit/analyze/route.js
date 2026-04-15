@@ -6,23 +6,25 @@ import { getCredentials } from "../../../../lib/dbFunctions";
 import dbConnect from "../../../../lib/mongoose";
 import { SEO_AUDIT_SYSTEM_PROMPT } from "../../../../lib/seoAuditPrompt";
 import { ADMIN_EMAILS } from "../../../../lib/admins";
+import { checkRateLimit } from '../../../../lib/seoRateLimit.js';
 
 const DAILY_LIMIT = 5;
 const DB = "tokensApi";
 const COLLECTION = "SeoAudits";
 
-async function checkAndIncrementUsage(email) {
-  const mongoClient = await dbConnect();
-  const db = mongoClient.db(DB);
+async function getDailyUsageCount(db, email) {
   const today = new Date().toISOString().slice(0, 10);
+  const doc = await db.collection('UsageLimits').findOne({ email, date: today });
+  return doc?.seoAuditCount ?? 0;
+}
 
-  const doc = await db.collection("UsageLimits").findOneAndUpdate(
+async function incrementDailyUsage(db, email) {
+  const today = new Date().toISOString().slice(0, 10);
+  await db.collection('UsageLimits').updateOne(
     { email, date: today },
     { $inc: { seoAuditCount: 1 }, $setOnInsert: { email, date: today } },
-    { upsert: true, returnDocument: "before" }
+    { upsert: true }
   );
-
-  return doc?.seoAuditCount ?? 0;
 }
 
 export async function POST(request) {
@@ -78,17 +80,25 @@ export async function POST(request) {
     }
   }
 
-  // ── Rate limit check (admins are exempt) ────────────────────────────────
-  const isAdmin = ADMIN_EMAILS.includes(email);
-  const usedToday = await checkAndIncrementUsage(email);
-  if (!isAdmin && usedToday >= DAILY_LIMIT) {
+  // ── Rate limit: per-request 30s window ──────────────────────────────────
+  const { limited, retryAfterSeconds } = checkRateLimit(email);
+  if (limited) {
     return NextResponse.json(
-      {
-        error: `Daily limit reached — you've used all ${DAILY_LIMIT} SEO audits for today. Resets at midnight.`,
-      },
+      { error: `Too many requests — wait ${retryAfterSeconds}s before retrying.` },
       { status: 429 }
     );
   }
+
+  // ── Daily limit: check before calling Claude (admins exempt) ────────────
+  const isAdmin = ADMIN_EMAILS.includes(email);
+  const usedToday = await getDailyUsageCount(db, email);
+  if (!isAdmin && usedToday >= DAILY_LIMIT) {
+    return NextResponse.json(
+      { error: `Daily limit reached — you've used all ${DAILY_LIMIT} SEO audits for today. Resets at midnight.` },
+      { status: 429 }
+    );
+  }
+  await incrementDailyUsage(db, email);
 
   const credentials = await getCredentials();
   const apiKey = credentials.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
@@ -178,7 +188,7 @@ export async function POST(request) {
     // ── Save audit to SeoAudits collection ─────────────────────────────
     let auditId = null;
     try {
-      const insertResult = await db.collection(COLLECTION).insertOne({
+      const auditDoc = {
         email,
         domain,
         auditType: crawlData.audit_type || "full",
@@ -192,10 +202,20 @@ export async function POST(request) {
         crawlData,
         auditResult: audit,
         createdAt: new Date(),
-      });
-      auditId = insertResult.insertedId.toString();
+      };
+
+      if (forceRerun) {
+        const result = await db.collection(COLLECTION).findOneAndReplace(
+          { domain, email, createdAt: { $gte: todayStart } },
+          auditDoc,
+          { upsert: true, returnDocument: 'after' }
+        );
+        auditId = result?._id?.toString() ?? null;
+      } else {
+        const insertResult = await db.collection(COLLECTION).insertOne(auditDoc);
+        auditId = insertResult.insertedId.toString();
+      }
     } catch (saveErr) {
-      // Non-fatal — audit still returned even if save fails
       console.error("[seo-audit/analyze] Failed to save audit:", saveErr.message);
     }
 
