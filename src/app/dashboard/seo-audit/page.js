@@ -526,7 +526,8 @@ export default function SEOAuditPage() {
         throw new Error(err.error || `Crawl failed (${crawlRes.status})`);
       }
 
-      const crawl = await crawlRes.json();
+      const crawlJson = await crawlRes.json();
+      const crawl = crawlJson.data ?? crawlJson; // unwrap { data: ... } envelope
       setCrawlData(crawl);
 
       // Step 2: Analyze
@@ -544,8 +545,8 @@ export default function SEOAuditPage() {
       }
 
       const result = await analyzeRes.json();
-      setAuditResult(result.audit);
-      setRemainingToday(result.remainingToday);
+      setAuditResult(result.data?.audit);
+      setRemainingToday(result.data?.remainingToday);
       setStep(STEPS.RESULTS);
 
       // Refresh history list so the new audit appears
@@ -790,7 +791,7 @@ export default function SEOAuditPage() {
 
               {/* Submit button */}
               <button
-                onClick={handleRunAudit}
+                onClick={() => handleRunAudit()}
                 disabled={!domain.trim()}
                 style={{
                   width: "100%",
