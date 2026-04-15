@@ -361,13 +361,14 @@ export default function GoogleAdsDashboard() {
         queryParams.set("startDate", requestedCustomDateRange.startDate);
         queryParams.set("endDate", requestedCustomDateRange.endDate);
       }
-      const response = await fetch(`/api?${queryParams.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/googleads?${queryParams.toString()}`, { cache: "no-store" });
       if (response.status === 401) {
         router.replace("/?callbackUrl=/dashboard/google/ads");
         return;
       }
       if (!response.ok) throw new Error("Failed to fetch dashboard data");
-      const data = await response.json();
+      const { data: responseData } = await response.json();
+      const data = responseData ?? {};
       const validCampaignsData = data.validCampaignsData || [];
       const cachedPayload = { validCampaignsData, dateWindow: data.dateWindow || null };
       localStorage.setItem(getCampaignCacheKey(requestedDateRange, requestedStatusFilter, requestedCustomDateRange), JSON.stringify(cachedPayload));
