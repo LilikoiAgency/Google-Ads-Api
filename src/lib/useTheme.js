@@ -4,16 +4,17 @@ const THEME_KEY = 'lik-theme';
 
 /**
  * Persists and exposes the current UI theme ('dark' | 'light').
- * Reads from localStorage on mount, writes on every change.
+ * Reads from localStorage synchronously via lazy initializer — no flash on remount.
+ * Writes to localStorage on every change.
+ * Default: 'light'.
  */
 export function useTheme() {
-  const [theme, setTheme] = useState('dark');
-
-  // Read saved preference on mount
-  useEffect(() => {
+  const [theme, setTheme] = useState(() => {
+    // typeof window check keeps SSR safe (server always gets the default)
+    if (typeof window === 'undefined') return 'light';
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark') setTheme(saved);
-  }, []);
+    return saved === 'light' || saved === 'dark' ? saved : 'light';
+  });
 
   // Persist on change
   useEffect(() => {
