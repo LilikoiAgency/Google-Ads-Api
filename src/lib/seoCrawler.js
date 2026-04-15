@@ -13,7 +13,7 @@ import * as cheerio from "cheerio";
 const USER_AGENT = "LilikoiSEOAudit/1.0 (+https://lilikoiagency.com)";
 const FETCH_TIMEOUT_MS = 15_000;
 const DELAY_BETWEEN_PAGES_MS = 300;
-const MAX_PAGES_FULL = 25;
+const MAX_PAGES_FULL = 50;
 const MAX_PAGES_QUICK = 5;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -367,7 +367,7 @@ async function extractSiteWide(domain, homepageData) {
 
 // ── Prioritize which pages to crawl ──────────────────────────────────────────
 
-function prioritizePages(urls, domain, maxPages) {
+export function prioritizePages(urls, domain, maxPages) {
   const baseUrl = `https://${domain}`;
   const priorityPatterns = [
     { pattern: /^\/?$/, type: "homepage" },
@@ -428,6 +428,11 @@ export async function crawlSite(domain, auditType = "full", customUrls = null) {
     }));
   } else {
     pagesToCrawl = prioritizePages(discovery.urls, domain, maxPages);
+    if (discovery.urls.length > maxPages) {
+      console.warn(
+        `[seoCrawler] Discovered ${discovery.urls.length} pages for ${domain} — truncated to ${maxPages}`
+      );
+    }
   }
 
   // Crawl each page
