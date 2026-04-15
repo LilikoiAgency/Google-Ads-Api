@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Mockup v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── DARK MODE ── */
+  [data-theme="dark"] {
+    --bg: radial-gradient(ellipse at 25% 15%, #3b1278 0%, #1e0a38 45%, #0d0520 100%);
+    --orb1: rgba(139,92,246,0.13);
+    --orb2: rgba(79,70,229,0.1);
+    --header-bg: rgba(14,5,32,0.65);
+    --header-border: rgba(255,255,255,0.08);
+    --title-grad: linear-gradient(135deg, #ffffff 30%, rgba(196,167,255,0.9) 100%);
+    --hero-sub: rgba(255,255,255,0.4);
+    --section-title: rgba(255,255,255,0.5);
+    --section-desc: rgba(255,255,255,0.25);
+    --section-count: rgba(255,255,255,0.2);
+    --section-border: rgba(255,255,255,0.07);
+    --tile-bg: rgba(255,255,255,0.06);
+    --tile-border: rgba(255,255,255,0.12);
+    --tile-hover-bg: rgba(255,255,255,0.1);
+    --tile-hover-border: rgba(255,255,255,0.22);
+    --tile-shine: rgba(255,255,255,0.1);
+    --tile-title: rgba(255,255,255,0.93);
+    --tile-desc: rgba(255,255,255,0.4);
+    --tile-arrow: rgba(255,255,255,0.25);
+    --tile-arrow-hover: rgba(255,255,255,0.65);
+    --pill-bg: rgba(255,255,255,0.06);
+    --pill-border: rgba(255,255,255,0.1);
+    --pill-text: rgba(255,255,255,0.55);
+    --shadow: 0 6px 28px rgba(0,0,0,0.3);
+    --shadow-hover: 0 16px 48px rgba(0,0,0,0.4);
+    --toggle-bg: rgba(255,255,255,0.08);
+    --toggle-border: rgba(255,255,255,0.15);
+    --toggle-text: rgba(255,255,255,0.6);
+  }
+
+  /* ── LIGHT MODE ── */
+  [data-theme="light"] {
+    --bg: radial-gradient(ellipse at 25% 10%, #ede9fe 0%, #f5f3ff 40%, #faf5ff 70%, #ffffff 100%);
+    --orb1: rgba(139,92,246,0.08);
+    --orb2: rgba(109,40,217,0.06);
+    --header-bg: rgba(255,255,255,0.7);
+    --header-border: rgba(139,92,246,0.12);
+    --title-grad: linear-gradient(135deg, #1e0a38 30%, #6d28d9 100%);
+    --hero-sub: rgba(30,10,56,0.45);
+    --section-title: rgba(30,10,56,0.5);
+    --section-desc: rgba(30,10,56,0.35);
+    --section-count: rgba(30,10,56,0.25);
+    --section-border: rgba(109,40,217,0.1);
+    --tile-bg: rgba(255,255,255,0.65);
+    --tile-border: rgba(139,92,246,0.15);
+    --tile-hover-bg: rgba(255,255,255,0.9);
+    --tile-hover-border: rgba(139,92,246,0.3);
+    --tile-shine: rgba(255,255,255,0.8);
+    --tile-title: #1e0a38;
+    --tile-desc: rgba(30,10,56,0.5);
+    --tile-arrow: rgba(30,10,56,0.3);
+    --tile-arrow-hover: #6d28d9;
+    --pill-bg: rgba(109,40,217,0.06);
+    --pill-border: rgba(109,40,217,0.15);
+    --pill-text: #6d28d9;
+    --shadow: 0 4px 20px rgba(109,40,217,0.08), 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-hover: 0 14px 40px rgba(109,40,217,0.15), 0 2px 8px rgba(0,0,0,0.06);
+    --toggle-bg: rgba(109,40,217,0.07);
+    --toggle-border: rgba(109,40,217,0.2);
+    --toggle-text: #6d28d9;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    color: white;
+    position: relative;
+    overflow-x: hidden;
+    transition: background 0.4s;
+  }
+  body::before {
+    content: '';
+    position: fixed; top: -100px; left: -100px;
+    width: 500px; height: 500px; border-radius: 50%;
+    background: var(--orb1); filter: blur(90px);
+    pointer-events: none;
+  }
+  body::after {
+    content: '';
+    position: fixed; bottom: -80px; right: -80px;
+    width: 420px; height: 420px; border-radius: 50%;
+    background: var(--orb2); filter: blur(80px);
+    pointer-events: none;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--header-bg);
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid var(--header-border);
+    padding: 16px 36px;
+    transition: background 0.4s, border-color 0.4s;
+  }
+  .header-inner { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: white;
+    border: 2px solid rgba(168,85,247,0.35);
+    flex-shrink: 0;
+  }
+  .brand-name { font-size: 16px; font-weight: 700; color: var(--tile-title); transition: color 0.4s; }
+  .brand-sub  { font-size: 12px; color: var(--section-desc); margin-top: 1px; transition: color 0.4s; }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  /* Theme toggle */
+  .theme-toggle {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--toggle-bg);
+    border: 1px solid var(--toggle-border);
+    border-radius: 24px; padding: 7px 14px;
+    font-size: 12px; font-weight: 600; color: var(--toggle-text);
+    cursor: pointer; transition: all 0.2s; user-select: none;
+  }
+  .theme-toggle:hover { opacity: 0.8; }
+
+  .user-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    border-radius: 24px; padding: 7px 16px;
+    font-size: 13px; color: var(--pill-text);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .user-pill:hover { opacity: 0.8; }
+  .user-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+
+  /* ── HERO ── */
+  .hero { text-align: center; padding: 60px 36px 40px; }
+  .hero h1 {
+    font-size: 38px; font-weight: 800; letter-spacing: -0.8px;
+    background: var(--title-grad);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: all 0.4s;
+  }
+  .hero p { margin-top: 12px; color: var(--hero-sub); font-size: 16px; transition: color 0.4s; }
+
+  /* ── SECTIONS ── */
+  .sections { max-width: 1160px; margin: 0 auto; padding: 0 36px 72px; }
+  .section { margin-bottom: 48px; }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--section-border);
+    padding-bottom: 12px; margin-bottom: 18px;
+    transition: border-color 0.4s;
+  }
+  .section-title {
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.4px;
+    color: var(--section-title); transition: color 0.4s;
+  }
+  .section-desc { font-size: 12px; color: var(--section-desc); margin-top: 3px; transition: color 0.4s; }
+  .section-count { font-size: 12px; color: var(--section-count); transition: color 0.4s; }
+
+  /* ── GRID ── */
+  .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* ── TILE ── */
+  .tile {
+    background: var(--tile-bg);
+    border: 1px solid var(--tile-border);
+    border-radius: 20px;
+    padding: 24px;
+    cursor: pointer;
+    transition: transform 0.22s, box-shadow 0.22s, background 0.22s, border-color 0.22s;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    box-shadow: var(--shadow);
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+    text-decoration: none; color: inherit;
+  }
+  .tile::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--tile-shine), transparent);
+  }
+  .tile:hover {
+    transform: translateY(-4px) scale(1.015);
+    background: var(--tile-hover-bg);
+    border-color: var(--tile-hover-border);
+    box-shadow: var(--shadow-hover);
+  }
+  [data-theme="dark"] .tile:hover { box-shadow: var(--shadow-hover), 0 0 24px rgba(var(--c,168,85,247),0.12); }
+
+  /* Tile parts */
+  .tile-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+  .tile-icon-wrap {
+    width: 50px; height: 50px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: background 0.4s, box-shadow 0.4s;
+  }
+  .tag {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    padding: 4px 10px; border-radius: 20px; border: 1px solid;
+    transition: all 0.4s;
+  }
+  .tile-title { font-size: 16px; font-weight: 700; color: var(--tile-title); margin-bottom: 8px; line-height: 1.3; transition: color 0.4s; }
+  .tile-desc  { font-size: 13px; line-height: 1.65; color: var(--tile-desc); flex: 1; transition: color 0.4s; }
+  .tile-arrow {
+    margin-top: 18px;
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 600; color: var(--tile-arrow);
+    transition: color 0.2s, gap 0.2s;
+  }
+  .tile:hover .tile-arrow { color: var(--tile-arrow-hover); gap: 8px; }
+
+  /* Per-category color vars */
+  .c-paid     { --c: 168,85,247; }
+  .c-meta     { --c: 24,119,242; }
+  .c-msft     { --c: 0,120,212; }
+  .c-organic  { --c: 34,197,94; }
+  .c-report   { --c: 245,158,11; }
+  .c-ai       { --c: 13,148,136; }
+  .c-portals  { --c: 109,40,217; }
+  .c-segments { --c: 168,85,247; }
+  .c-stream   { --c: 14,165,233; }
+  .c-admin    { --c: 236,72,153; }
+
+  [data-theme="dark"] [class*=" c-"] .tile-icon-wrap,
+  [data-theme="dark"] [class*="c-"] .tile-icon-wrap  { background: rgba(var(--c),0.18); box-shadow: 0 0 18px rgba(var(--c),0.15); }
+  [data-theme="dark"] [class*="c-"] .tag             { background: rgba(var(--c),0.12); color: rgb(var(--c)); border-color: rgba(var(--c),0.3); }
+
+  [data-theme="light"] [class*="c-"] .tile-icon-wrap { background: rgba(var(--c),0.1); box-shadow: 0 0 12px rgba(var(--c),0.08); }
+  [data-theme="light"] [class*="c-"] .tag            { background: rgba(var(--c),0.09); color: rgb(var(--c)); border-color: rgba(var(--c),0.25); }
+  [data-theme="light"] [class*="c-"]:hover           { box-shadow: 0 14px 40px rgba(var(--c),0.12), 0 2px 8px rgba(0,0,0,0.05); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="avatar">L</div>
+      <div>
+        <div class="brand-name">Lilikoi Agency</div>
+        <div class="brand-sub">Internal Tools</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+        ☀️ Light mode
+      </button>
+      <div class="user-pill">
+        <div class="user-dot"></div>
+        Frank Hernandez
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="hero">
+  <h1 id="heroTitle">Welcome back, Frank</h1>
+  <p>Choose a tool below to get started.</p>
+</div>
+
+<div class="sections">
+
+  <!-- Paid Media -->
+  <div class="section">
+    <div class="section-header">
+      <div><div class="section-title">Paid Media</div><div class="section-desc">Ad platform dashboards</div></div>
+      <span class="section-count">3 tools</span>
+    </div>
+    <div class="tile-grid">
+      <a class="tile c-paid">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 192 192" width="30" height="30"><circle cx="40" cy="148" r="40" fill="#FBBC04"/><path d="M96 4L56 72l40 68 40-68z" fill="#4285F4"/><circle cx="152" cy="148" r="40" fill="#34A853"/></svg></div>
+          <span class="tag">Paid</span>
+        </div>
+        <div class="tile-title">Google Ads</div>
+        <div class="tile-desc">Campaigns, keyword spend, conversions, ROAS.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+      <a class="tile c-meta">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg width="30" height="30" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="8" fill="#1877F2"/><path d="M26 12c-1.1 0-2 .45-2.7 1.2C21.95 11.44 20.1 10 18 10c-2.1 0-3.95 1.44-5.3 3.2C11.99 12.45 11.1 12 10 12c-2.2 0-4 1.8-4 4 0 .9.3 1.72.8 2.38C8.1 21.66 12.8 26 18 26s9.9-4.34 11.2-7.62c.5-.66.8-1.48.8-2.38 0-2.2-1.8-4-4-4z" fill="white"/></svg></div>
+          <span class="tag">Paid</span>
+        </div>
+        <div class="tile-title">Meta Ads</div>
+        <div class="tile-desc">Facebook & Instagram spend, reach, conversions, ROAS.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+      <a class="tile c-msft">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg width="28" height="28" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#F25022" rx="1"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00" rx="1"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF" rx="1"/><rect x="11" y="11" width="9" height="9" fill="#FFB900" rx="1"/></svg></div>
+          <span class="tag">Paid</span>
+        </div>
+        <div class="tile-title">Microsoft Advertising</div>
+        <div class="tile-desc">Bing Ads spend, clicks, CTR, CPC, conversions.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Organic & Reports -->
+  <div class="section">
+    <div class="section-header">
+      <div><div class="section-title">Organic & Reports</div><div class="section-desc">Search performance and cross-channel analysis</div></div>
+      <span class="section-count">4 tools</span>
+    </div>
+    <div class="tile-grid">
+      <a class="tile c-organic">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 64 64" width="30" height="30"><circle cx="26" cy="26" r="18" fill="none" stroke="#4285F4" stroke-width="6"/><circle cx="26" cy="26" r="9" fill="#34A853"/><line x1="39" y1="39" x2="57" y2="57" stroke="#EA4335" stroke-width="6" stroke-linecap="round"/><circle cx="26" cy="26" r="4" fill="#FBBC04"/></svg></div>
+          <span class="tag">Organic</span>
+        </div>
+        <div class="tile-title">Google Search Organic</div>
+        <div class="tile-desc">Search Console queries, clicks, impressions, CTR, position.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+      <a class="tile c-report">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 48 48" width="30" height="30"><rect x="2" y="28" width="10" height="18" rx="2" fill="#4285F4"/><rect x="15" y="18" width="10" height="28" rx="2" fill="#34A853"/><rect x="28" y="8" width="10" height="38" rx="2" fill="#FBBC04"/><rect x="41" y="20" width="5" height="26" rx="2" fill="#EA4335"/></svg></div>
+          <span class="tag">Report</span>
+        </div>
+        <div class="tile-title">Paid vs. Organic Report</div>
+        <div class="tile-desc">Cross-channel comparison — keyword overlap, gaps, opportunities.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+      <a class="tile c-ai">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 48 48" width="30" height="30" fill="none"><circle cx="22" cy="22" r="13" stroke="#0d9488" stroke-width="2.5"/><line x1="31.5" y1="31.5" x2="42" y2="42" stroke="#0d9488" stroke-width="3.5" stroke-linecap="round"/><rect x="15" y="24" width="3.5" height="7" rx="1" fill="#f59e0b"/><rect x="20.25" y="20" width="3.5" height="11" rx="1" fill="#0d9488"/><rect x="25.5" y="16" width="3.5" height="15" rx="1" fill="#6366f1"/></svg></div>
+          <span class="tag">AI Audit</span>
+        </div>
+        <div class="tile-title">SEO / GEO / AEO Audit</div>
+        <div class="tile-desc">AI-powered site audit with prioritized fixes.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+      <a class="tile c-portals">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 48 48" width="30" height="30" fill="none"><circle cx="18" cy="16" r="7" fill="#6d28d9" opacity="0.9"/><circle cx="33" cy="16" r="5" fill="#a78bfa" opacity="0.8"/><ellipse cx="18" cy="34" rx="12" ry="7" fill="#6d28d9" opacity="0.85"/><ellipse cx="34" cy="34" rx="9" ry="6" fill="#a78bfa" opacity="0.7"/></svg></div>
+          <span class="tag">Portals</span>
+        </div>
+        <div class="tile-title">Client Portals</div>
+        <div class="tile-desc">Manage client-facing portals with ad and audience data.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Data Tools -->
+  <div class="section">
+    <div class="section-header">
+      <div><div class="section-title">Data Tools</div><div class="section-desc">Audience and attribution tools</div></div>
+      <span class="section-count">2 tools</span>
+    </div>
+    <div class="tile-grid">
+      <a class="tile c-segments">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 48 48" width="30" height="30"><circle cx="16" cy="16" r="8" fill="#4285F4"/><circle cx="32" cy="16" r="8" fill="#EA4335" opacity="0.85"/><circle cx="24" cy="30" r="8" fill="#34A853" opacity="0.85"/></svg></div>
+          <span class="tag">Segments</span>
+        </div>
+        <div class="tile-title">Audience Lab</div>
+        <div class="tile-desc">Manage segment syncs to BigQuery.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+      <a class="tile c-stream">
+        <div class="tile-top">
+          <div class="tile-icon-wrap"><svg viewBox="0 0 48 48" width="30" height="30" fill="none"><rect x="2" y="12" width="44" height="28" rx="4" fill="#0ea5e9" opacity="0.3"/><rect x="2" y="12" width="44" height="28" rx="4" stroke="#0ea5e9" stroke-width="2.5"/><polygon points="21,22 21,30 30,26" fill="#0ea5e9"/></svg></div>
+          <span class="tag">Streaming</span>
+        </div>
+        <div class="tile-title">Targeted Streaming</div>
+        <div class="tile-desc">Trade Desk path-to-conversion attribution.</div>
+        <div class="tile-arrow">Open <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    const btn = document.getElementById('themeBtn');
+    if (html.dataset.theme === 'dark') {
+      html.dataset.theme = 'light';
+      btn.textContent = '🌙 Dark mode';
+    } else {
+      html.dataset.theme = 'dark';
+      btn.textContent = '☀️ Light mode';
+    }
+  }
+</script>
+</body>
+</html>

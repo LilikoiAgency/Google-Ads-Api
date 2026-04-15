@@ -1,0 +1,49 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img "Lilikoi Agency" [ref=e6]
+      - generic [ref=e7]:
+        - paragraph [ref=e8]: Lilikoi Agency
+        - paragraph [ref=e9]: Google Ads reporting access
+    - generic [ref=e10]: Google SSO only
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - paragraph [ref=e13]: Internal dashboard
+      - heading "Secure access for theLilikoi paid search team." [level=1] [ref=e14]
+      - paragraph [ref=e15]: Review campaign performance, search terms, landing pages, device trends, impression share, and optimization insights in one internal workspace protected by Google single sign-on.
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - paragraph [ref=e18]: Reporting
+          - paragraph [ref=e19]: Cross-account visibility
+          - paragraph [ref=e20]: Search terms, landing pages, devices, trends, and impression share in one view.
+        - generic [ref=e21]:
+          - paragraph [ref=e22]: Access
+          - paragraph [ref=e23]: Google-only SSO
+          - paragraph [ref=e24]: Access is limited to approved company identities on the Lilikoi domain.
+        - generic [ref=e25]:
+          - paragraph [ref=e26]: Workflow
+          - paragraph [ref=e27]: Built for optimization
+          - paragraph [ref=e28]: Surface where spend, conversion volume, and delivery constraints need action.
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - img [ref=e33]
+        - generic [ref=e35]: SSO required
+      - generic [ref=e36]:
+        - paragraph [ref=e37]: Sign in
+        - heading "Continue with Google" [level=2] [ref=e38]
+        - paragraph [ref=e39]: Use your company Google identity to enter the internal Google Ads dashboard. Password login is disabled.
+      - generic [ref=e41]:
+        - generic [ref=e42]: ID
+        - generic [ref=e43]:
+          - paragraph [ref=e44]: Restricted company access
+          - paragraph [ref=e45]:
+            - text: Only
+            - generic [ref=e46]: "@lilikoiagency.com"
+            - text: accounts can sign in.
+      - button "Checking session..." [disabled] [ref=e48]:
+        - img [ref=e49]
+        - text: Checking session...
+      - generic [ref=e54]:
+        - paragraph [ref=e55]: Need access?
+        - paragraph [ref=e56]: Contact the Lilikoi Agency admin team if your company Google account should be added to this dashboard.
+      - generic [ref=e57]: Google-only authentication© 2026 Lilikoi Agency
