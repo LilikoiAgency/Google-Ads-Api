@@ -8,20 +8,6 @@ import ContentArea from "../../components/ContentArea";
 import { isAdmin } from "../../../../lib/admins";
 import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
 
-// Priority clients — shown first in every account list (order matters)
-const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf", "cmk"];
-function priorityIndex(name) {
-  const lower = (name || "").toLowerCase();
-  const idx = PRIORITY_KEYWORDS.findIndex((kw) => lower.includes(kw));
-  return idx === -1 ? PRIORITY_KEYWORDS.length : idx;
-}
-function prioritySort(list, nameKey = "name") {
-  return [...list].sort((a, b) => {
-    const pa = priorityIndex(a[nameKey]), pb = priorityIndex(b[nameKey]);
-    if (pa !== pb) return pa - pb;
-    return (a[nameKey] || "").localeCompare(b[nameKey] || "");
-  });
-}
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -521,9 +507,10 @@ export default function GoogleAdsDashboard() {
   };
 
   const handleTogglePin = async (accountId) => {
-    const optimistic = pinnedAccountIds.includes(accountId)
-      ? pinnedAccountIds.filter((id) => id !== accountId)
-      : [...pinnedAccountIds, accountId];
+    const previous = pinnedAccountIds;
+    const optimistic = previous.includes(accountId)
+      ? previous.filter((id) => id !== accountId)
+      : [...previous, accountId];
     setPinnedAccountIds(optimistic);
 
     try {
@@ -536,7 +523,7 @@ export default function GoogleAdsDashboard() {
       const { data } = await res.json();
       setPinnedAccountIds(data.pinnedAccountIds);
     } catch {
-      setPinnedAccountIds(pinnedAccountIds);
+      setPinnedAccountIds(previous);
     }
   };
 
