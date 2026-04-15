@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import "../../../globals.css";
 import ContentArea from "../../components/ContentArea";
+import { isAdmin } from "../../../../lib/admins";
+import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
 
 // Priority clients — shown first in every account list (order matters)
 const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf", "cmk"];
@@ -123,17 +125,55 @@ function resolveSelectedCampaign(campaignData, customerId, campaignSelection) {
 
 // ─── Account dropdown ─────────────────────────────────────────────────────────
 
-function AccountDropdown({ accounts, selectedId, onChange }) {
-  const [open, setOpen] = useState(false);
+function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isAdminUser, onTogglePin }) {
+  const [open, setOpen]       = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setShowAll(false); }
+    };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const current = accounts.find((a) => a.id === selectedId);
+  const { pinned, unpinned } = sortWithPinned(accounts, pinnedAccountIds);
+
+  const StarButton = ({ accountId, isPinned }) =>
+    isAdminUser ? (
+      <button
+        onClick={(e) => { e.stopPropagation(); onTogglePin(accountId); }}
+        title={isPinned ? "Unpin account" : "Pin account"}
+        className="ml-2 text-base leading-none flex-shrink-0 hover:scale-110 transition-transform"
+      >
+        {isPinned ? "⭐" : "☆"}
+      </button>
+    ) : null;
+
+  const AccountRow = ({ a, isPinned }) => (
+    <button
+      key={a.id}
+      onClick={() => { onChange(a.id); setOpen(false); }}
+      className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
+        a.id === selectedId ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="font-medium truncate">{a.name}</p>
+        <p className="text-xs text-gray-400 mt-0.5">ID: {a.id}</p>
+      </div>
+      <div className="flex items-center ml-3 flex-shrink-0">
+        <StarButton accountId={a.id} isPinned={isPinned} />
+        {a.id === selectedId && (
+          <svg className="w-4 h-4 text-purple-600 ml-2" fill="none" viewBox="0 0 24 24">
+            <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </div>
+    </button>
+  );
 
   return (
     <div ref={ref} className="relative">
@@ -149,25 +189,23 @@ function AccountDropdown({ accounts, selectedId, onChange }) {
 
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 min-w-[240px] rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
-          {accounts.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => { onChange(a.id); setOpen(false); }}
-              className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
-                a.id === selectedId ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
-              }`}
-            >
-              <div>
-                <p className="font-medium">{a.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">ID: {a.id}</p>
-              </div>
-              {a.id === selectedId && (
-                <svg className="w-4 h-4 text-purple-600 flex-shrink-0 ml-3" fill="none" viewBox="0 0 24 24">
-                  <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
-          ))}
+          {pinned.map((a) => <AccountRow key={a.id} a={a} isPinned />)}
+
+          {unpinned.length > 0 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowAll((v) => !v); }}
+                className="w-full px-4 py-2 text-xs text-gray-400 text-left hover:bg-gray-50 border-t border-gray-100 flex items-center gap-1"
+              >
+                {showAll ? "▲ Show less" : `▾ ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+              </button>
+              {showAll && unpinned.map((a) => <AccountRow key={a.id} a={a} isPinned={false} />)}
+            </>
+          )}
+
+          {pinned.length === 0 && unpinned.length === 0 && (
+            <p className="px-4 py-4 text-sm text-gray-400 text-center">No accounts found.</p>
+          )}
         </div>
       )}
     </div>
@@ -289,7 +327,7 @@ function CampaignDropdown({ campaigns, selectedCampaign, onChange, onClear }) {
 
 export default function GoogleAdsDashboard() {
   const router = useRouter();
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const [allCampaignData, setAllCampaignData] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -306,6 +344,9 @@ export default function GoogleAdsDashboard() {
   const [showPicker, setShowPicker]           = useState(null);
   const [pickerCustomers, setPickerCustomers] = useState([]);
   const [pickerLoading, setPickerLoading]     = useState(false);
+  const [pinnedAccountIds, setPinnedAccountIds] = useState([]);
+  const [pickerShowAll, setPickerShowAll]       = useState(false);
+  const isAdminUser = isAdmin(session?.user?.email || '');
 
   const updateLastUpdated = (
     date = new Date(),
@@ -386,21 +427,28 @@ export default function GoogleAdsDashboard() {
   // ── Step 1: check sessionStorage for saved account, or show picker ──────────
   useEffect(() => {
     if (status !== "authenticated") return;
+
+    // Always fetch preferences (needed for both picker and dropdown)
+    fetch("/api/googleads/preferences")
+      .then((r) => r.json())
+      .then((d) => setPinnedAccountIds(d?.data?.pinnedAccountIds ?? []))
+      .catch(() => {});
+
     const savedId = sessionStorage.getItem("gads_customer_id");
     if (savedId) {
-      setShowPicker(false); // skip picker — we remember their choice
+      setShowPicker(false);
     } else {
       setShowPicker(true);
       setPickerLoading(true);
       const cached = sessionStorage.getItem("gads_customers_list");
       if (cached) {
-        try { setPickerCustomers(prioritySort(JSON.parse(cached))); } catch {}
+        try { setPickerCustomers(JSON.parse(cached)); } catch {}
         setPickerLoading(false);
       } else {
         fetch("/api/customers")
           .then((r) => r.json())
           .then((d) => {
-            const list = prioritySort(d.customers || []);
+            const list = d.customers || [];
             setPickerCustomers(list);
             sessionStorage.setItem("gads_customers_list", JSON.stringify(list));
           })
@@ -472,6 +520,26 @@ export default function GoogleAdsDashboard() {
     fetchData({ forceRefresh: true, requestedDateRange: dateRange, requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange });
   };
 
+  const handleTogglePin = async (accountId) => {
+    const optimistic = pinnedAccountIds.includes(accountId)
+      ? pinnedAccountIds.filter((id) => id !== accountId)
+      : [...pinnedAccountIds, accountId];
+    setPinnedAccountIds(optimistic);
+
+    try {
+      const res = await fetch("/api/googleads/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+      if (!res.ok) throw new Error("Failed to update pin");
+      const { data } = await res.json();
+      setPinnedAccountIds(data.pinnedAccountIds);
+    } catch {
+      setPinnedAccountIds(pinnedAccountIds);
+    }
+  };
+
   const handleDateRangeChange = (event) => {
     const nextDateRange = event.target.value;
     setCustomDateError(null);
@@ -538,32 +606,63 @@ export default function GoogleAdsDashboard() {
             </div>
             {pickerLoading ? (
               <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-2xl bg-white/10 animate-pulse" />)}</div>
-            ) : pickerCustomers.length === 0 ? (
-              <div className="rounded-2xl bg-white/10 p-8 text-center text-gray-400 text-sm">No accounts found.</div>
-            ) : (
-              <div className="space-y-2">
-                {pickerCustomers.map((c) => (
-                  <button key={c.id} onClick={() => {
-                    sessionStorage.setItem("gads_customer_id", c.id);
-                    localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
-                    setShowPicker(false);
-                  }}
-                    className="w-full flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 px-5 py-4 hover:bg-white/20 hover:border-white/20 transition text-left group"
+            ) : (() => {
+              const { pinned, unpinned } = sortWithPinned(pickerCustomers, pinnedAccountIds);
+
+              const PickerRow = ({ c, isPinned }) => (
+                <div key={c.id} className="relative">
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem("gads_customer_id", c.id);
+                      localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
+                      setShowPicker(false);
+                    }}
+                    className="w-full flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 px-5 py-4 hover:bg-white/20 hover:border-white/20 transition text-left"
                   >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 group-hover:bg-white/20 transition flex-shrink-0">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 flex-shrink-0">
                       <svg viewBox="0 0 48 48" className="w-5 h-5"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-white truncate">{c.name}</p>
                       <p className="text-xs text-gray-400 mt-0.5">ID: {c.id}</p>
                     </div>
-                    <svg className="w-5 h-5 text-gray-500 group-hover:text-white transition flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                      <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                    {isPinned
+                      ? <span className="text-base flex-shrink-0">⭐</span>
+                      : <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    }
                   </button>
-                ))}
-              </div>
-            )}
+                  {isAdminUser && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleTogglePin(c.id); }}
+                      title={isPinned ? "Unpin account" : "Pin account"}
+                      className="absolute top-3 right-3 text-lg leading-none opacity-60 hover:opacity-100 transition-opacity"
+                    >
+                      {isPinned ? "⭐" : "☆"}
+                    </button>
+                  )}
+                </div>
+              );
+
+              return (
+                <div className="space-y-2">
+                  {pinned.map((c) => <PickerRow key={c.id} c={c} isPinned />)}
+                  {unpinned.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => setPickerShowAll((v) => !v)}
+                        className="w-full text-center text-sm text-gray-400 hover:text-gray-300 py-2 transition"
+                      >
+                        {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+                      </button>
+                      {pickerShowAll && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
+                    </>
+                  )}
+                  {pinned.length === 0 && unpinned.length === 0 && (
+                    <div className="rounded-2xl bg-white/10 p-8 text-center text-gray-400 text-sm">No accounts found.</div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -632,6 +731,9 @@ export default function GoogleAdsDashboard() {
                   setSelectedCustomerId(id);
                   setSelectedCampaign(null);
                 }}
+                pinnedAccountIds={pinnedAccountIds}
+                isAdminUser={isAdminUser}
+                onTogglePin={handleTogglePin}
               />
               <CampaignDropdown
                 campaigns={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
