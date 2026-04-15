@@ -16,11 +16,13 @@ const COLLECTION = "SeoAudits";
  *   (none)         → list all audits for the logged-in user (metadata only)
  */
 export async function GET(request) {
+  const requestId = crypto.randomUUID();
+
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.toLowerCase() || "";
 
   if (!email.endsWith(`@${allowedEmailDomain}`)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", requestId }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -36,14 +38,14 @@ export async function GET(request) {
     try {
       objectId = new ObjectId(id);
     } catch {
-      return NextResponse.json({ error: "Invalid audit ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid audit ID", requestId }, { status: 400 });
     }
 
     const doc = await db.collection(COLLECTION).findOne({ _id: objectId });
     if (!doc) {
-      return NextResponse.json({ error: "Audit not found" }, { status: 404 });
+      return NextResponse.json({ error: "Audit not found", requestId }, { status: 404 });
     }
-    return NextResponse.json(doc);
+    return NextResponse.json({ ...doc, requestId });
   }
 
   // ── List audits (metadata only — exclude heavy fields) ─────────────────
@@ -59,7 +61,7 @@ export async function GET(request) {
     .limit(50)
     .toArray();
 
-  return NextResponse.json({ audits });
+  return NextResponse.json({ audits, requestId });
 }
 
 /**
@@ -68,25 +70,27 @@ export async function GET(request) {
  * Delete a single audit by _id.
  */
 export async function DELETE(request) {
+  const requestId = crypto.randomUUID();
+
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.toLowerCase() || "";
 
   if (!email.endsWith(`@${allowedEmailDomain}`)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", requestId }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json({ error: "id is required" }, { status: 400 });
+    return NextResponse.json({ error: "id is required", requestId }, { status: 400 });
   }
 
   let objectId;
   try {
     objectId = new ObjectId(id);
   } catch {
-    return NextResponse.json({ error: "Invalid audit ID" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid audit ID", requestId }, { status: 400 });
   }
 
   const client = await dbConnect();
@@ -96,8 +100,8 @@ export async function DELETE(request) {
     .deleteOne({ _id: objectId });
 
   if (result.deletedCount === 0) {
-    return NextResponse.json({ error: "Audit not found" }, { status: 404 });
+    return NextResponse.json({ error: "Audit not found", requestId }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, requestId });
 }

@@ -7,10 +7,19 @@ import dbConnect from "../../../../lib/mongoose";
 import { SEO_AUDIT_SYSTEM_PROMPT } from "../../../../lib/seoAuditPrompt";
 import { ADMIN_EMAILS } from "../../../../lib/admins";
 import { checkRateLimit } from '../../../../lib/seoRateLimit.js';
+import { z } from 'zod';
 
 const DAILY_LIMIT = 5;
 const DB = "tokensApi";
 const COLLECTION = "SeoAudits";
+
+const analyzeBodySchema = z.object({
+  crawlData: z.object({ pages_crawled: z.array(z.any()).min(1), domain: z.string().optional() }).passthrough(),
+  gscData: z.any().optional(),
+  adsData: z.any().optional(),
+  seoToolData: z.any().optional(),
+  forceRerun: z.boolean().optional(),
+});
 
 async function getDailyUsageCount(db, email) {
   const today = new Date().toISOString().slice(0, 10);
@@ -28,11 +37,13 @@ async function incrementDailyUsage(db, email) {
 }
 
 export async function POST(request) {
+  const requestId = crypto.randomUUID();
+
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.toLowerCase() || "";
 
   if (!email.endsWith(`@${allowedEmailDomain}`)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", requestId }, { status: 401 });
   }
 
   let body;
@@ -40,19 +51,20 @@ export async function POST(request) {
     body = await request.json();
   } catch {
     return NextResponse.json(
-      { error: "Invalid request body" },
+      { error: "Invalid request body", requestId },
       { status: 400 }
     );
   }
 
-  const { crawlData, gscData, adsData, seoToolData, forceRerun } = body;
-
-  if (!crawlData || !crawlData.pages_crawled?.length) {
+  const parsed = analyzeBodySchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "crawlData with pages_crawled is required" },
+      { error: parsed.error.errors[0].message, requestId },
       { status: 400 }
     );
   }
+
+  const { crawlData, gscData, adsData, seoToolData, forceRerun } = parsed.data;
 
   const domain = crawlData.domain?.toLowerCase().replace(/^www\./, "") || "";
 
@@ -76,6 +88,7 @@ export async function POST(request) {
         auditId: existing._id.toString(),
         remainingToday: null,
         fromHistory: true,
+        requestId,
       });
     }
   }
@@ -84,7 +97,7 @@ export async function POST(request) {
   const { limited, retryAfterSeconds } = checkRateLimit(email);
   if (limited) {
     return NextResponse.json(
-      { error: `Too many requests — wait ${retryAfterSeconds}s before retrying.` },
+      { error: `Too many requests — wait ${retryAfterSeconds}s before retrying.`, requestId },
       { status: 429 }
     );
   }
@@ -94,7 +107,7 @@ export async function POST(request) {
   const usedToday = await getDailyUsageCount(db, email);
   if (!isAdmin && usedToday >= DAILY_LIMIT) {
     return NextResponse.json(
-      { error: `Daily limit reached — you've used all ${DAILY_LIMIT} SEO audits for today. Resets at midnight.` },
+      { error: `Daily limit reached — you've used all ${DAILY_LIMIT} SEO audits for today. Resets at midnight.`, requestId },
       { status: 429 }
     );
   }
@@ -107,6 +120,7 @@ export async function POST(request) {
       {
         error:
           "Anthropic API key not configured — add ANTHROPIC_API_KEY to your MongoDB Tokens document.",
+        requestId,
       },
       { status: 500 }
     );
@@ -179,6 +193,7 @@ export async function POST(request) {
           {
             error: "Failed to parse audit response as JSON",
             rawResponse: responseText.substring(0, 500),
+            requestId,
           },
           { status: 502 }
         );
@@ -219,15 +234,11 @@ export async function POST(request) {
       console.error("[seo-audit/analyze] Failed to save audit:", saveErr.message);
     }
 
-    return NextResponse.json({
-      audit,
-      auditId,
-      remainingToday: DAILY_LIMIT - usedToday - 1,
-    });
+    return NextResponse.json({ data: { audit, auditId, remainingToday: DAILY_LIMIT - usedToday - 1 }, requestId });
   } catch (err) {
     console.error("[seo-audit/analyze] Claude error:", err);
     return NextResponse.json(
-      { error: err.message || "Analysis failed" },
+      { error: err.message || "Analysis failed", requestId },
       { status: 500 }
     );
   }
