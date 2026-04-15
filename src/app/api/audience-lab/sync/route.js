@@ -1,5 +1,7 @@
 import { google } from "googleapis";
 import { getSegmentBySlot, updateSyncStatus, writeSyncLog, seedFromEnvIfEmpty, saveCheckpoint, getCheckpoint, clearCheckpoint } from "../../../../lib/audienceLabSegments";
+import { shouldSkipCronRun, getCronLastRun, setCronLastRun } from '../../../../lib/cronGuard.js';
+import dbConnect from '../../../../lib/mongoose.js';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -1026,6 +1028,18 @@ export async function GET(request) {
       );
     }
 
+    // ── Cron idempotency guard ────────────────────────────────────────────
+    const mongoClient = await dbConnect();
+    const guardDb = mongoClient.db('tokensApi');
+    const jobName = `audience-lab-sync-slot-${slot}`;
+    const lastRun = await getCronLastRun(guardDb, jobName);
+    if (shouldSkipCronRun(lastRun)) {
+      return new Response(
+        JSON.stringify({ skipped: true, reason: 'ran recently', lastRun }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Build a single target from the MongoDB document
     const slotTarget = { key: segDoc.key, tableId: segDoc.tableId, segmentId: segDoc.segmentId, entityType: segDoc.entityType || "segment", source: "mongodb" };
     logInfo(logState, "slot.resolved", { slot, key: segDoc.key, tableId: segDoc.tableId });
@@ -1125,6 +1139,7 @@ export async function GET(request) {
       return new Response(JSON.stringify({ error: err.message, slot, key: segDoc.key, runId: logState.runId }), { status: 500, headers: NO_STORE_HEADERS });
     }
 
+    await setCronLastRun(guardDb, jobName);
     return new Response(JSON.stringify({ ok: true, slot, key: segDoc.key, result: syncResult, runId: logState.runId, logs: logState.includeLogs ? logState.entries : undefined }), { status: 200, headers: NO_STORE_HEADERS });
   }
   // ── End slot-based routing ───────────────────────────────────────────────────
