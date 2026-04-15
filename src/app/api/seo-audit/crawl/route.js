@@ -63,7 +63,7 @@ export async function POST(request) {
   if (!forceRerun) {
     const cached = await getCached(cacheKey);
     if (cached) {
-      return NextResponse.json({ ...cached, fromCache: true, requestId });
+      return NextResponse.json({ data: cached, fromCache: true, requestId });
     }
   }
 

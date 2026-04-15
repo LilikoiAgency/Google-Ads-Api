@@ -84,9 +84,11 @@ export async function POST(request) {
     if (existing) {
       // Return the cached audit — no Claude call, no rate-limit charge
       return NextResponse.json({
-        audit: existing.auditResult,
-        auditId: existing._id.toString(),
-        remainingToday: null,
+        data: {
+          audit: existing.auditResult,
+          auditId: existing._id.toString(),
+          remainingToday: null,
+        },
         fromHistory: true,
         requestId,
       });
