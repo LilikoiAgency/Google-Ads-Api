@@ -5,6 +5,7 @@ import {
   getCampaignStatusCondition,
   normalizeLandingPageUrl,
   sortPerformanceRows,
+  sortWithPinned,
 } from '@/lib/googleAdsHelpers.js';
 
 describe('isValidDateLiteral', () => {
@@ -55,5 +56,34 @@ describe('sortPerformanceRows', () => {
     const rows = [{ conversions: 2 }, { conversions: 5 }, { conversions: 1 }];
     const sorted = [...rows].sort(sortPerformanceRows);
     expect(sorted[0].conversions).toBe(5);
+  });
+});
+
+describe('sortWithPinned', () => {
+  const accounts = [
+    { id: '1', name: 'Zebra Co' },
+    { id: '2', name: 'Alpha Inc' },
+    { id: '3', name: 'Middle LLC' },
+  ];
+
+  it('returns pinned accounts in pin order', () => {
+    const { pinned } = sortWithPinned(accounts, ['3', '1']);
+    expect(pinned.map((a) => a.id)).toEqual(['3', '1']);
+  });
+
+  it('returns unpinned accounts sorted alphabetically', () => {
+    const { unpinned } = sortWithPinned(accounts, ['3']);
+    expect(unpinned.map((a) => a.name)).toEqual(['Alpha Inc', 'Zebra Co']);
+  });
+
+  it('returns all accounts as unpinned when pinnedIds is empty', () => {
+    const { pinned, unpinned } = sortWithPinned(accounts, []);
+    expect(pinned).toHaveLength(0);
+    expect(unpinned.map((a) => a.name)).toEqual(['Alpha Inc', 'Middle LLC', 'Zebra Co']);
+  });
+
+  it('silently skips pinnedIds not present in accounts', () => {
+    const { pinned } = sortWithPinned(accounts, ['999', '1']);
+    expect(pinned.map((a) => a.id)).toEqual(['1']);
   });
 });

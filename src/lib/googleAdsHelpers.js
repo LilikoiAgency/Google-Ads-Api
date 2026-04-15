@@ -105,3 +105,20 @@ export function mapUserListType(v) {
 export function mapJobStatus(v) {
   return typeof v === 'number' ? JOB_STATUS[v] || String(v) : v;
 }
+
+/**
+ * Splits an account list into pinned (in pin order) and unpinned (alphabetical).
+ * @param {Array<{id: string, name: string}>} accounts
+ * @param {string[]} pinnedIds - ordered array of pinned account IDs
+ * @returns {{ pinned: Array, unpinned: Array }}
+ */
+export function sortWithPinned(accounts, pinnedIds) {
+  const pinnedSet = new Set(pinnedIds);
+  const pinned = pinnedIds
+    .map((id) => accounts.find((a) => a.id === id))
+    .filter(Boolean);
+  const unpinned = accounts
+    .filter((a) => !pinnedSet.has(a.id))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return { pinned, unpinned };
+}
