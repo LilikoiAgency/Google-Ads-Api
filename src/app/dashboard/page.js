@@ -230,6 +230,7 @@ const SECTIONS = [
 ];
 
 function hexToRgb(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return "168,85,247"; // fallback purple
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -248,7 +249,7 @@ const DASH_STYLES = `
     --tile-bg: rgba(255,255,255,0.06); --tile-border: rgba(255,255,255,0.12);
     --tile-hover-bg: rgba(255,255,255,0.10); --tile-hover-border: rgba(255,255,255,0.22);
     --tile-shine: rgba(255,255,255,0.10); --tile-title: rgba(255,255,255,0.93);
-    --tile-desc: rgba(255,255,255,0.42); --tile-arrow: rgba(255,255,255,0.25);
+    --tile-desc: rgba(255,255,255,0.42); --tile-arrow: rgba(255,255,255,0.25); --tile-arrow-hover: rgba(255,255,255,0.80);
     --shadow: 0 6px 28px rgba(0,0,0,0.30); --shadow-hover: 0 18px 52px rgba(0,0,0,0.42);
     --toggle-label: rgba(255,255,255,0.5);
     --pill-bg: rgba(255,255,255,0.06); --pill-border: rgba(255,255,255,0.10); --pill-text: rgba(255,255,255,0.55);
@@ -265,7 +266,7 @@ const DASH_STYLES = `
     --tile-bg: rgba(255,255,255,0.68); --tile-border: rgba(139,92,246,0.15);
     --tile-hover-bg: rgba(255,255,255,0.92); --tile-hover-border: rgba(139,92,246,0.32);
     --tile-shine: rgba(255,255,255,0.85); --tile-title: #1e0a38;
-    --tile-desc: rgba(30,10,56,0.50); --tile-arrow: rgba(30,10,56,0.30);
+    --tile-desc: rgba(30,10,56,0.50); --tile-arrow: rgba(30,10,56,0.30); --tile-arrow-hover: #6d28d9;
     --shadow: 0 4px 20px rgba(109,40,217,0.08),0 1px 4px rgba(0,0,0,0.04);
     --shadow-hover: 0 16px 44px rgba(109,40,217,0.15),0 2px 8px rgba(0,0,0,0.06);
     --toggle-label: rgba(30,10,56,0.45);
