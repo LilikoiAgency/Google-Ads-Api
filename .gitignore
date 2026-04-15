@@ -129,3 +129,10 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Claude Code / tooling artifacts
+.claude/worktrees/
+.superpowers/
+.playwright-mcp/
+test-*.png
+*.csv
