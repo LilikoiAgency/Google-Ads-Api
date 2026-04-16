@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
+import DashboardLoader from "../../components/DashboardLoader";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -76,15 +77,7 @@ export default function UsageAnalyticsPage() {
   }, [authStatus]);
 
   if (authStatus === "loading" || loading) {
-    return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-customPurple-dark">
-        <img
-          src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
-          alt="Loading..."
-          className="w-24 h-24"
-        />
-      </div>
-    );
+    return <DashboardLoader label="Loading..." />;
   }
 
   const { kpis, byTool, users, dailyTrend } = data || {};

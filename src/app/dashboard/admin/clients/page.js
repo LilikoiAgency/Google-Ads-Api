@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import "../../../globals.css";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
+import DashboardLoader from "../../components/DashboardLoader";
 
 
 const EMPTY_FORM = {
@@ -322,11 +323,7 @@ export default function AdminClientsPage() {
     setTimeout(() => setCopiedSlug(null), 2000);
   };
 
-  if (status === "loading") return (
-    <div className="flex min-h-screen items-center justify-center bg-customPurple-dark">
-      <img src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif" alt="Loading" className="w-24 h-24" />
-    </div>
-  );
+  if (status === "loading") return <DashboardLoader label="Loading..." />;
 
 
   return (

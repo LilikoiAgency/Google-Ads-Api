@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
+import DashboardLoader from "../components/DashboardLoader";
 import "../../globals.css";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -600,15 +601,7 @@ export default function SEOAuditPage() {
 
   // ── Loading / auth ─────────────────────────────────────────────────────────
   if (authStatus === "loading") {
-    return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-customPurple-dark">
-        <img
-          src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
-          alt="Loading..."
-          className="w-24 h-24"
-        />
-      </div>
-    );
+    return <DashboardLoader label="Loading..." />;
   }
 
   // ── Build tab list based on available data ─────────────────────────────────
@@ -924,27 +917,13 @@ export default function SEOAuditPage() {
 
         {/* ── Step 1: Crawling ───────────────────────────────────────────── */}
         {step === STEPS.CRAWLING && (
-          <div style={{ textAlign: "center" }}>
-            <img
-              src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
-              alt="Crawling..."
-              style={{ width: 80, height: 80, margin: "0 auto 16px" }}
-            />
-            <p style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Crawling {domain}...</p>
-            <p style={{ fontSize: 13, color: "#aaa", marginTop: 6 }}>Fetching pages and extracting SEO signals</p>
-          </div>
+          <DashboardLoader label="Crawling site..." />
         )}
 
         {/* ── Step 2: Analyzing ──────────────────────────────────────────── */}
         {step === STEPS.ANALYZING && (
           <div style={{ textAlign: "center" }}>
-            <img
-              src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
-              alt="Analyzing..."
-              style={{ width: 80, height: 80, margin: "0 auto 16px" }}
-            />
-            <p style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Analyzing with AI...</p>
-            <p style={{ fontSize: 13, color: "#aaa", marginTop: 6 }}>Claude is scoring SEO, GEO, and AEO signals</p>
+            <DashboardLoader label="Analyzing with AI..." />
             {crawlData && (
               <div style={{ marginTop: 24 }}>
                 <CrawlProgress pages={crawlData.pages_crawled || []} errors={crawlData.crawl_errors || []} />

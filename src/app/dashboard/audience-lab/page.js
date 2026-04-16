@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import "../../globals.css";
 import DashboardToolHeader from "../components/DashboardToolHeader";
+import DashboardLoader from "../components/DashboardLoader";
 import { isAdmin } from "../../../lib/admins";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -308,11 +309,7 @@ export default function AudienceLabPage() {
     }
   };
 
-  if (status === "loading") return (
-    <div className="flex min-h-screen items-center justify-center bg-customPurple-dark">
-      <img src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif" alt="Loading" className="w-24 h-24" />
-    </div>
-  );
+  if (status === "loading") return <DashboardLoader label="Loading..." />;
 
   const isAudienceTab    = activeTab === "audiences";
   const tabSlots         = slots.filter((s) =>
