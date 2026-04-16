@@ -9,6 +9,7 @@ import {
   faFileLines, faMagnifyingGlassChart,
   faBriefcase, faPeopleGroup, faTv, faChartLine,
 } from "@fortawesome/free-solid-svg-icons";
+import { faMeta } from "@fortawesome/free-brands-svg-icons";
 import { useTheme } from "../../../lib/useTheme";
 import { isAdmin } from "../../../lib/admins";
 
@@ -23,12 +24,6 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const MetaIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 36 36" fill="none">
-    <rect width="36" height="36" rx="8" fill="#1877F2"/>
-    <path d="M26 12c-1.1 0-2 .45-2.7 1.2C21.95 11.44 20.1 10 18 10c-2.1 0-3.95 1.44-5.3 3.2C11.99 12.45 11.1 12 10 12c-2.2 0-4 1.8-4 4 0 .9.3 1.72.8 2.38C8.1 21.66 12.8 26 18 26s9.9-4.34 11.2-7.62c.5-.66.8-1.48.8-2.38 0-2.2-1.8-4-4-4z" fill="white"/>
-  </svg>
-);
 
 const MicrosoftIcon = () => (
   <svg width="16" height="16" viewBox="0 0 21 21">
@@ -56,7 +51,7 @@ const FA = (icon, color) => (
 const NAV = [
   { label: "Paid Media", items: [
     { href: "/dashboard/google/ads",     label: "Google Ads",      icon: <GoogleIcon />                                  },
-    { href: "/dashboard/meta",           label: "Meta Ads",        icon: <MetaIcon />                                    },
+    { href: "/dashboard/meta",           label: "Meta Ads",        icon: FA(faMeta, "#1877F2")                           },
     { href: "/dashboard/bing",           label: "Microsoft Ads",   icon: <MicrosoftIcon />                               },
   ]},
   { label: "Organic & Reports", items: [
