@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
+import DashboardToolHeader from "../components/DashboardToolHeader";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -718,43 +718,33 @@ export default function MetaDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
+    <div className="flex flex-col flex-1">
 
-      {/* ── Header ── */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard"
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm"
-              title="Home">←
-            </Link>
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-sm">
-              <MetaIcon size={28} />
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-white">Meta Ads</p>
-              <p className="text-sm text-gray-400">Facebook &amp; Instagram Campaigns</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <AccountPicker
-              accounts={accounts}
-              selected={selectedAccount}
-              onChange={handleAccountChange}
-              loading={accountsLoading}
-            />
-            {data?.campaigns?.length > 0 && (
-              <CampaignPicker
-                campaigns={data.campaigns}
-                selected={selectedCampaign}
-                onChange={setSelectedCampaign}
-                onClear={() => { setSelectedCampaign(null); setAdSets(null); }}
-              />
-            )}
-          </div>
-        </div>
-      </header>
+      <DashboardToolHeader
+        icon={
+          <svg width="16" height="16" viewBox="0 0 36 36" fill="none">
+            <rect width="36" height="36" rx="8" fill="#1877F2"/>
+            <path d="M26 12c-1.1 0-2 .45-2.7 1.2C21.95 11.44 20.1 10 18 10c-2.1 0-3.95 1.44-5.3 3.2C11.99 12.45 11.1 12 10 12c-2.2 0-4 1.8-4 4 0 .9.3 1.72.8 2.38C8.1 21.66 12.8 26 18 26s9.9-4.34 11.2-7.62c.5-.66.8-1.48.8-2.38 0-2.2-1.8-4-4-4z" fill="white"/>
+          </svg>
+        }
+        title="Meta Ads"
+        subtitle="Facebook & Instagram Campaigns"
+      >
+        <AccountPicker
+          accounts={accounts}
+          selected={selectedAccount}
+          onChange={handleAccountChange}
+          loading={accountsLoading}
+        />
+        {data?.campaigns?.length > 0 && (
+          <CampaignPicker
+            campaigns={data.campaigns}
+            selected={selectedCampaign}
+            onChange={setSelectedCampaign}
+            onClear={() => { setSelectedCampaign(null); setAdSets(null); }}
+          />
+        )}
+      </DashboardToolHeader>
 
       {/* ── Date range bar ── */}
       <div className={`bg-customPurple-dark border-b border-white/10 px-6 py-3 ${!selectedAccount ? "hidden" : ""}`}>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
+import DashboardToolHeader from "../components/DashboardToolHeader";
 import "../../globals.css";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -626,28 +626,20 @@ export default function SEOAuditPage() {
   if (audit?.strengths?.length) tabList.push({ key: "strengths", label: "Strengths" });
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard">
-              <img
-                src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png"
-                alt="Lilikoi Agency"
-                className="h-10 w-10 rounded-full cursor-pointer"
-              />
-            </Link>
-            <div>
-              <p className="text-lg font-semibold text-white">SEO / GEO / AEO Audit</p>
-              <p className="text-sm text-gray-400">Comprehensive website analysis</p>
-            </div>
-          </div>
-          <Link href="/dashboard" className="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 transition">
-            Dashboard
-          </Link>
-        </div>
-      </header>
+    <div className="flex flex-col flex-1">
+      <DashboardToolHeader
+        icon={
+          <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
+            <circle cx="22" cy="22" r="13" stroke="#0d9488" strokeWidth="2.5"/>
+            <line x1="31.5" y1="31.5" x2="42" y2="42" stroke="#0d9488" strokeWidth="3.5" strokeLinecap="round"/>
+            <rect x="15" y="24" width="3.5" height="7" rx="1" fill="#f59e0b"/>
+            <rect x="20.25" y="20" width="3.5" height="11" rx="1" fill="#0d9488"/>
+            <rect x="25.5" y="16" width="3.5" height="15" rx="1" fill="#6366f1"/>
+          </svg>
+        }
+        title="SEO / GEO / AEO Audit"
+        subtitle="AI-powered site analysis"
+      />
 
       <div className="mx-auto max-w-5xl px-6 py-10">
         {/* ── Step 0: Configure ──────────────────────────────────────────── */}

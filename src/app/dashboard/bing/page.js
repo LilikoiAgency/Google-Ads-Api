@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
+import DashboardToolHeader from "../components/DashboardToolHeader";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, BarChart, Bar,
@@ -461,42 +461,28 @@ export default function BingDashboard() {
     : accountTotals;
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
+    <div className="flex flex-col flex-1">
 
-      {/* ── Header ── */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard"
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm"
-              title="Home">←
-            </Link>
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white">
-              <MicrosoftAdsIcon size={24} />
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-white">Microsoft Advertising</p>
-              <p className="text-sm text-gray-400">Bing Ads Dashboard</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <AccountPicker
-              accounts={accounts}
-              selected={selectedAccount}
-              onChange={(a) => { sessionStorage.setItem("bing_selected_account", JSON.stringify(a)); setSelectedAccount(a); setData(null); setSelectedCampaign(null); }}
-              loading={accountsLoading}
-            />
-            {data?.campaigns?.length > 0 && (
-              <CampaignPicker
-                campaigns={data.campaigns}
-                selected={selectedCampaign}
-                onChange={setSelectedCampaign}
-                onClear={() => setSelectedCampaign(null)}
-              />
-            )}
-          </div>
-        </div>
-      </header>
+      <DashboardToolHeader
+        icon={<MicrosoftAdsIcon size={16} />}
+        title="Microsoft Advertising"
+        subtitle="Bing Ads Dashboard"
+      >
+        <AccountPicker
+          accounts={accounts}
+          selected={selectedAccount}
+          onChange={(a) => { sessionStorage.setItem("bing_selected_account", JSON.stringify(a)); setSelectedAccount(a); setData(null); setSelectedCampaign(null); }}
+          loading={accountsLoading}
+        />
+        {data?.campaigns?.length > 0 && (
+          <CampaignPicker
+            campaigns={data.campaigns}
+            selected={selectedCampaign}
+            onChange={setSelectedCampaign}
+            onClear={() => setSelectedCampaign(null)}
+          />
+        )}
+      </DashboardToolHeader>
 
       {/* ── Date range bar — only shown once an account is selected ── */}
       <div className={`bg-customPurple-dark border-b border-white/10 px-6 py-3 ${!selectedAccount ? "hidden" : ""}`}>
