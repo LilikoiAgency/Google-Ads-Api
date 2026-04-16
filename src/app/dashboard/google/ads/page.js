@@ -2,12 +2,21 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import "../../../globals.css";
 import ContentArea from "../../components/ContentArea";
 import { isAdmin } from "../../../../lib/admins";
 import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
+import DashboardToolHeader from "../../components/DashboardToolHeader";
 
+function GAdsHeaderIcon() {
+  return (
+    <svg viewBox="0 0 192 192" width="16" height="16">
+      <circle cx="40" cy="148" r="40" fill="#FBBC04"/>
+      <path d="M96 4L56 72l40 68 40-68z" fill="#4285F4"/>
+      <circle cx="152" cy="148" r="40" fill="#34A853"/>
+    </svg>
+  );
+}
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -575,96 +584,9 @@ export default function GoogleAdsDashboard() {
     fetchData({ requestedDateRange: "CUSTOM", requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange });
   };
 
-  // ── Account picker screen ──────────────────────────────────────────────────
-  if (showPicker === true) {
-    return (
-      <div className="min-h-screen bg-customPurple-dark flex flex-col">
-        <header className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
-          <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Home">←</Link>
-          <img src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png" alt="Lilikoi" className="h-10 w-10 rounded-full" />
-          <div>
-            <p className="text-lg font-semibold text-white">Google Ads</p>
-            <p className="text-sm text-gray-400">Select an account to continue</p>
-          </div>
-        </header>
-        <div className="flex-1 flex items-start justify-center pt-16 px-6">
-          <div className="w-full max-w-lg">
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm border border-gray-100 mb-4">
-                <svg viewBox="0 0 48 48" className="w-8 h-8"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-              </div>
-              <h2 className="text-xl font-bold text-white mb-1">Select a Google Ads Account</h2>
-              <p className="text-sm text-gray-400">Your selection will be remembered for this session</p>
-            </div>
-            {pickerLoading ? (
-              <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-2xl bg-white/10 animate-pulse" />)}</div>
-            ) : (() => {
-              const { pinned, unpinned } = sortWithPinned(pickerCustomers, pinnedAccountIds);
-
-              const PickerRow = ({ c, isPinned }) => (
-                <div key={c.id} className="relative">
-                  <button
-                    onClick={() => {
-                      sessionStorage.setItem("gads_customer_id", c.id);
-                      localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
-                      setPickerShowAll(false);
-                      setShowPicker(false);
-                    }}
-                    className="w-full flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 px-5 py-4 hover:bg-white/20 hover:border-white/20 transition text-left"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 flex-shrink-0">
-                      <svg viewBox="0 0 48 48" className="w-5 h-5"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-white truncate">{c.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">ID: {c.id}</p>
-                    </div>
-                    {isPinned
-                      ? <span className="text-base flex-shrink-0">⭐</span>
-                      : <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    }
-                  </button>
-                  {isAdminUser && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleTogglePin(c.id); }}
-                      title={isPinned ? "Unpin account" : "Pin account"}
-                      className="absolute top-3 right-3 text-lg leading-none opacity-60 hover:opacity-100 transition-opacity"
-                    >
-                      {isPinned ? "⭐" : "☆"}
-                    </button>
-                  )}
-                </div>
-              );
-
-              return (
-                <div className="space-y-2">
-                  {pinned.map((c) => <PickerRow key={c.id} c={c} isPinned />)}
-                  {unpinned.length > 0 && (
-                    <>
-                      <button
-                        onClick={() => setPickerShowAll((v) => !v)}
-                        className="w-full text-center text-sm text-gray-400 hover:text-gray-300 py-2 transition"
-                      >
-                        {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
-                      </button>
-                      {pickerShowAll && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
-                    </>
-                  )}
-                  {pinned.length === 0 && unpinned.length === 0 && (
-                    <div className="rounded-2xl bg-white/10 p-8 text-center text-gray-400 text-sm">No accounts found.</div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (showPicker === null || status === "loading" || (showPicker === false && isFetching && allCampaignData.length === 0 && !error)) {
     return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-white">
+      <div className="flex flex-col justify-center items-center flex-1">
         <h2 className="text-2xl text-customPurple mb-4">
           {status === "loading" ? "Checking login..." : "Pulling Data From Google...."}
         </h2>
@@ -695,49 +617,114 @@ export default function GoogleAdsDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
+    <div className="flex flex-col flex-1" style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
 
-      {/* ── Header ── */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm" title="Back to Dashboard">←</Link>
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white flex-shrink-0">
-              <svg viewBox="0 0 48 48" className="w-6 h-6"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      {/* ── Account picker overlay ── */}
+      {showPicker === true && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 40,
+          background: "rgba(10,5,22,0.96)",
+          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", paddingTop: 48, overflowY: "auto",
+        }}>
+          <div style={{ width: "100%", maxWidth: 480, padding: "0 24px" }}>
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 64, height: 64, borderRadius: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", marginBottom: 16 }}>
+                <svg viewBox="0 0 48 48" style={{ width: 32, height: 32 }}><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: "rgba(255,255,255,0.95)", margin: 0, marginBottom: 6 }}>Select a Google Ads Account</h2>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: 0 }}>Your selection will be remembered for this session</p>
             </div>
-            <div>
-              <p className="text-lg font-semibold text-white">Google Ads</p>
-              <p className="text-sm text-gray-400">Campaign Dashboard</p>
-            </div>
+            {pickerLoading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[...Array(4)].map((_, i) => <div key={i} style={{ height: 64, borderRadius: 16, background: "rgba(255,255,255,0.06)" }} className="animate-pulse" />)}
+              </div>
+            ) : (() => {
+              const { pinned, unpinned } = sortWithPinned(pickerCustomers, pinnedAccountIds);
+              const PickerRow = ({ c, isPinned }) => (
+                <div style={{ position: "relative", marginBottom: 8 }}>
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem("gads_customer_id", c.id);
+                      localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
+                      setPickerShowAll(false);
+                      setShowPicker(false);
+                    }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, borderRadius: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", padding: "14px 18px", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg viewBox="0 0 48 48" style={{ width: 20, height: 20 }}><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 700, color: "rgba(255,255,255,0.9)", margin: 0, fontSize: 14 }}>{c.name}</p>
+                      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", margin: 0, marginTop: 2 }}>ID: {c.id}</p>
+                    </div>
+                    {isPinned && <span style={{ fontSize: 16, flexShrink: 0 }}>⭐</span>}
+                  </button>
+                  {isAdminUser && (
+                    <button onClick={(e) => { e.stopPropagation(); handleTogglePin(c.id); }}
+                      title={isPinned ? "Unpin" : "Pin"}
+                      style={{ position: "absolute", top: 10, right: 10, fontSize: 14, background: "none", border: "none", cursor: "pointer", opacity: 0.6 }}>
+                      {isPinned ? "⭐" : "☆"}
+                    </button>
+                  )}
+                </div>
+              );
+              return (
+                <div>
+                  {pinned.map((c) => <PickerRow key={c.id} c={c} isPinned />)}
+                  {unpinned.length > 0 && (
+                    <>
+                      <button onClick={() => setPickerShowAll((v) => !v)}
+                        style={{ width: "100%", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.35)", background: "none", border: "none", cursor: "pointer", padding: "8px 0" }}>
+                        {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+                      </button>
+                      {pickerShowAll && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
+                    </>
+                  )}
+                  {pinned.length === 0 && unpinned.length === 0 && (
+                    <div style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", padding: 32 }}>No accounts found.</div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
-          {selectedCustomerId && allCampaignData.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <AccountDropdown
-                accounts={allCampaignData.map((d) => ({
-                  id: String(d.customer.customer_client.id),
-                  name: d.customer.customer_client.descriptive_name,
-                }))}
-                selectedId={String(selectedCustomerId)}
-                onChange={(id) => {
-                  localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
-                  sessionStorage.setItem("gads_customer_id", id);
-                  setSelectedCustomerId(id);
-                  setSelectedCampaign(null);
-                }}
-                pinnedAccountIds={pinnedAccountIds}
-                isAdminUser={isAdminUser}
-                onTogglePin={handleTogglePin}
-              />
-              <CampaignDropdown
-                campaigns={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
-                selectedCampaign={selectedCampaign}
-                onChange={handleCampaignSelect}
-                onClear={() => setSelectedCampaign(null)}
-              />
-            </div>
-          )}
         </div>
-      </header>
+      )}
+
+      <DashboardToolHeader
+        icon={<GAdsHeaderIcon />}
+        title="Google Ads"
+        subtitle="Campaign Dashboard"
+      >
+        {selectedCustomerId && allCampaignData.length > 0 && (
+          <>
+            <AccountDropdown
+              accounts={allCampaignData.map((d) => ({
+                id: String(d.customer.customer_client.id),
+                name: d.customer.customer_client.descriptive_name,
+              }))}
+              selectedId={String(selectedCustomerId)}
+              onChange={(id) => {
+                localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
+                sessionStorage.setItem("gads_customer_id", id);
+                setSelectedCustomerId(id);
+                setSelectedCampaign(null);
+              }}
+              pinnedAccountIds={pinnedAccountIds}
+              isAdminUser={isAdminUser}
+              onTogglePin={handleTogglePin}
+            />
+            <CampaignDropdown
+              campaigns={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
+              selectedCampaign={selectedCampaign}
+              onChange={handleCampaignSelect}
+              onClear={() => setSelectedCampaign(null)}
+            />
+          </>
+        )}
+      </DashboardToolHeader>
 
       {/* ── Date range bar ── */}
       <div className="border-b border-white/10 bg-customPurple-dark px-6 py-3">
