@@ -1009,7 +1009,7 @@ export default function ContentArea({
           <h2 className="text-xl font-semibold text-customPurple">
             Campaigns for {customerName}
           </h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="kpi-grid mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
                 Account Optimization Score
@@ -1064,7 +1064,7 @@ export default function ContentArea({
               </p>
             </div>
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="kpi-grid mt-4 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
                 Avg. CPC

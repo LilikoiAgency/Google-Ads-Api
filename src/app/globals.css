@@ -76,3 +76,18 @@ nav:hover .sb-active-dot {
 @media (min-width: 768px) {
   .mobile-only  { display: none !important; }
 }
+
+/* ── Responsive content ── */
+@media (max-width: 767px) {
+  /* Full-width containers on mobile */
+  .max-w-7xl, .max-w-6xl, .max-w-5xl { max-width: 100% !important; }
+
+  /* Tighter horizontal padding on mobile */
+  .px-6 { padding-left: 16px !important; padding-right: 16px !important; }
+
+  /* Table horizontal scroll */
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+  /* KPI grids — 2 columns on mobile */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
