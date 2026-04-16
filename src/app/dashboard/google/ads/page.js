@@ -9,6 +9,7 @@ import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
 import { GoogleAdsIcon } from "../../components/DashboardIcons";
+import MobileFilterSheet from "../../components/MobileFilterSheet";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -339,6 +340,7 @@ export default function GoogleAdsDashboard() {
   const [pinnedAccountIds, setPinnedAccountIds] = useState([]);
   const [pickerShowAll, setPickerShowAll]       = useState(false);
   const isAdminUser = isAdmin(session?.user?.email || '');
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const updateLastUpdated = (
     date = new Date(),
@@ -682,7 +684,7 @@ export default function GoogleAdsDashboard() {
         subtitle="Campaign Dashboard"
       >
         {selectedCustomerId && allCampaignData.length > 0 && (
-          <>
+          <div className="desktop-only" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <AccountDropdown
               accounts={allCampaignData.map((d) => ({
                 id: String(d.customer.customer_client.id),
@@ -705,9 +707,64 @@ export default function GoogleAdsDashboard() {
               onChange={handleCampaignSelect}
               onClear={() => setSelectedCampaign(null)}
             />
-          </>
+          </div>
         )}
       </DashboardToolHeader>
+
+      {/* Mobile filter row */}
+      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+        <button
+          onClick={() => setFilterOpen(true)}
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+        >
+          Filters <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+        </button>
+        {selectedCustomerId && (
+          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>
+            {allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.customer?.customer_client?.descriptive_name || ""}
+          </span>
+        )}
+      </div>
+
+      {/* Mobile filter sheet */}
+      <MobileFilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => setFilterOpen(false)}
+      >
+        {selectedCustomerId && allCampaignData.length > 0 && (
+          <>
+            <div style={{ marginBottom: 18 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" }}>Account</p>
+              <AccountDropdown
+                accounts={allCampaignData.map((d) => ({
+                  id: String(d.customer.customer_client.id),
+                  name: d.customer.customer_client.descriptive_name,
+                }))}
+                selectedId={String(selectedCustomerId)}
+                onChange={(id) => {
+                  localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
+                  sessionStorage.setItem("gads_customer_id", id);
+                  setSelectedCustomerId(id);
+                  setSelectedCampaign(null);
+                }}
+                pinnedAccountIds={pinnedAccountIds}
+                isAdminUser={isAdminUser}
+                onTogglePin={handleTogglePin}
+              />
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" }}>Campaign</p>
+              <CampaignDropdown
+                campaigns={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId))?.campaigns || []}
+                selectedCampaign={selectedCampaign}
+                onChange={handleCampaignSelect}
+                onClear={() => setSelectedCampaign(null)}
+              />
+            </div>
+          </>
+        )}
+      </MobileFilterSheet>
 
       {/* ── Date range bar ── */}
       <div className="border-b border-white/10 bg-customPurple-dark px-6 py-3">
