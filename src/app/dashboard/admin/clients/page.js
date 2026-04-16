@@ -7,6 +7,7 @@ import Link from "next/link";
 import "../../../globals.css";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
+import { ClientPortalsIcon } from "../../components/DashboardIcons";
 
 
 const EMPTY_FORM = {
@@ -329,14 +330,7 @@ export default function AdminClientsPage() {
   return (
     <div className="flex flex-col flex-1">
       <DashboardToolHeader
-        icon={
-          <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
-            <circle cx="18" cy="16" r="7" fill="#6d28d9" opacity="0.9"/>
-            <circle cx="33" cy="16" r="5" fill="#a78bfa" opacity="0.8"/>
-            <ellipse cx="18" cy="34" rx="12" ry="7" fill="#6d28d9" opacity="0.85"/>
-            <ellipse cx="34" cy="34" rx="9" ry="6" fill="#a78bfa" opacity="0.7"/>
-          </svg>
-        }
+        icon={<ClientPortalsIcon />}
         title="Client Portals"
         subtitle="Manage client-facing portals"
       />

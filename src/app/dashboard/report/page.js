@@ -8,6 +8,7 @@ import Link from "next/link";
 import "../../globals.css";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
+import { ReportIcon } from "../components/DashboardIcons";
 import {
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, Sector,
@@ -1171,11 +1172,7 @@ function ReportPageInner() {
 
     <div className="flex flex-col flex-1" style={{ overflowX: "hidden" }}>
       <DashboardToolHeader
-        icon={
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none">
-            <path d="M7 17V13M10 17V10M13 17V12M16 17V7" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-        }
+        icon={<ReportIcon />}
         title="Paid vs. Organic Report"
         subtitle="Cross-channel keyword overlap analysis"
       />

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import "../../globals.css";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
+import { AudienceLabIcon } from "../components/DashboardIcons";
 import { isAdmin } from "../../../lib/admins";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -324,13 +325,7 @@ export default function AudienceLabPage() {
     <div className="flex flex-col flex-1">
 
       <DashboardToolHeader
-        icon={
-          <svg viewBox="0 0 48 48" width="16" height="16">
-            <circle cx="16" cy="16" r="8" fill="#4285F4"/>
-            <circle cx="32" cy="16" r="8" fill="#EA4335" opacity="0.85"/>
-            <circle cx="24" cy="30" r="8" fill="#34A853" opacity="0.85"/>
-          </svg>
-        }
+        icon={<AudienceLabIcon />}
         title="Audience Lab"
         subtitle={`${tabOccupied} of ${tabMax} ${isAudienceTab ? "audience" : "segment"} slots used · Syncs every Monday`}
       >

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
+import { SEOAuditIcon } from "../components/DashboardIcons";
 import "../../globals.css";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -621,15 +622,7 @@ export default function SEOAuditPage() {
   return (
     <div className="flex flex-col flex-1">
       <DashboardToolHeader
-        icon={
-          <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
-            <circle cx="22" cy="22" r="13" stroke="#0d9488" strokeWidth="2.5"/>
-            <line x1="31.5" y1="31.5" x2="42" y2="42" stroke="#0d9488" strokeWidth="3.5" strokeLinecap="round"/>
-            <rect x="15" y="24" width="3.5" height="7" rx="1" fill="#f59e0b"/>
-            <rect x="20.25" y="20" width="3.5" height="11" rx="1" fill="#0d9488"/>
-            <rect x="25.5" y="16" width="3.5" height="15" rx="1" fill="#6366f1"/>
-          </svg>
-        }
+        icon={<SEOAuditIcon />}
         title="SEO / GEO / AEO Audit"
         subtitle="AI-powered site analysis"
       />

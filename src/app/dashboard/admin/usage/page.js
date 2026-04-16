@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
+import { UsageAnalyticsIcon } from "../../components/DashboardIcons";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -85,14 +86,7 @@ export default function UsageAnalyticsPage() {
   return (
     <div className="flex flex-col flex-1">
       <DashboardToolHeader
-        icon={
-          <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
-            <rect x="6" y="28" width="7" height="14" rx="1.5" fill="#ec4899" opacity="0.9"/>
-            <rect x="16" y="20" width="7" height="22" rx="1.5" fill="#ec4899"/>
-            <rect x="26" y="12" width="7" height="30" rx="1.5" fill="#ec4899" opacity="0.8"/>
-            <rect x="36" y="24" width="7" height="18" rx="1.5" fill="#ec4899" opacity="0.6"/>
-          </svg>
-        }
+        icon={<UsageAnalyticsIcon />}
         title="Usage Analytics"
         subtitle="Dashboard tool adoption"
       />

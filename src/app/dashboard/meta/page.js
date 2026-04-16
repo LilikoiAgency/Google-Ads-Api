@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
+import { MetaAdsIcon } from "../components/DashboardIcons";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -718,12 +719,7 @@ export default function MetaDashboard() {
     <div className="flex flex-col flex-1">
 
       <DashboardToolHeader
-        icon={
-          <svg width="16" height="16" viewBox="0 0 36 36" fill="none">
-            <rect width="36" height="36" rx="8" fill="#1877F2"/>
-            <path d="M26 12c-1.1 0-2 .45-2.7 1.2C21.95 11.44 20.1 10 18 10c-2.1 0-3.95 1.44-5.3 3.2C11.99 12.45 11.1 12 10 12c-2.2 0-4 1.8-4 4 0 .9.3 1.72.8 2.38C8.1 21.66 12.8 26 18 26s9.9-4.34 11.2-7.62c.5-.66.8-1.48.8-2.38 0-2.2-1.8-4-4-4z" fill="white"/>
-          </svg>
-        }
+        icon={<MetaAdsIcon />}
         title="Meta Ads"
         subtitle="Facebook & Instagram Campaigns"
       >

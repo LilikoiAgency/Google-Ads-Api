@@ -8,16 +8,7 @@ import { isAdmin } from "../../../../lib/admins";
 import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
-
-function GAdsHeaderIcon() {
-  return (
-    <svg viewBox="0 0 192 192" width="16" height="16">
-      <circle cx="40" cy="148" r="40" fill="#FBBC04"/>
-      <path d="M96 4L56 72l40 68 40-68z" fill="#4285F4"/>
-      <circle cx="152" cy="148" r="40" fill="#34A853"/>
-    </svg>
-  );
-}
+import { GoogleAdsIcon } from "../../components/DashboardIcons";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -686,7 +677,7 @@ export default function GoogleAdsDashboard() {
       )}
 
       <DashboardToolHeader
-        icon={<GAdsHeaderIcon />}
+        icon={<GoogleAdsIcon />}
         title="Google Ads"
         subtitle="Campaign Dashboard"
       >

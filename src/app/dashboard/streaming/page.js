@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import DashboardToolHeader from "../components/DashboardToolHeader";
+import { StreamingIcon as StreamingNavIcon } from "../components/DashboardIcons";
 import Papa from "papaparse";
 import {
   validateFileType, processAll, filterData, createConversionsObject,
@@ -44,15 +45,6 @@ function makeBarTraces(dataObj, y1Key, y1Name, y2Key, y2Name) {
 }
 
 // ── sub-components ─────────────────────────────────────────────────────────────
-
-function StreamingIconSVG() {
-  return (
-    <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
-      <rect x="2" y="12" width="44" height="28" rx="4" stroke="#0ea5e9" strokeWidth="2.5"/>
-      <polygon points="21,22 21,30 30,26" fill="#0ea5e9"/>
-    </svg>
-  );
-}
 
 function StatCard({ label, value }) {
   return (
@@ -422,7 +414,7 @@ export default function StreamingPage() {
   if (step === "clients") {
     return (
       <div className="flex flex-col flex-1">
-        <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle="Select a client to get started" />
+        <DashboardToolHeader icon={<StreamingNavIcon />} title="Targeted Streaming" subtitle="Select a client to get started" />
         <div className="mx-auto max-w-4xl px-6 py-8">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Choose a Client</p>
           {/* Quick View — always shown first */}
@@ -495,7 +487,7 @@ export default function StreamingPage() {
     };
     return (
       <div className="flex flex-col flex-1">
-        <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle={selectedClient ? "Upload a report or view a previous one" : "Quick View — no client selected"}><button onClick={() => { setSelectedClient(null); setStep("clients"); }} style={{ display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,0.7)",fontSize:12,cursor:"pointer" }}>← Back</button></DashboardToolHeader>
+        <DashboardToolHeader icon={<StreamingNavIcon />} title="Targeted Streaming" subtitle={selectedClient ? "Upload a report or view a previous one" : "Quick View — no client selected"}><button onClick={() => { setSelectedClient(null); setStep("clients"); }} style={{ display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,0.7)",fontSize:12,cursor:"pointer" }}>← Back</button></DashboardToolHeader>
         <div className="mx-auto max-w-4xl px-6 py-8 space-y-8">
 
           {/* Upload new report */}
@@ -561,7 +553,7 @@ export default function StreamingPage() {
   if (step === "processing") {
     return (
       <div className="flex flex-col flex-1">
-        <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle="Processing your file…" />
+        <DashboardToolHeader icon={<StreamingNavIcon />} title="Targeted Streaming" subtitle="Processing your file…" />
         <div className="flex flex-col items-center justify-center" style={{ minHeight: "calc(100vh - 73px)" }}>
           <div className="rounded-2xl bg-white border border-gray-200 p-10 text-center w-full max-w-md mx-6">
             <div className="text-4xl mb-4">⚙️</div>
@@ -599,7 +591,7 @@ export default function StreamingPage() {
 
   return (
     <div className="flex flex-col flex-1">
-      <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle={fileName}>
+      <DashboardToolHeader icon={<StreamingNavIcon />} title="Targeted Streaming" subtitle={fileName}>
         <button onClick={() => { setStep("client"); setProcessedData(null); setRawData([]); setViewingReportId(null); }} style={{ display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,0.7)",fontSize:12,cursor:"pointer" }}>← Back</button>
         {viewingReportId ? (
           <span className="text-sm text-sky-400 font-medium">📺 Saved report</span>

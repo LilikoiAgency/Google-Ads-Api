@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
+import { MicrosoftAdsIcon as BingIcon } from "../components/DashboardIcons";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, BarChart, Bar,
@@ -461,7 +462,7 @@ export default function BingDashboard() {
     <div className="flex flex-col flex-1">
 
       <DashboardToolHeader
-        icon={<MicrosoftAdsIcon size={16} />}
+        icon={<BingIcon />}
         title="Microsoft Advertising"
         subtitle="Bing Ads Dashboard"
       >

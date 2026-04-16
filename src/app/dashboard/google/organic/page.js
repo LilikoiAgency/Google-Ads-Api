@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
+import { SearchConsoleIcon } from "../../components/DashboardIcons";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -349,14 +350,7 @@ export default function OrganicPage() {
     <div className="flex flex-col flex-1">
 
       <DashboardToolHeader
-        icon={
-          <svg viewBox="0 0 64 64" width="16" height="16">
-            <circle cx="26" cy="26" r="18" fill="none" stroke="#4285F4" strokeWidth="6"/>
-            <circle cx="26" cy="26" r="9" fill="#34A853"/>
-            <line x1="39" y1="39" x2="57" y2="57" stroke="#EA4335" strokeWidth="6" strokeLinecap="round"/>
-            <circle cx="26" cy="26" r="4" fill="#FBBC04"/>
-          </svg>
-        }
+        icon={<SearchConsoleIcon />}
         title="Google Search Organic"
         subtitle="Search Console Performance"
       >
