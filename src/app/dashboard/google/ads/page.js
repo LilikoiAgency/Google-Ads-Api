@@ -127,6 +127,11 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
   const current = accounts.find((a) => a.id === selectedId);
   const { pinned, unpinned } = sortWithPinned(accounts, pinnedAccountIds);
 
+  // Auto-expand accordion when the selected account is not pinned — keeps it always visible
+  useEffect(() => {
+    if (selectedId && unpinned.some((a) => a.id === selectedId)) setShowAll(true);
+  }, [selectedId, pinnedAccountIds]);
+
   const StarButton = ({ accountId, isPinned }) =>
     isAdminUser ? (
       <button
