@@ -61,6 +61,7 @@ export default function DashboardSidebar() {
 
   return (
     <nav
+      className="sb-desktop"
       style={sidebarStyle}
       onMouseEnter={(e) => {
         e.currentTarget.style.width = "200px";
