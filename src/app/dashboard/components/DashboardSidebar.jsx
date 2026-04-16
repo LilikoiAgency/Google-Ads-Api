@@ -72,14 +72,15 @@ export default function DashboardSidebar() {
   const isActive = (href) => pathname?.startsWith(href) ?? false;
 
   const sidebarStyle = {
-    width: 56, minHeight: "100vh",
+    width: 56, height: "100vh",
+    position: "sticky", top: 0,
     background: "rgba(8,5,18,0.88)",
     backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
     borderRight: "1px solid rgba(255,255,255,0.07)",
     display: "flex", flexDirection: "column",
     padding: "14px 0", flexShrink: 0,
     transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
-    overflow: "hidden", position: "relative", zIndex: 20,
+    overflow: "hidden", zIndex: 20,
   };
 
   const expandLabel = { opacity: 0, transition: "opacity 0.15s 0.06s", whiteSpace: "nowrap" };
