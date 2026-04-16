@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
 import { MetaAdsIcon } from "../components/DashboardIcons";
+import MobileFilterSheet from "../components/MobileFilterSheet";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -579,6 +580,9 @@ export default function MetaDashboard() {
   const [adSets, setAdSets]           = useState(null);
   const [adSetsLoading, setAdSetsLoading] = useState(false);
 
+  // Mobile filter sheet
+  const [filterOpen, setFilterOpen] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/meta");
   }, [status, router]);
@@ -723,21 +727,66 @@ export default function MetaDashboard() {
         title="Meta Ads"
         subtitle="Facebook & Instagram Campaigns"
       >
-        <AccountPicker
-          accounts={accounts}
-          selected={selectedAccount}
-          onChange={handleAccountChange}
-          loading={accountsLoading}
-        />
-        {data?.campaigns?.length > 0 && (
-          <CampaignPicker
-            campaigns={data.campaigns}
-            selected={selectedCampaign}
-            onChange={setSelectedCampaign}
-            onClear={() => { setSelectedCampaign(null); setAdSets(null); }}
+        <div className="desktop-only" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <AccountPicker
+            accounts={accounts}
+            selected={selectedAccount}
+            onChange={handleAccountChange}
+            loading={accountsLoading}
           />
-        )}
+          {data?.campaigns?.length > 0 && (
+            <CampaignPicker
+              campaigns={data.campaigns}
+              selected={selectedCampaign}
+              onChange={setSelectedCampaign}
+              onClear={() => { setSelectedCampaign(null); setAdSets(null); }}
+            />
+          )}
+        </div>
       </DashboardToolHeader>
+
+      {/* Mobile filter row */}
+      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+        <button
+          onClick={() => setFilterOpen(true)}
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+        >
+          Filters <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+        </button>
+        {selectedAccount && (
+          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>
+            {selectedAccount.name}
+          </span>
+        )}
+      </div>
+
+      {/* Mobile filter sheet */}
+      <MobileFilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => setFilterOpen(false)}
+      >
+        <div style={{ marginBottom: 18 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" }}>Account</p>
+          <AccountPicker
+            accounts={accounts}
+            selected={selectedAccount}
+            onChange={handleAccountChange}
+            loading={accountsLoading}
+          />
+        </div>
+        {data?.campaigns?.length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" }}>Campaign</p>
+            <CampaignPicker
+              campaigns={data.campaigns}
+              selected={selectedCampaign}
+              onChange={setSelectedCampaign}
+              onClear={() => { setSelectedCampaign(null); setAdSets(null); }}
+            />
+          </div>
+        )}
+      </MobileFilterSheet>
 
       {/* ── Date range bar ── */}
       <div className={`bg-customPurple-dark border-b border-white/10 px-6 py-3 ${!selectedAccount ? "hidden" : ""}`}>
