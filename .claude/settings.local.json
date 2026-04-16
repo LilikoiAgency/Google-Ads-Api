@@ -21,7 +21,8 @@
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "Bash(node:*)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('history 401 has requestId:', 'requestId' in d\\); print\\('history 401 has error:', 'error' in d\\)\")",
-      "Bash(cat /c/Users/frank/Documents/GitHub/Google-Ads-Api/.superpowers/brainstorm/*/state/server-info)"
+      "Bash(cat /c/Users/frank/Documents/GitHub/Google-Ads-Api/.superpowers/brainstorm/*/state/server-info)",
+      "Bash(git rm *)"
     ]
   }
 }

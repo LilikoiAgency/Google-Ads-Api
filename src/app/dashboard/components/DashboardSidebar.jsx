@@ -1,63 +1,40 @@
-// src/app/dashboard/components/DashboardSidebar.js
+// src/app/dashboard/components/DashboardSidebar.jsx
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBullseye, faSearch, faScaleBalanced, faMagnifyingGlassChart,
+  faBriefcase, faPeopleGroup, faTv, faChartLine, faRightFromBracket,
+} from "@fortawesome/free-solid-svg-icons";
+import { faFacebook, faSquareWindows } from "@fortawesome/free-brands-svg-icons";
 import { useTheme } from "../../../lib/useTheme";
 import { isAdmin } from "../../../lib/admins";
 
-function IconGrid() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
-}
-function IconMeta() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>;
-}
-function IconMicrosoft() {
-  return <svg width="15" height="15" viewBox="0 0 21 21" fill="none"><rect x="1" y="1" width="9" height="9" fill="#F25022" rx="1"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00" rx="1"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF" rx="1"/><rect x="11" y="11" width="9" height="9" fill="#FFB900" rx="1"/></svg>;
-}
-function IconSearch() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-}
-function IconBars() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
-}
-function IconAudit() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>;
-}
-function IconUsers() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
-}
-function IconVideo() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>;
-}
-function IconPortals() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>;
-}
-function IconChart() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
-}
+const FA = (icon) => <FontAwesomeIcon icon={icon} style={{ width: 15, height: 15 }} />;
 
 const NAV = [
   { label: "Paid Media", items: [
-    { href: "/dashboard/google/ads",  label: "Google Ads",       icon: <IconGrid />      },
-    { href: "/dashboard/meta",        label: "Meta Ads",         icon: <IconMeta />      },
-    { href: "/dashboard/bing",        label: "Microsoft Ads",    icon: <IconMicrosoft /> },
+    { href: "/dashboard/google/ads",     label: "Google Ads",       icon: FA(faBullseye)             },
+    { href: "/dashboard/meta",           label: "Meta Ads",         icon: FA(faFacebook)             },
+    { href: "/dashboard/bing",           label: "Microsoft Ads",    icon: FA(faSquareWindows)        },
   ]},
   { label: "Organic & Reports", items: [
-    { href: "/dashboard/google/organic", label: "Google Organic",  icon: <IconSearch />  },
-    { href: "/report",                   label: "Paid vs Organic", icon: <IconBars />    },
-    { href: "/dashboard/seo-audit",      label: "SEO Audit",       icon: <IconAudit />   },
-    { href: "/dashboard/admin/clients",  label: "Client Portals",  icon: <IconPortals /> },
+    { href: "/dashboard/google/organic", label: "Google Organic",   icon: FA(faSearch)               },
+    { href: "/dashboard/report",         label: "Paid vs Organic",  icon: FA(faScaleBalanced)        },
+    { href: "/dashboard/seo-audit",      label: "SEO Audit",        icon: FA(faMagnifyingGlassChart) },
+    { href: "/dashboard/admin/clients",  label: "Client Portals",   icon: FA(faBriefcase)            },
   ]},
   { label: "Data Tools", items: [
-    { href: "/dashboard/audience-lab", label: "Audience Lab", icon: <IconUsers /> },
-    { href: "/dashboard/streaming",    label: "Streaming",    icon: <IconVideo />  },
+    { href: "/dashboard/audience-lab",   label: "Audience Lab",     icon: FA(faPeopleGroup)          },
+    { href: "/dashboard/streaming",      label: "Streaming",        icon: FA(faTv)                   },
   ]},
 ];
 
 const ADMIN_SECTION = { label: "Admin", items: [
-  { href: "/dashboard/admin/usage", label: "Usage Analytics", icon: <IconChart /> },
+  { href: "/dashboard/admin/usage", label: "Usage Analytics", icon: FA(faChartLine) },
 ]};
 
 export default function DashboardSidebar() {

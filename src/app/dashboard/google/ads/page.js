@@ -7,6 +7,7 @@ import ContentArea from "../../components/ContentArea";
 import { isAdmin } from "../../../../lib/admins";
 import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
+import DashboardLoader from "../../components/DashboardLoader";
 
 function GAdsHeaderIcon() {
   return (
@@ -586,16 +587,7 @@ export default function GoogleAdsDashboard() {
 
   if (showPicker === null || status === "loading" || (showPicker === false && isFetching && allCampaignData.length === 0 && !error)) {
     return (
-      <div className="flex flex-col justify-center items-center flex-1">
-        <h2 className="text-2xl text-customPurple mb-4">
-          {status === "loading" ? "Checking login..." : "Pulling Data From Google...."}
-        </h2>
-        <img
-          src="https://lilikoiagency.com/wp-content/uploads/2024/05/lik-loading-icon-1.gif"
-          alt="Loading..."
-          className="w-100 h-100"
-        />
-      </div>
+      <DashboardLoader label="Pulling data from Google..." />
     );
   }
 
