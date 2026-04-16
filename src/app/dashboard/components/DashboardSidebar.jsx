@@ -7,6 +7,8 @@ import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "../../../lib/useTheme";
 import { isAdmin } from "../../../lib/admins";
 import { useEffect, useRef } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faHouse } from "@fortawesome/free-solid-svg-icons";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon, AudienceLabIcon,
@@ -94,6 +96,51 @@ export default function DashboardSidebar() {
 
       {/* Nav */}
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }} className="sidebar-scrollbar">
+        {/* ── Pinned Home item ── */}
+        {(() => {
+          const homeActive = pathname === "/dashboard";
+          return (
+            <Link
+              href="/dashboard"
+              title="Home"
+              className={`sb-nav-item${homeActive ? " sb-nav-item-active" : ""}`}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "0 10px", height: 38, borderRadius: 10,
+                margin: "1px 6px 6px", cursor: "pointer",
+                transition: "background 0.15s", flexShrink: 0, minWidth: 188,
+                textDecoration: "none",
+                background: homeActive ? "rgba(168,85,247,0.18)" : "transparent",
+                color: homeActive ? "#c084fc" : "rgba(255,255,255,0.45)",
+                position: "relative",
+              }}
+            >
+              <div
+                className="sb-nav-icon"
+                style={{
+                  width: 32, height: 32, borderRadius: 9,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                  background: homeActive ? "rgba(168,85,247,0.25)" : "transparent",
+                  color: homeActive ? "#c084fc" : "rgba(255,255,255,0.45)",
+                  transition: "filter 0.2s",
+                }}
+              >
+                <FontAwesomeIcon icon={faHouse} style={{ width: 15, height: 15 }} />
+              </div>
+              <span className="sb-label" style={{ opacity: 0, transition: "opacity 0.15s 0.06s", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>
+                Home
+              </span>
+              {homeActive && (
+                <div className="sb-active-dot" style={{ width: 4, height: 4, borderRadius: "50%", background: "#a855f7", position: "absolute", right: 10 }} />
+              )}
+            </Link>
+          );
+        })()}
+
+        {/* ── Divider below Home ── */}
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "2px 10px 8px" }} />
+
         {sections.map((section) => (
           <div key={section.label}>
             <div className="sb-label" style={{ ...expandLabel, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(255,255,255,0.2)", padding: "8px 14px 4px", minWidth: 200 }}>
