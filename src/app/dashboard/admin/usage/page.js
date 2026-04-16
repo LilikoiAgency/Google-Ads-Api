@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
+import DashboardToolHeader from "../../components/DashboardToolHeader";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -90,28 +90,19 @@ export default function UsageAnalyticsPage() {
   const { kpis, byTool, users, dailyTrend } = data || {};
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard">
-              <img
-                src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png"
-                alt="Lilikoi Agency"
-                className="h-10 w-10 rounded-full cursor-pointer"
-              />
-            </Link>
-            <div>
-              <p className="text-lg font-semibold text-white">Usage Analytics</p>
-              <p className="text-sm text-gray-400">Dashboard tool adoption</p>
-            </div>
-          </div>
-          <Link href="/dashboard" className="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 transition">
-            Dashboard
-          </Link>
-        </div>
-      </header>
+    <div className="flex flex-col flex-1">
+      <DashboardToolHeader
+        icon={
+          <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
+            <rect x="6" y="28" width="7" height="14" rx="1.5" fill="#ec4899" opacity="0.9"/>
+            <rect x="16" y="20" width="7" height="22" rx="1.5" fill="#ec4899"/>
+            <rect x="26" y="12" width="7" height="30" rx="1.5" fill="#ec4899" opacity="0.8"/>
+            <rect x="36" y="24" width="7" height="18" rx="1.5" fill="#ec4899" opacity="0.6"/>
+          </svg>
+        }
+        title="Usage Analytics"
+        subtitle="Dashboard tool adoption"
+      />
 
       <div className="mx-auto max-w-6xl px-6 py-10">
         {error && (

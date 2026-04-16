@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import "../../globals.css";
-
-const ADMIN_EMAILS = ["frank@lilikoiagency.com"];
+import DashboardToolHeader from "../components/DashboardToolHeader";
+import { isAdmin } from "../../../lib/admins";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,7 +130,7 @@ export default function AudienceLabPage() {
   const { data: session, status } = useSession();
 
   const userEmail = session?.user?.email || "";
-  const isAdminUser = ADMIN_EMAILS.includes(userEmail.toLowerCase());
+  const isAdminUser = isAdmin(userEmail);
 
   const [activeTab, setActiveTab]         = useState("segments"); // "segments" | "audiences"
   const [slots, setSlots]                 = useState([]);
@@ -325,65 +324,42 @@ export default function AudienceLabPage() {
   const allAudienceCount = slots.filter((s) => s.occupied && s.segment?.entityType === "audience").length;
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
+    <div className="flex flex-col flex-1">
 
-      {/* ── Header ── */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-sm text-white hover:bg-white/20 transition">←</Link>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-                <rect x="3"  y="3"  width="7" height="7" rx="1" fill="#4285F4"/>
-                <rect x="14" y="3"  width="7" height="7" rx="1" fill="#EA4335"/>
-                <rect x="3"  y="14" width="7" height="7" rx="1" fill="#34A853"/>
-                <rect x="14" y="14" width="7" height="7" rx="1" fill="#FBBC04"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-white">Audience Lab</p>
-              <p className="text-sm text-gray-400">
-                {tabOccupied} of {tabMax} {isAudienceTab ? "audience" : "segment"} slots used · Syncs every Monday
-                {isAdminUser && <span className="ml-2 rounded-full bg-purple-500/20 px-2 py-0.5 text-xs font-semibold text-purple-300">Admin</span>}
-              </p>
-            </div>
-          </div>
-          {isAdminUser && (
-            <button onClick={() => openAdd(null)} className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 transition px-4 py-2 text-sm font-semibold text-white">
-              <span className="text-base leading-none">+</span> Add {isAudienceTab ? "Audience" : "Segment"}
-            </button>
-          )}
-        </div>
+      <DashboardToolHeader
+        icon={
+          <svg viewBox="0 0 48 48" width="16" height="16">
+            <circle cx="16" cy="16" r="8" fill="#4285F4"/>
+            <circle cx="32" cy="16" r="8" fill="#EA4335" opacity="0.85"/>
+            <circle cx="24" cy="30" r="8" fill="#34A853" opacity="0.85"/>
+          </svg>
+        }
+        title="Audience Lab"
+        subtitle={`${tabOccupied} of ${tabMax} ${isAudienceTab ? "audience" : "segment"} slots used · Syncs every Monday`}
+      >
+        {isAdminUser && (
+          <button
+            onClick={() => openAdd(null)}
+            className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 transition px-4 py-2 text-sm font-semibold text-white"
+          >
+            <span className="text-base leading-none">+</span> Add {isAudienceTab ? "Audience" : "Segment"}
+          </button>
+        )}
+      </DashboardToolHeader>
 
-        {/* ── Tabs ── */}
-        <div className="mx-auto max-w-6xl mt-4">
-          <div className="flex gap-1 bg-white/5 rounded-xl p-1 w-fit">
-            <button
-              onClick={() => setActiveTab("segments")}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === "segments" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
-            >
-              {/* Bullseye icon */}
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-              </svg>
-              Segments
-              {allSegmentCount > 0 && <span className="ml-1 rounded-full bg-purple-100 text-purple-700 px-1.5 py-0.5 text-xs font-bold">{allSegmentCount}</span>}
-            </button>
-            <button
-              onClick={() => setActiveTab("audiences")}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === "audiences" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
-            >
-              {/* People group icon */}
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
-              Audiences
-              {allAudienceCount > 0 && <span className="ml-1 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-xs font-bold">{allAudienceCount}</span>}
-            </button>
-          </div>
+      {/* ── Tabs ── */}
+      <div className="px-6 py-3 border-b border-white/10">
+        <div className="flex gap-1 bg-white/5 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("segments")}
+            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${activeTab === "segments" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white"}`}
+          >Segments</button>
+          <button
+            onClick={() => setActiveTab("audiences")}
+            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${activeTab === "audiences" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white"}`}
+          >Audiences</button>
         </div>
-      </header>
+      </div>
 
       {/* ── Body ── */}
       <div className="bg-gray-50 min-h-[calc(100vh-73px)]">

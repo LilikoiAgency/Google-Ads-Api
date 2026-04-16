@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import "../../../globals.css";
+import DashboardToolHeader from "../../components/DashboardToolHeader";
 
 
 const EMPTY_FORM = {
@@ -329,24 +330,19 @@ export default function AdminClientsPage() {
 
 
   return (
-    <div className="min-h-screen bg-customPurple-dark">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-sm text-white hover:bg-white/20 transition">←</Link>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm text-xl">🏢</div>
-            <div>
-              <p className="text-lg font-semibold text-white">Client Portals</p>
-              <p className="text-sm text-gray-400">{clients.length} client{clients.length !== 1 ? "s" : ""} configured</p>
-            </div>
-          </div>
-          <button onClick={openAdd}
-            className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 transition px-4 py-2 text-sm font-semibold text-white">
-            <span className="text-base leading-none">+</span> New Client
-          </button>
-        </div>
-      </header>
+    <div className="flex flex-col flex-1">
+      <DashboardToolHeader
+        icon={
+          <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
+            <circle cx="18" cy="16" r="7" fill="#6d28d9" opacity="0.9"/>
+            <circle cx="33" cy="16" r="5" fill="#a78bfa" opacity="0.8"/>
+            <ellipse cx="18" cy="34" rx="12" ry="7" fill="#6d28d9" opacity="0.85"/>
+            <ellipse cx="34" cy="34" rx="9" ry="6" fill="#a78bfa" opacity="0.7"/>
+          </svg>
+        }
+        title="Client Portals"
+        subtitle="Manage client-facing portals"
+      />
 
       {/* Body */}
       <div className="bg-gray-50 min-h-[calc(100vh-73px)]">

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import DashboardToolHeader from "../components/DashboardToolHeader";
 import Papa from "papaparse";
 import {
   validateFileType, processAll, filterData, createConversionsObject,
@@ -43,6 +44,15 @@ function makeBarTraces(dataObj, y1Key, y1Name, y2Key, y2Name) {
 }
 
 // ── sub-components ─────────────────────────────────────────────────────────────
+
+function StreamingIconSVG() {
+  return (
+    <svg viewBox="0 0 48 48" width="16" height="16" fill="none">
+      <rect x="2" y="12" width="44" height="28" rx="4" stroke="#0ea5e9" strokeWidth="2.5"/>
+      <polygon points="21,22 21,30 30,26" fill="#0ea5e9"/>
+    </svg>
+  );
+}
 
 function StatCard({ label, value }) {
   return (
@@ -408,39 +418,11 @@ export default function StreamingPage() {
     }
   };
 
-  // ── shared header ──────────────────────────────────────────────────────────
-  const StreamingHeader = ({ backFn, backLabel, subtitle }) => (
-    <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4 sticky top-0 z-10">
-      <div className="mx-auto flex max-w-6xl items-center gap-3">
-        {backFn ? (
-          <button onClick={backFn}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm">←</button>
-        ) : (
-          <Link href="/dashboard"
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm">←</Link>
-        )}
-        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-sm flex-shrink-0">
-          <svg viewBox="0 0 40 40" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="2" y="10" width="36" height="22" rx="4" fill="#0ea5e9" opacity="0.2"/>
-            <rect x="2" y="10" width="36" height="22" rx="4" stroke="#0ea5e9" strokeWidth="2"/>
-            <path d="M13 6l-3 4M27 6l3 4" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="20" cy="21" r="5" fill="#0ea5e9" opacity="0.3"/>
-            <polygon points="18,18 18,24 24,21" fill="#0ea5e9"/>
-          </svg>
-        </div>
-        <div>
-          <p className="text-lg font-semibold text-white">Targeted Streaming{selectedClient ? ` · ${selectedClient.name}` : ""}</p>
-          <p className="text-sm text-gray-400">{subtitle || "Path-to-Conversion Analysis"}</p>
-        </div>
-      </div>
-    </header>
-  );
-
   // ── client picker screen ───────────────────────────────────────────────────
   if (step === "clients") {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <StreamingHeader subtitle="Select a client to get started" />
+      <div className="flex flex-col flex-1">
+        <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle="Select a client to get started" />
         <div className="mx-auto max-w-4xl px-6 py-8">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Choose a Client</p>
           {/* Quick View — always shown first */}
@@ -512,8 +494,8 @@ export default function StreamingPage() {
       return e && e !== s ? `${s} – ${e}` : s;
     };
     return (
-      <div className="min-h-screen bg-gray-50">
-        <StreamingHeader backFn={() => { setSelectedClient(null); setStep("clients"); }} subtitle={selectedClient ? "Upload a report or view a previous one" : "Quick View — no client selected"} />
+      <div className="flex flex-col flex-1">
+        <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle={selectedClient ? "Upload a report or view a previous one" : "Quick View — no client selected"}><button onClick={() => { setSelectedClient(null); setStep("clients"); }} style={{ display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,0.7)",fontSize:12,cursor:"pointer" }}>← Back</button></DashboardToolHeader>
         <div className="mx-auto max-w-4xl px-6 py-8 space-y-8">
 
           {/* Upload new report */}
@@ -578,8 +560,8 @@ export default function StreamingPage() {
   // ── processing screen ──────────────────────────────────────────────────────
   if (step === "processing") {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <StreamingHeader subtitle="Processing your file…" />
+      <div className="flex flex-col flex-1">
+        <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle="Processing your file…" />
         <div className="flex flex-col items-center justify-center" style={{ minHeight: "calc(100vh - 73px)" }}>
           <div className="rounded-2xl bg-white border border-gray-200 p-10 text-center w-full max-w-md mx-6">
             <div className="text-4xl mb-4">⚙️</div>
@@ -616,50 +598,27 @@ export default function StreamingPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-customPurple-dark px-6 py-4 sticky top-0 z-10">
-        <div className="mx-auto max-w-6xl flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setStep("client"); setProcessedData(null); setRawData([]); setViewingReportId(null); }}
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition text-white text-sm">←</button>
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-sm flex-shrink-0">
-              <svg viewBox="0 0 40 40" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="10" width="36" height="22" rx="4" fill="#0ea5e9" opacity="0.2"/>
-                <rect x="2" y="10" width="36" height="22" rx="4" stroke="#0ea5e9" strokeWidth="2"/>
-                <path d="M13 6l-3 4M27 6l3 4" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round"/>
-                <circle cx="20" cy="21" r="5" fill="#0ea5e9" opacity="0.3"/>
-                <polygon points="18,18 18,24 24,21" fill="#0ea5e9"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-white">
-                {selectedClient?.name || "Targeted Streaming"}
-              </p>
-              <p className="text-xs text-gray-400">{fileName}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            {viewingReportId ? (
-              <span className="text-sm text-sky-400 font-medium">📺 Saved report</span>
-            ) : selectedClient ? (
-              <>
-                <button
-                  onClick={saveReport}
-                  disabled={saving || !!saveStatus}
-                  className="rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 transition"
-                >
-                  {saving ? "Saving…" : "Save Report"}
-                </button>
-                {saveStatus === "ok"    && <span className="text-sm text-green-400 font-medium">✓ Saved!</span>}
-                {saveStatus === "error" && <span className="text-sm text-red-400 font-medium">Save failed</span>}
-              </>
-            ) : (
-              <span className="text-sm text-gray-400 font-medium">⚡ Quick View</span>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="flex flex-col flex-1">
+      <DashboardToolHeader icon={<StreamingIconSVG />} title="Targeted Streaming" subtitle={fileName}>
+        <button onClick={() => { setStep("client"); setProcessedData(null); setRawData([]); setViewingReportId(null); }} style={{ display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,0.7)",fontSize:12,cursor:"pointer" }}>← Back</button>
+        {viewingReportId ? (
+          <span className="text-sm text-sky-400 font-medium">📺 Saved report</span>
+        ) : selectedClient ? (
+          <>
+            <button
+              onClick={saveReport}
+              disabled={saving || !!saveStatus}
+              className="rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 transition"
+            >
+              {saving ? "Saving…" : "Save Report"}
+            </button>
+            {saveStatus === "ok"    && <span className="text-sm text-green-400 font-medium">✓ Saved!</span>}
+            {saveStatus === "error" && <span className="text-sm text-red-400 font-medium">Save failed</span>}
+          </>
+        ) : (
+          <span className="text-sm text-gray-400 font-medium">⚡ Quick View</span>
+        )}
+      </DashboardToolHeader>
 
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-8">
 
