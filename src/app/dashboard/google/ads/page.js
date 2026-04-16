@@ -141,7 +141,7 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
   const AccountRow = ({ a, isPinned }) => (
     <button
       key={a.id}
-      onClick={() => { onChange(a.id); setOpen(false); }}
+      onClick={() => { onChange(a.id); setOpen(false); setShowAll(false); }}
       className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
         a.id === selectedId ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
       }`}
@@ -602,6 +602,7 @@ export default function GoogleAdsDashboard() {
                     onClick={() => {
                       sessionStorage.setItem("gads_customer_id", c.id);
                       localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
+                      setPickerShowAll(false);
                       setShowPicker(false);
                     }}
                     className="w-full flex items-center gap-4 rounded-2xl bg-white/10 border border-white/10 px-5 py-4 hover:bg-white/20 hover:border-white/20 transition text-left"
