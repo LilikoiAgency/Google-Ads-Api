@@ -56,3 +56,13 @@ body {
 nav:hover .sb-active-dot {
   opacity: 0;
 }
+
+/* Sidebar nav icons — grayscale by default, full color on hover or active */
+.sb-nav-icon {
+  filter: grayscale(1) opacity(0.55);
+  transition: filter 0.18s;
+}
+.sb-nav-item:hover .sb-nav-icon,
+.sb-nav-item-active .sb-nav-icon {
+  filter: none;
+}

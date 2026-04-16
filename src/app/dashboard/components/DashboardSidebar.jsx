@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faScaleBalanced, faMagnifyingGlassChart,
+  faFileLines, faMagnifyingGlassChart,
   faBriefcase, faPeopleGroup, faTv, faChartLine,
 } from "@fortawesome/free-solid-svg-icons";
 import { useTheme } from "../../../lib/useTheme";
@@ -61,7 +61,7 @@ const NAV = [
   ]},
   { label: "Organic & Reports", items: [
     { href: "/dashboard/google/organic", label: "Google Organic",  icon: <SearchConsoleIcon />                           },
-    { href: "/dashboard/report",         label: "Paid vs Organic", icon: FA(faScaleBalanced,        "#f59e0b")           },
+    { href: "/dashboard/report",         label: "Paid vs Organic", icon: FA(faFileLines,            "#f59e0b")           },
     { href: "/dashboard/seo-audit",      label: "SEO Audit",       icon: FA(faMagnifyingGlassChart, "#0d9488")           },
     { href: "/dashboard/admin/clients",  label: "Client Portals",  icon: FA(faBriefcase,            "#a855f7")           },
   ]},
@@ -129,8 +129,9 @@ export default function DashboardSidebar() {
               const active = isActive(item.href);
               return (
                 <Link key={item.href} href={item.href} title={item.label}
+                  className={`sb-nav-item${active ? " sb-nav-item-active" : ""}`}
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 10px", height: 38, borderRadius: 10, margin: "1px 6px", cursor: "pointer", transition: "background 0.15s", flexShrink: 0, minWidth: 188, textDecoration: "none", background: active ? "rgba(168,85,247,0.18)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)", position: "relative" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: active ? "rgba(168,85,247,0.25)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)" }}>
+                  <div className="sb-nav-icon" style={{ width: 32, height: 32, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: active ? "rgba(168,85,247,0.25)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)", transition: "filter 0.2s" }}>
                     {item.icon}
                   </div>
                   <span className="sb-label" style={{ ...expandLabel, fontSize: 12, fontWeight: 600 }}>{item.label}</span>
