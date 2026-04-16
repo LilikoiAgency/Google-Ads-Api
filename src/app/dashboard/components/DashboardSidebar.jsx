@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "../../../lib/useTheme";
 import { isAdmin } from "../../../lib/admins";
+import { useEffect, useRef } from "react";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon, AudienceLabIcon,
@@ -44,6 +45,19 @@ export default function DashboardSidebar() {
   const adminUser = isAdmin(email);
   const sections = adminUser ? [...NAV, ADMIN_SECTION] : NAV;
   const isActive = (href) => pathname?.startsWith(href) ?? false;
+
+  // ── Client-side page view logging (reliable: edge middleware fire-and-forget drops) ──
+  const lastLoggedPath = useRef(null);
+  useEffect(() => {
+    if (!email || !pathname) return;
+    if (pathname === lastLoggedPath.current) return; // dedupe same-path re-renders
+    lastLoggedPath.current = pathname;
+    fetch("/api/admin/usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, path: pathname }),
+    }).catch(() => {}); // non-blocking, best-effort
+  }, [pathname, email]);
 
   const sidebarStyle = {
     width: 56, height: "100vh",
