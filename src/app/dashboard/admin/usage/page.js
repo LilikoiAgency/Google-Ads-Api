@@ -100,7 +100,7 @@ export default function UsageAnalyticsPage() {
 
         {/* KPI Cards */}
         {kpis && (
-          <div style={{ display: "flex", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
+          <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
             <KpiCard label="Page Views (7d)" value={kpis.total7d?.toLocaleString() || "0"} color="blue" />
             <KpiCard label="Unique Users (7d)" value={kpis.uniqueUsers7d || "0"} color="green" />
             <KpiCard label="Most Used Tool" value={kpis.topTool7d || "—"} color="orange" />
