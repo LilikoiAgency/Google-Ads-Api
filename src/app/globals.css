@@ -51,3 +51,8 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Sidebar expand-on-hover: active dot hides when expanded */
+nav:hover .sb-active-dot {
+  opacity: 0;
+}
