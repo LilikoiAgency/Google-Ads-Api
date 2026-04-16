@@ -20,6 +20,7 @@ const TOOL_MAP = {
   "/dashboard/admin/clients":  "Client Portals",
   "/dashboard/admin/usage":    "Usage Analytics",
   "/report":                   "Paid vs Organic Report",
+  "/dashboard/report":         "Paid vs Organic Report",
 };
 
 function pathToTool(path) {
