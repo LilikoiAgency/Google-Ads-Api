@@ -129,43 +129,39 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
   const current = accounts.find((a) => a.id === selectedId);
   const { pinned, unpinned } = sortWithPinned(accounts, pinnedAccountIds);
 
-  // Auto-expand accordion when the selected account is not pinned — keeps it always visible
   useEffect(() => {
     if (selectedId && unpinned.some((a) => a.id === selectedId)) setShowAll(true);
   }, [selectedId, pinnedAccountIds]);
 
-  const StarButton = ({ accountId, isPinned }) =>
-    isAdminUser ? (
-      <button
-        onClick={(e) => { e.stopPropagation(); onTogglePin(accountId); }}
-        title={isPinned ? "Unpin account" : "Pin account"}
-        className="ml-2 text-base leading-none flex-shrink-0 hover:scale-110 transition-transform"
-      >
-        {isPinned ? "⭐" : "☆"}
-      </button>
-    ) : null;
-
   const AccountRow = ({ a, isPinned }) => (
-    <button
-      key={a.id}
-      onClick={() => { onChange(a.id); setOpen(false); setShowAll(false); }}
-      className={`flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
-        a.id === selectedId ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="font-medium truncate">{a.name}</p>
-        <p className="text-xs text-gray-400 mt-0.5">ID: {a.id}</p>
-      </div>
-      <div className="flex items-center ml-3 flex-shrink-0">
-        <StarButton accountId={a.id} isPinned={isPinned} />
+    <div className="flex items-stretch">
+      <button
+        onClick={() => { onChange(a.id); setOpen(false); setShowAll(false); }}
+        className={`flex items-center gap-3 flex-1 min-w-0 px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
+          a.id === selectedId ? "bg-purple-50 text-purple-700 font-semibold" : "text-gray-700"
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="font-medium truncate">{a.name}</p>
+          <p className="text-xs text-gray-400 mt-0.5">ID: {a.id}</p>
+        </div>
         {a.id === selectedId && (
-          <svg className="w-4 h-4 text-purple-600 ml-2" fill="none" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" viewBox="0 0 24 24">
             <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         )}
-      </div>
-    </button>
+      </button>
+      {isAdminUser && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onTogglePin(a.id); }}
+          title={isPinned ? "Remove from main accounts" : "Add to main accounts"}
+          className={`flex-shrink-0 px-3 border-l border-gray-100 flex flex-col items-center justify-center gap-0.5 transition hover:bg-gray-50 ${isPinned ? "text-amber-500" : "text-gray-300 hover:text-amber-400"}`}
+        >
+          <span className="text-base leading-none">{isPinned ? "⭐" : "☆"}</span>
+          <span className="text-[9px] font-semibold leading-none">{isPinned ? "Main" : "Pin"}</span>
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -181,21 +177,36 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[240px] rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[280px] rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+          {pinned.length > 0 && (
+            <div className="px-4 pt-2 pb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500">⭐ Main Accounts</p>
+            </div>
+          )}
           {pinned.map((a) => <AccountRow key={a.id} a={a} isPinned />)}
 
           {unpinned.length > 0 && (
             <>
-              {/* Only collapse unpinned if there are pinned accounts to separate from */}
               {pinned.length > 0 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowAll((v) => !v); }}
-                  className="w-full px-4 py-2 text-xs text-gray-400 text-left hover:bg-gray-50 border-t border-gray-100 flex items-center gap-1"
-                >
-                  {showAll ? "▲ Show less" : `▾ ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
-                </button>
+                <div className="border-t border-gray-100">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowAll((v) => !v); }}
+                    className="w-full px-4 py-2 text-xs text-gray-400 text-left hover:bg-gray-50 flex items-center gap-1"
+                  >
+                    {showAll ? "▲ Show less" : `▾ ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+                  </button>
+                </div>
               )}
-              {(showAll || pinned.length === 0) && unpinned.map((a) => <AccountRow key={a.id} a={a} isPinned={false} />)}
+              {(showAll || pinned.length === 0) && (
+                <>
+                  {pinned.length === 0 && isAdminUser && (
+                    <div className="px-4 pt-2 pb-1">
+                      <p className="text-[10px] text-gray-400">Star an account to pin it to the top</p>
+                    </div>
+                  )}
+                  {unpinned.map((a) => <AccountRow key={a.id} a={a} isPinned={false} />)}
+                </>
+              )}
             </>
           )}
 
@@ -631,7 +642,7 @@ export default function GoogleAdsDashboard() {
             ) : (() => {
               const { pinned, unpinned } = sortWithPinned(pickerCustomers, pinnedAccountIds);
               const PickerRow = ({ c, isPinned }) => (
-                <div style={{ position: "relative", marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <button
                     onClick={() => {
                       sessionStorage.setItem("gads_customer_id", c.id);
@@ -639,7 +650,7 @@ export default function GoogleAdsDashboard() {
                       setPickerShowAll(false);
                       setShowPicker(false);
                     }}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, borderRadius: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", padding: "14px 18px", cursor: "pointer", textAlign: "left" }}
+                    style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 14, borderRadius: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", padding: "14px 18px", cursor: "pointer", textAlign: "left" }}
                   >
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <svg viewBox="0 0 48 48" style={{ width: 20, height: 20 }}><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
@@ -648,27 +659,52 @@ export default function GoogleAdsDashboard() {
                       <p style={{ fontWeight: 700, color: "rgba(255,255,255,0.9)", margin: 0, fontSize: 14 }}>{c.name}</p>
                       <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", margin: 0, marginTop: 2 }}>ID: {c.id}</p>
                     </div>
-                    {isPinned && <span style={{ fontSize: 16, flexShrink: 0 }}>⭐</span>}
                   </button>
                   {isAdminUser && (
-                    <button onClick={(e) => { e.stopPropagation(); handleTogglePin(c.id); }}
-                      title={isPinned ? "Unpin" : "Pin"}
-                      style={{ position: "absolute", top: 10, right: 10, fontSize: 14, background: "none", border: "none", cursor: "pointer", opacity: 0.6 }}>
-                      {isPinned ? "⭐" : "☆"}
+                    <button
+                      onClick={() => handleTogglePin(c.id)}
+                      title={isPinned ? "Remove from main accounts" : "Add to main accounts"}
+                      style={{
+                        flexShrink: 0, width: 64, borderRadius: 16,
+                        background: isPinned ? "rgba(251,191,36,0.15)" : "rgba(255,255,255,0.06)",
+                        border: isPinned ? "1px solid rgba(251,191,36,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                        cursor: "pointer", display: "flex", flexDirection: "column",
+                        alignItems: "center", justifyContent: "center", gap: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 20, lineHeight: 1 }}>{isPinned ? "⭐" : "☆"}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: isPinned ? "rgba(251,191,36,0.9)" : "rgba(255,255,255,0.3)" }}>
+                        {isPinned ? "Main" : "Pin"}
+                      </span>
                     </button>
                   )}
                 </div>
               );
               return (
                 <div>
+                  {pinned.length > 0 && (
+                    <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(251,191,36,0.7)", margin: "0 0 10px" }}>
+                      ⭐ Main Accounts
+                    </p>
+                  )}
                   {pinned.map((c) => <PickerRow key={c.id} c={c} isPinned />)}
                   {unpinned.length > 0 && (
                     <>
                       {pinned.length > 0 && (
-                        <button onClick={() => setPickerShowAll((v) => !v)}
-                          style={{ width: "100%", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.35)", background: "none", border: "none", cursor: "pointer", padding: "8px 0" }}>
-                          {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
-                        </button>
+                        <>
+                          <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(255,255,255,0.25)", margin: "16px 0 8px" }}>
+                            All Accounts
+                          </p>
+                          <button onClick={() => setPickerShowAll((v) => !v)}
+                            style={{ width: "100%", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.35)", background: "none", border: "none", cursor: "pointer", padding: "4px 0 10px" }}>
+                            {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+                          </button>
+                        </>
+                      )}
+                      {pinned.length === 0 && isAdminUser && (
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "0 0 12px", textAlign: "center" }}>
+                          Press <strong style={{ color: "rgba(255,255,255,0.5)" }}>Pin</strong> on any account to make it a Main Account
+                        </p>
                       )}
                       {(pickerShowAll || pinned.length === 0) && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
                     </>
