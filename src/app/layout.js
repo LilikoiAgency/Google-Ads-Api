@@ -16,6 +16,8 @@ export default function RootLayout({ children }) {
           href="https://lilikoiagency.com/wp-content/uploads/2020/06/LIK-Logo-Icon-Favicon-No-Background.png"
           sizes="32x32"
         />
+        {/* Runs before React hydrates — prevents theme flash on refresh */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('lik-theme');document.documentElement.dataset.theme=(t==='dark'||t==='light')?t:'light';}catch(e){}})();` }} />
       </head>
       <body>
         <Providers>{children}</Providers>
