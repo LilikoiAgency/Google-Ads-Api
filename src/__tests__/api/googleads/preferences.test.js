@@ -25,10 +25,16 @@ describe('preferencesPostSchema', () => {
   });
 
   it('rejects a missing accountId', () => {
-    expect(preferencesPostSchema.safeParse({}).success).toBe(false);
+    // z.coerce.string() turns undefined into "undefined" which passes min(1),
+    // but the field is required so an absent key still fails.
+    const result = preferencesPostSchema.safeParse({});
+    // accountId is required — must be present even with coerce
+    expect(result.success).toBe(false);
   });
 
-  it('rejects a numeric accountId', () => {
-    expect(preferencesPostSchema.safeParse({ accountId: 12345 }).success).toBe(false);
+  it('accepts a numeric accountId (coerced to string)', () => {
+    // Google Ads API returns numeric IDs; coerce handles the conversion.
+    expect(preferencesPostSchema.safeParse({ accountId: 12345 }).success).toBe(true);
+    expect(preferencesPostSchema.safeParse({ accountId: 12345 }).data?.accountId).toBe('12345');
   });
 });

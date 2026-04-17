@@ -39,7 +39,7 @@ export async function GET() {
         const customers = rows
             .filter((r) => r.customer_client.id !== credentials.customer_id)
             .map((r) => ({
-                id: r.customer_client.id,
+                id: String(r.customer_client.id),
                 name: r.customer_client.descriptive_name,
             }));
 

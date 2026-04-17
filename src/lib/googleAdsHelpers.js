@@ -113,12 +113,12 @@ export function mapJobStatus(v) {
  * @returns {{ pinned: Array, unpinned: Array }}
  */
 export function sortWithPinned(accounts, pinnedIds) {
-  const pinnedSet = new Set(pinnedIds);
+  const pinnedSet = new Set(pinnedIds.map(String));
   const pinned = pinnedIds
-    .map((id) => accounts.find((a) => a.id === id))
+    .map((id) => accounts.find((a) => String(a.id) === String(id)))
     .filter(Boolean);
   const unpinned = accounts
-    .filter((a) => !pinnedSet.has(a.id))
+    .filter((a) => !pinnedSet.has(String(a.id)))
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return { pinned, unpinned };
 }

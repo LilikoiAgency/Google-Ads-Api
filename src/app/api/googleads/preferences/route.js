@@ -10,7 +10,10 @@ const DB = 'tokensApi';
 const COLLECTION = 'GoogleAdsPreferences';
 
 export const preferencesPostSchema = z.object({
-  accountId: z.string().min(1),
+  accountId: z.preprocess(
+    (v) => (typeof v === 'number' ? String(v) : v),
+    z.string().min(1)
+  ),
 });
 
 export async function GET() {
