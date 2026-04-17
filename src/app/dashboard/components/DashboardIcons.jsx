@@ -10,7 +10,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { faMeta, faSquareWindows } from "@fortawesome/free-brands-svg-icons";
 
-const S = 16; // default icon size (sidebar/header); pass size prop to override
+const S = 19; // default icon size (sidebar); pass size prop to override
 
 export function GoogleAdsIcon({ size = S }) {
   return (

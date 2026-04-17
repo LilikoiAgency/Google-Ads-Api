@@ -2,25 +2,25 @@ import { useState, useEffect } from 'react';
 
 const THEME_KEY = 'lik-theme';
 
-/**
- * Persists and exposes the current UI theme ('dark' | 'light').
- * Reads from localStorage synchronously via lazy initializer — no flash on remount.
- * Writes to localStorage on every change.
- * Default: 'light'.
- */
 export function useTheme() {
-  const [theme, setTheme] = useState(() => {
-    // typeof window check keeps SSR safe (server always gets the default)
-    if (typeof window === 'undefined') return 'light';
-    const saved = localStorage.getItem(THEME_KEY);
-    return saved === 'light' || saved === 'dark' ? saved : 'light';
-  });
+  // Always start with 'light' to match server render — avoids hydration mismatch.
+  // After mount, sync the real value from localStorage.
+  const [theme, setTheme] = useState('light');
+  const [mounted, setMounted] = useState(false);
 
-  // Persist on change and apply to document root for CSS targeting
   useEffect(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    const initial = saved === 'dark' || saved === 'light' ? saved : 'light';
+    setTheme(initial);
+    document.documentElement.dataset.theme = initial;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     localStorage.setItem(THEME_KEY, theme);
     document.documentElement.dataset.theme = theme;
-  }, [theme]);
+  }, [theme, mounted]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 

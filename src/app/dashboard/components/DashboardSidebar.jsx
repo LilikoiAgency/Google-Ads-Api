@@ -48,21 +48,21 @@ export default function DashboardSidebar() {
   const sections = adminUser ? [...NAV, ADMIN_SECTION] : NAV;
   const isActive = (href) => pathname?.startsWith(href) ?? false;
 
-  // ── Client-side page view logging (reliable: edge middleware fire-and-forget drops) ──
+  // ── Client-side page view logging ──
   const lastLoggedPath = useRef(null);
   useEffect(() => {
     if (!email || !pathname) return;
-    if (pathname === lastLoggedPath.current) return; // dedupe same-path re-renders
+    if (pathname === lastLoggedPath.current) return;
     lastLoggedPath.current = pathname;
     fetch("/api/admin/usage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, path: pathname }),
-    }).catch(() => {}); // non-blocking, best-effort
+    }).catch(() => {});
   }, [pathname, email]);
 
   const sidebarStyle = {
-    width: 56, height: "100vh",
+    width: 68, height: "100vh",
     position: "sticky", top: 0,
     background: "rgba(8,5,18,0.88)",
     backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
@@ -80,17 +80,17 @@ export default function DashboardSidebar() {
       className="sb-desktop"
       style={sidebarStyle}
       onMouseEnter={(e) => {
-        e.currentTarget.style.width = "200px";
+        e.currentTarget.style.width = "216px";
         e.currentTarget.querySelectorAll(".sb-label").forEach(el => (el.style.opacity = "1"));
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.width = "56px";
+        e.currentTarget.style.width = "68px";
         e.currentTarget.querySelectorAll(".sb-label").forEach(el => (el.style.opacity = "0"));
       }}
     >
       {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 13px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: 8, flexShrink: 0, minWidth: 200 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg, #7c3aed, #a855f7)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "white" }}>L</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 15px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: 8, flexShrink: 0, minWidth: 216 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #7c3aed, #a855f7)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "white" }}>L</div>
         <span className="sb-label" style={{ ...expandLabel, fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.9)" }}>Lilikoi Agency</span>
       </div>
 
@@ -106,9 +106,9 @@ export default function DashboardSidebar() {
               className={`sb-nav-item${homeActive ? " sb-nav-item-active" : ""}`}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "0 10px", height: 38, borderRadius: 10,
+                padding: "0 12px", height: 46, borderRadius: 12,
                 margin: "1px 6px 6px", cursor: "pointer",
-                transition: "background 0.15s", flexShrink: 0, minWidth: 188,
+                transition: "background 0.15s", flexShrink: 0, minWidth: 200,
                 textDecoration: "none",
                 background: homeActive ? "rgba(168,85,247,0.18)" : "transparent",
                 color: homeActive ? "#c084fc" : "rgba(255,255,255,0.45)",
@@ -118,7 +118,7 @@ export default function DashboardSidebar() {
               <div
                 className="sb-nav-icon"
                 style={{
-                  width: 32, height: 32, borderRadius: 9,
+                  width: 38, height: 38, borderRadius: 10,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0,
                   background: homeActive ? "rgba(168,85,247,0.25)" : "transparent",
@@ -126,9 +126,9 @@ export default function DashboardSidebar() {
                   transition: "filter 0.2s",
                 }}
               >
-                <FontAwesomeIcon icon={faHouse} style={{ width: 15, height: 15 }} />
+                <FontAwesomeIcon icon={faHouse} style={{ width: 18, height: 18 }} />
               </div>
-              <span className="sb-label" style={{ opacity: 0, transition: "opacity 0.15s 0.06s", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>
+              <span className="sb-label" style={{ opacity: 0, transition: "opacity 0.15s 0.06s", whiteSpace: "nowrap", fontSize: 13, fontWeight: 600 }}>
                 Home
               </span>
               {homeActive && (
@@ -143,7 +143,7 @@ export default function DashboardSidebar() {
 
         {sections.map((section) => (
           <div key={section.label}>
-            <div className="sb-label" style={{ ...expandLabel, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(255,255,255,0.2)", padding: "8px 14px 4px", minWidth: 200 }}>
+            <div className="sb-label" style={{ ...expandLabel, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(255,255,255,0.2)", padding: "8px 14px 4px", minWidth: 216 }}>
               {section.label}
             </div>
             {section.items.map((item) => {
@@ -151,11 +151,11 @@ export default function DashboardSidebar() {
               return (
                 <Link key={item.href} href={item.href} title={item.label}
                   className={`sb-nav-item${active ? " sb-nav-item-active" : ""}`}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 10px", height: 38, borderRadius: 10, margin: "1px 6px", cursor: "pointer", transition: "background 0.15s", flexShrink: 0, minWidth: 188, textDecoration: "none", background: active ? "rgba(168,85,247,0.18)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)", position: "relative" }}>
-                  <div className="sb-nav-icon" style={{ width: 32, height: 32, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: active ? "rgba(168,85,247,0.25)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)", transition: "filter 0.2s" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 12px", height: 46, borderRadius: 12, margin: "1px 6px", cursor: "pointer", transition: "background 0.15s", flexShrink: 0, minWidth: 200, textDecoration: "none", background: active ? "rgba(168,85,247,0.18)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)", position: "relative" }}>
+                  <div className="sb-nav-icon" style={{ width: 38, height: 38, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: active ? "rgba(168,85,247,0.25)" : "transparent", color: active ? "#c084fc" : "rgba(255,255,255,0.45)", transition: "filter 0.2s" }}>
                     {item.icon}
                   </div>
-                  <span className="sb-label" style={{ ...expandLabel, fontSize: 12, fontWeight: 600 }}>{item.label}</span>
+                  <span className="sb-label" style={{ ...expandLabel, fontSize: 13, fontWeight: 600 }}>{item.label}</span>
                   {active && <div className="sb-active-dot" style={{ width: 4, height: 4, borderRadius: "50%", background: "#a855f7", position: "absolute", right: 10 }} />}
                 </Link>
               );
@@ -167,16 +167,17 @@ export default function DashboardSidebar() {
       {/* Bottom */}
       <div>
         <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "8px 10px" }} />
-        <div onClick={toggleTheme} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 10px", height: 36, margin: "2px 6px", borderRadius: 10, flexShrink: 0, minWidth: 188, cursor: "pointer" }}>
-          <div style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15 }}>{isDark ? "🌙" : "☀️"}</div>
-          <span className="sb-label" style={{ ...expandLabel, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{isDark ? "Dark mode" : "Light mode"}</span>
+        {/* suppressHydrationWarning: server/client theme emoji mismatch is intentional */}
+        <div onClick={toggleTheme} suppressHydrationWarning style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 12px", height: 42, margin: "2px 6px", borderRadius: 12, flexShrink: 0, minWidth: 200, cursor: "pointer" }}>
+          <div suppressHydrationWarning style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>{isDark ? "🌙" : "☀️"}</div>
+          <span className="sb-label" suppressHydrationWarning style={{ ...expandLabel, fontSize: 13, color: "rgba(255,255,255,0.35)" }}>{isDark ? "Dark mode" : "Light mode"}</span>
         </div>
         <button onClick={() => signOut({ callbackUrl: "/" })}
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 10px", height: 42, margin: "2px 6px", borderRadius: 10, cursor: "pointer", flexShrink: 0, minWidth: 188, border: "none", background: "transparent", textAlign: "left", width: "calc(100% - 12px)" }}>
-          <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "white", flexShrink: 0 }}>{firstName[0]}</div>
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 12px", height: 48, margin: "2px 6px", borderRadius: 12, cursor: "pointer", flexShrink: 0, minWidth: 200, border: "none", background: "transparent", textAlign: "left", width: "calc(100% - 12px)" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "white", flexShrink: 0 }}>{firstName[0]}</div>
           <div className="sb-label" style={{ ...expandLabel, textAlign: "left" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap" }}>{firstName}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", whiteSpace: "nowrap" }}>{adminUser ? "Admin · " : ""}Sign out</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap" }}>{firstName}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", whiteSpace: "nowrap" }}>{adminUser ? "Admin · " : ""}Sign out</div>
           </div>
         </button>
       </div>
