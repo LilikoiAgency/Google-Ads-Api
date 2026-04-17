@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMobileNav } from "./MobileNavContext";
 import { isAdmin } from "../../../lib/admins";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faHouse } from "@fortawesome/free-solid-svg-icons";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon,
@@ -60,6 +62,28 @@ export default function MobileNavSheet() {
           style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.7)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >✕</button>
       </div>
+
+      {/* Home */}
+      {(() => {
+        const homeActive = pathname === "/dashboard";
+        return (
+          <Link
+            href="/dashboard"
+            onClick={() => setNavOpen(false)}
+            style={{
+              display: "flex", alignItems: "center", gap: 12,
+              background: homeActive ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${homeActive ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.1)"}`,
+              borderRadius: 14, padding: "14px 16px", marginBottom: 20, textDecoration: "none",
+            }}
+          >
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: homeActive ? "rgba(168,85,247,0.25)" : "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: homeActive ? "#c084fc" : "rgba(255,255,255,0.6)" }}>
+              <FontAwesomeIcon icon={faHouse} style={{ width: 16, height: 16 }} />
+            </div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: homeActive ? "#c084fc" : "rgba(255,255,255,0.75)" }}>Home</span>
+          </Link>
+        );
+      })()}
 
       {/* Tool sections */}
       {sections.map((section) => (

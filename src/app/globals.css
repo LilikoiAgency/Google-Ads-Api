@@ -156,6 +156,7 @@ nav:hover .sb-active-dot {
 }
 @media (min-width: 768px) {
   .mobile-only  { display: none !important; }
+  .sb-content-offset { margin-left: 68px; }
 }
 
 /* ── Responsive content ── */

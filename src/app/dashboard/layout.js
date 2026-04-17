@@ -23,8 +23,8 @@ export default function DashboardLayout({ children }) {
         {/* Sidebar — hidden on mobile via .sb-desktop CSS class */}
         <DashboardSidebar />
 
-        {/* Main content area — offset by collapsed sidebar width */}
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative", zIndex: 1, minWidth: 0, marginLeft: 68 }}>
+        {/* Main content area — sb-content-offset applies margin-left: 68px on desktop only */}
+        <main className="sb-content-offset" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative", zIndex: 1, minWidth: 0 }}>
           {children}
         </main>
 
