@@ -16,9 +16,10 @@ export function useTheme() {
     return saved === 'light' || saved === 'dark' ? saved : 'light';
   });
 
-  // Persist on change
+  // Persist on change and apply to document root for CSS targeting
   useEffect(() => {
     localStorage.setItem(THEME_KEY, theme);
+    document.documentElement.dataset.theme = theme;
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));

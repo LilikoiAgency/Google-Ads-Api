@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useTheme } from "../../lib/useTheme";
 import DashboardToolHeader from "./components/DashboardToolHeader";
 import DashboardLoader from "./components/DashboardLoader";
 import {
@@ -46,32 +47,34 @@ const TOOLS = [
 ];
 
 // ── Tool card ─────────────────────────────────────────────────────────────────
-function ToolCard({ href, Icon, name, tag, tagColor, tagText, tagBorder, desc }) {
+function ToolCard({ href, Icon, name, tag, tagColor, tagText, tagBorder, desc, isDark }) {
+  const cardBg    = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)";
+  const cardBdr   = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.10)";
+  const hoverBg   = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)";
+  const hoverBdr  = isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.16)";
+  const iconBg    = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
+  const nameColor = isDark ? "rgba(255,255,255,0.88)" : "rgba(0,0,0,0.85)";
+  const descColor = isDark ? "rgba(255,255,255,0.4)"  : "rgba(0,0,0,0.45)";
+  const linkColor = isDark ? "rgba(255,255,255,0.3)"  : "rgba(0,0,0,0.3)";
+
   return (
     <Link
       href={href}
-      style={{
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.09)",
-        borderRadius: 14, padding: 18,
-        display: "flex", flexDirection: "column", gap: 10,
-        textDecoration: "none",
-        transition: "background 0.15s, border-color 0.15s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.16)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)"; }}
+      style={{ background: cardBg, border: `1px solid ${cardBdr}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", gap: 10, textDecoration: "none", transition: "background 0.15s, border-color 0.15s" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = hoverBg; e.currentTarget.style.borderColor = hoverBdr; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = cardBg;  e.currentTarget.style.borderColor = cardBdr;  }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)" }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: iconBg }}>
           <Icon />
         </div>
         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.7px", padding: "3px 8px", borderRadius: 12, border: "1px solid", background: tagColor, color: tagText, borderColor: tagBorder }}>
           {tag}
         </span>
       </div>
-      <p style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.88)", margin: 0 }}>{name}</p>
-      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.55, margin: 0, flex: 1 }}>{desc}</p>
-      <p style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", margin: 0 }}>Open tool →</p>
+      <p style={{ fontSize: 13, fontWeight: 700, color: nameColor, margin: 0 }}>{name}</p>
+      <p style={{ fontSize: 11, color: descColor, lineHeight: 1.55, margin: 0, flex: 1 }}>{desc}</p>
+      <p style={{ fontSize: 11, fontWeight: 600, color: linkColor, margin: 0 }}>Open tool →</p>
     </Link>
   );
 }
@@ -80,6 +83,8 @@ function ToolCard({ href, Icon, name, tag, tagColor, tagText, tagBorder, desc })
 export default function DashboardHome() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -92,6 +97,12 @@ export default function DashboardHome() {
   }
 
   const firstName = session?.user?.name?.split(" ")[0] || "there";
+
+  const headingColor  = isDark ? "#fff"                   : "rgba(0,0,0,0.88)";
+  const bodyColor     = isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)";
+  const sectionColor  = isDark ? "rgba(255,255,255,0.3)"  : "rgba(0,0,0,0.35)";
+  const bannerTitle   = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.8)";
+  const bannerBody    = isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)";
 
   return (
     <div className="flex flex-col flex-1">
@@ -108,14 +119,14 @@ export default function DashboardHome() {
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 28px 60px", width: "100%" }}>
         {/* Hero */}
         <div style={{ marginBottom: 36 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#fff", letterSpacing: "-0.5px", margin: "0 0 10px" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: headingColor, letterSpacing: "-0.5px", margin: "0 0 10px" }}>
             Welcome back,{" "}
             <span style={{ background: "linear-gradient(135deg,#a855f7,#6366f1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               {firstName}
             </span>{" "}
             👋
           </h1>
-          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, margin: 0, maxWidth: 520 }}>
+          <p style={{ fontSize: 15, color: bodyColor, lineHeight: 1.6, margin: 0, maxWidth: 520 }}>
             Everything you need to manage paid media, organic search, and audience data — all in one place. Use the sidebar or pick a tool below to get started.
           </p>
         </div>
@@ -124,17 +135,17 @@ export default function DashboardHome() {
         <div style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 14, padding: "16px 20px", marginBottom: 40, display: "flex", alignItems: "flex-start", gap: 14 }}>
           <span style={{ background: "rgba(168,85,247,0.25)", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 800, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap", flexShrink: 0 }}>NEW</span>
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", margin: "0 0 4px" }}>{WHATS_NEW_TITLE}</p>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.55, margin: 0 }}>{WHATS_NEW_BODY}</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: bannerTitle, margin: "0 0 4px" }}>{WHATS_NEW_TITLE}</p>
+            <p style={{ fontSize: 12, color: bannerBody, lineHeight: 1.55, margin: 0 }}>{WHATS_NEW_BODY}</p>
           </div>
         </div>
 
         {/* Tool sections */}
         {TOOLS.map(({ section, items }) => (
           <div key={section} style={{ marginBottom: 36 }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: "rgba(255,255,255,0.3)", margin: "0 0 12px" }}>{section}</p>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: sectionColor, margin: "0 0 12px" }}>{section}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-              {items.map((tool) => <ToolCard key={tool.href} {...tool} />)}
+              {items.map((tool) => <ToolCard key={tool.href} {...tool} isDark={isDark} />)}
             </div>
           </div>
         ))}
