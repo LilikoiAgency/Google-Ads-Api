@@ -50,21 +50,21 @@ function ToolCard({ href, Icon, name, tag, tagColor, tagText, tagBorder, desc })
   return (
     <Link
       href={href}
-      style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", gap: 10, textDecoration: "none", transition: "background 0.15s, border-color 0.15s" }}
+      style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: 20, padding: 26, display: "flex", flexDirection: "column", gap: 14, textDecoration: "none", transition: "background 0.15s, border-color 0.15s" }}
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--card-bg-hover)"; e.currentTarget.style.borderColor = "var(--card-border-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card-bg)";       e.currentTarget.style.borderColor = "var(--card-border)";       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--icon-bg)" }}>
-          <Icon />
+        <div style={{ width: 50, height: 50, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--icon-bg)" }}>
+          <Icon size={26} />
         </div>
-        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.7px", padding: "3px 8px", borderRadius: 12, border: "1px solid", background: tagColor, color: tagText, borderColor: tagBorder }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.7px", padding: "5px 11px", borderRadius: 16, border: "1px solid", background: tagColor, color: tagText, borderColor: tagBorder }}>
           {tag}
         </span>
       </div>
-      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{name}</p>
-      <p style={{ fontSize: 11, color: "var(--banner-body)", lineHeight: 1.55, margin: 0, flex: 1 }}>{desc}</p>
-      <p style={{ fontSize: 11, fontWeight: 600, color: "var(--link-label)", margin: 0 }}>Open tool →</p>
+      <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{name}</p>
+      <p style={{ fontSize: 14, color: "var(--banner-body)", lineHeight: 1.55, margin: 0, flex: 1 }}>{desc}</p>
+      <p style={{ fontSize: 14, fontWeight: 600, color: "var(--link-label)", margin: 0 }}>Open tool →</p>
     </Link>
   );
 }
@@ -89,44 +89,44 @@ export default function DashboardHome() {
   return (
     <div className="flex flex-col flex-1">
       <DashboardToolHeader
-        icon={<span style={{ fontSize: 14 }}>🏠</span>}
+        icon={<span style={{ fontSize: 20 }}>🏠</span>}
         title="Home"
         subtitle="Tools & documentation"
       >
-        <span style={{ background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.35)", borderRadius: 20, padding: "4px 12px", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
+        <span style={{ background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.35)", borderRadius: 28, padding: "6px 16px", fontSize: 13, fontWeight: 700, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
           ✦ WHAT&apos;S NEW
         </span>
       </DashboardToolHeader>
 
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 28px 60px", width: "100%" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "50px 40px 84px", width: "100%" }}>
         {/* Hero */}
-        <div style={{ marginBottom: 36 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.5px", margin: "0 0 10px" }}>
+        <div style={{ marginBottom: 50 }}>
+          <h1 style={{ fontSize: 40, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.5px", margin: "0 0 14px" }}>
             Welcome back,{" "}
             <span style={{ background: "linear-gradient(135deg,#a855f7,#6366f1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               {firstName}
             </span>{" "}
             👋
           </h1>
-          <p style={{ fontSize: 15, color: "var(--banner-body)", lineHeight: 1.6, margin: 0, maxWidth: 520 }}>
+          <p style={{ fontSize: 20, color: "var(--banner-body)", lineHeight: 1.6, margin: 0, maxWidth: 620 }}>
             Everything you need to manage paid media, organic search, and audience data — all in one place. Use the sidebar or pick a tool below to get started.
           </p>
         </div>
 
         {/* What's New banner */}
-        <div style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 14, padding: "16px 20px", marginBottom: 40, display: "flex", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ background: "rgba(168,85,247,0.25)", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 800, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap", flexShrink: 0 }}>NEW</span>
+        <div style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 20, padding: "22px 28px", marginBottom: 56, display: "flex", alignItems: "flex-start", gap: 20 }}>
+          <span style={{ background: "rgba(168,85,247,0.25)", borderRadius: 11, padding: "8px 14px", fontSize: 14, fontWeight: 800, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap", flexShrink: 0 }}>NEW</span>
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--banner-title)", margin: "0 0 4px" }}>{WHATS_NEW_TITLE}</p>
-            <p style={{ fontSize: 12, color: "var(--banner-body)", lineHeight: 1.55, margin: 0 }}>{WHATS_NEW_BODY}</p>
+            <p style={{ fontSize: 17, fontWeight: 700, color: "var(--banner-title)", margin: "0 0 6px" }}>{WHATS_NEW_TITLE}</p>
+            <p style={{ fontSize: 15, color: "var(--banner-body)", lineHeight: 1.55, margin: 0 }}>{WHATS_NEW_BODY}</p>
           </div>
         </div>
 
         {/* Tool sections */}
         {TOOLS.map(({ section, items }) => (
-          <div key={section} style={{ marginBottom: 36 }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: "var(--section-label)", margin: "0 0 12px" }}>{section}</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          <div key={section} style={{ marginBottom: 50 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: "var(--section-label)", margin: "0 0 16px" }}>{section}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
               {items.map((tool) => <ToolCard key={tool.href} {...tool} />)}
             </div>
           </div>
