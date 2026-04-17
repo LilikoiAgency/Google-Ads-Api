@@ -1,28 +1,17 @@
 // src/app/dashboard/components/DashboardToolHeader.jsx
 "use client";
 import { useMobileNav } from "./MobileNavContext";
-import { useTheme } from "../../../lib/useTheme";
 
 export default function DashboardToolHeader({ icon, title, subtitle, children }) {
   const { setNavOpen } = useMobileNav();
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
-  const headerBg  = isDark ? "rgba(14,8,28,0.65)"    : "rgba(255,255,255,0.75)";
-  const headerBdr = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)";
-  const titleClr  = isDark ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.85)";
-  const subClr    = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.4)";
-  const btnBg     = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
-  const btnBdr    = isDark ? "rgba(255,255,255,0.1)"  : "rgba(0,0,0,0.1)";
-  const dotClr    = isDark ? "rgba(255,255,255,0.6)"  : "rgba(0,0,0,0.5)";
 
   return (
     <header
       style={{
         height: 56, flexShrink: 0,
-        background: headerBg,
+        background: "var(--header-bg)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        borderBottom: `1px solid ${headerBdr}`,
+        borderBottom: "1px solid var(--header-border)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 16px", gap: 12, position: "sticky", top: 0, zIndex: 10,
       }}
@@ -35,8 +24,8 @@ export default function DashboardToolHeader({ icon, title, subtitle, children })
           </div>
         )}
         <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: 15, fontWeight: 700, color: titleClr, margin: 0, lineHeight: 1.2 }}>{title}</p>
-          {subtitle && <p style={{ fontSize: 11, color: subClr, margin: 0, marginTop: 2, lineHeight: 1 }}>{subtitle}</p>}
+          <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: 0, lineHeight: 1.2 }}>{title}</p>
+          {subtitle && <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0, marginTop: 2, lineHeight: 1 }}>{subtitle}</p>}
         </div>
       </div>
 
@@ -54,14 +43,14 @@ export default function DashboardToolHeader({ icon, title, subtitle, children })
         aria-label="Open navigation"
         style={{
           width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-          background: btnBg, border: `1px solid ${btnBdr}`,
+          background: "var(--btn-bg)", border: "1px solid var(--btn-border)",
           cursor: "pointer",
           display: "none",
           alignItems: "center", justifyContent: "center",
         }}
       >
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
-          {[0,1,2,3].map(i => <div key={i} style={{ width: 6, height: 6, background: dotClr, borderRadius: 1.5 }} />)}
+          {[0,1,2,3].map(i => <div key={i} style={{ width: 6, height: 6, background: "var(--dot-color)", borderRadius: 1.5 }} />)}
         </div>
       </button>
     </header>
