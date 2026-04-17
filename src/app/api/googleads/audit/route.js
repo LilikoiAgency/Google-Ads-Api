@@ -70,9 +70,12 @@ export async function GET(request) {
       login_customer_id: credentials.customer_id,
     });
 
-    const [keywordsRaw, campaignConfigRaw, campaignAssetsRaw, adStrengthRaw, pmaxAssetGroupsRaw, pmaxBrandExclusionsRaw] = await Promise.all([
+    const [keywordQsRaw, keywordMetricsRaw, campaignConfigRaw, campaignAssetsRaw, accountAssetsRaw, adStrengthRaw, pmaxAssetGroupsRaw, pmaxBrandExclusionsRaw] = await Promise.all([
+      // QS + attributes — ad_group_criterion does NOT allow performance metrics with date filtering;
+      // fetch criterion data only (no metrics) so quality_score is returned for all active keywords
       customer.query(`
         SELECT
+          ad_group_criterion.criterion_id,
           ad_group_criterion.keyword.text,
           ad_group_criterion.keyword.match_type,
           ad_group_criterion.status,
@@ -81,16 +84,33 @@ export async function GET(request) {
           ad_group_criterion.quality_info.post_click_quality_score,
           ad_group_criterion.quality_info.search_predicted_ctr,
           campaign.id, campaign.name,
-          ad_group.id, ad_group.name,
-          metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.all_conversions
+          ad_group.id, ad_group.name
         FROM ad_group_criterion
         WHERE ad_group_criterion.type = 'KEYWORD'
           AND ad_group_criterion.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
-          AND segments.date BETWEEN '${startDate}' AND '${endDate}'
-        ORDER BY metrics.cost_micros DESC LIMIT 500
-      `).catch(() => []),
+        LIMIT 5000
+      `).catch((e) => { console.error('[audit] QS query failed:', e?.message || JSON.stringify(e)); return []; }),
+
+      // Performance metrics — keyword_view supports date-ranged metrics
+      customer.query(`
+        SELECT
+          ad_group_criterion.criterion_id,
+          campaign.id,
+          ad_group.id,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.all_conversions
+        FROM keyword_view
+        WHERE ad_group_criterion.status != 'REMOVED'
+          AND campaign.status != 'REMOVED'
+          AND ad_group.status != 'REMOVED'
+          AND segments.date >= '${startDate}'
+          AND segments.date <= '${endDate}'
+        ORDER BY metrics.cost_micros DESC LIMIT 1000
+      `).catch((e) => { console.error('[audit] keyword metrics query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       customer.query(`
         SELECT
@@ -106,11 +126,19 @@ export async function GET(request) {
         WHERE campaign.status != 'REMOVED'
       `).catch(() => []),
 
+      // Campaign-level assets — use field_type (AssetFieldType) not asset_type (AssetType)
       customer.query(`
-        SELECT campaign.id, campaign_asset.asset_type
+        SELECT campaign.id, campaign_asset.field_type
         FROM campaign_asset
         WHERE campaign_asset.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
+      `).catch(() => []),
+
+      // Account-level assets apply to all campaigns
+      customer.query(`
+        SELECT customer_asset.field_type
+        FROM customer_asset
+        WHERE customer_asset.status != 'REMOVED'
       `).catch(() => []),
 
       customer.query(`
@@ -152,20 +180,30 @@ export async function GET(request) {
       `).catch(() => []),
     ]);
 
-    const keywords = (keywordsRaw || []).map((row) => {
+    console.log(`[audit] raw rows — kwQS:${(keywordQsRaw||[]).length} kwMetrics:${(keywordMetricsRaw||[]).length} campaigns:${(campaignConfigRaw||[]).length} accountAssets:${(accountAssetsRaw||[]).length}`);
+
+    // Build metrics lookup keyed by criterion_id
+    const metricsById = new Map();
+    (keywordMetricsRaw || []).forEach((row) => {
+      const id = String(row.ad_group_criterion?.criterion_id || '');
+      if (id) metricsById.set(id, row.metrics || {});
+    });
+
+    const keywords = (keywordQsRaw || []).map((row) => {
       const crit = row.ad_group_criterion || {};
       const kw = crit.keyword || {};
       const qi = crit.quality_info || {};
-      const metrics = row.metrics || {};
+      const criterionId = String(crit.criterion_id || '');
+      const metrics = metricsById.get(criterionId) || {};
       return {
         text: kw.text || '',
         matchType: typeof kw.match_type === 'number'
-          ? ({ 2: 'BROAD', 3: 'PHRASE', 4: 'EXACT' }[kw.match_type] || String(kw.match_type))
+          ? ({ 2: 'EXACT', 3: 'PHRASE', 4: 'BROAD' }[kw.match_type] || String(kw.match_type))
           : (kw.match_type || ''),
         status: typeof crit.status === 'number'
           ? ({ 2: 'ENABLED', 3: 'PAUSED', 4: 'REMOVED' }[crit.status] || String(crit.status))
           : (crit.status || ''),
-        qualityScore: qi.quality_score ?? null,
+        qualityScore: (qi.quality_score != null && qi.quality_score > 0) ? qi.quality_score : null,
         expectedCtr: mapQsComponent(qi.search_predicted_ctr),
         adRelevance: mapQsComponent(qi.creative_quality_score),
         lpExperience: mapQsComponent(qi.post_click_quality_score),
@@ -224,29 +262,34 @@ export async function GET(request) {
       };
     });
 
-    const campaignAssets = (campaignAssetsRaw || []).map((row) => {
-      const assetTypeRaw = row.campaign_asset?.asset_type;
-      const assetTypeNumMap = {
-        2: 'YOUTUBE_VIDEO', 3: 'MEDIA_BUNDLE', 4: 'IMAGE',
-        5: 'TEXT', 6: 'LEAD_FORM', 7: 'BOOK_ON_GOOGLE',
-        8: 'PROMOTION', 9: 'CALLOUT', 10: 'STRUCTURED_SNIPPET',
-        11: 'SITELINK', 12: 'PAGE_FEED', 13: 'DYNAMIC_EDUCATION',
-        14: 'MOBILE_APP', 15: 'HOTEL_CALLOUT', 16: 'CALL',
-        17: 'PRICE', 18: 'LONG_HEADLINE', 19: 'BUSINESS_NAME',
-        20: 'SQUARE_MARKETING_IMAGE', 21: 'PORTRAIT_MARKETING_IMAGE',
-        22: 'LOGO', 23: 'LANDSCAPE_LOGO', 24: 'VIDEO',
-        25: 'CALL_TO_ACTION_SELECTION', 26: 'AD_IMAGE',
-        27: 'BUSINESS_LOGO', 28: 'HOTEL_PROPERTY',
-        29: 'DISCOVERY_CAROUSEL_CARD',
-      };
-      const assetType = typeof assetTypeRaw === 'number'
-        ? (assetTypeNumMap[assetTypeRaw] || `TYPE_${assetTypeRaw}`)
-        : (assetTypeRaw || '');
-      return {
-        campaignId: String(row.campaign?.id || ''),
-        assetType,
-      };
-    });
+    // AssetFieldType enum — what role the asset plays (sitelink, callout, etc.)
+    const assetFieldTypeMap = {
+      2: 'HEADLINE', 3: 'DESCRIPTION', 4: 'MANDATORY_AD_TEXT',
+      5: 'MARKETING_IMAGE', 6: 'MEDIA_BUNDLE', 7: 'YOUTUBE_VIDEO',
+      8: 'BOOK_ON_GOOGLE', 9: 'LEAD_FORM', 10: 'PROMOTION',
+      11: 'CALLOUT', 12: 'STRUCTURED_SNIPPET', 13: 'SITELINK',
+      14: 'MOBILE_APP', 15: 'HOTEL_CALLOUT', 16: 'CALL',
+      17: 'PRICE', 18: 'LONG_HEADLINE', 19: 'BUSINESS_NAME',
+      20: 'PORTRAIT_MARKETING_IMAGE', 21: 'LOGO', 22: 'LANDSCAPE_LOGO',
+      23: 'VIDEO', 24: 'CALL_TO_ACTION_SELECTION', 25: 'AD_IMAGE',
+      26: 'BUSINESS_LOGO', 27: 'HOTEL_PROPERTY', 28: 'DISCOVERY_CAROUSEL_CARD',
+    };
+
+    function resolveFieldType(raw) {
+      if (typeof raw === 'number') return assetFieldTypeMap[raw] || `FIELD_${raw}`;
+      return raw || '';
+    }
+
+    // Account-level assets apply to ALL campaigns — collect them as a set
+    const accountAssetTypes = new Set(
+      (accountAssetsRaw || []).map((row) => resolveFieldType(row.customer_asset?.field_type)).filter(Boolean)
+    );
+
+    // Campaign-level assets
+    const campaignAssets = (campaignAssetsRaw || []).map((row) => ({
+      campaignId: String(row.campaign?.id || ''),
+      assetType: resolveFieldType(row.campaign_asset?.field_type),
+    }));
 
     const adStrength = (adStrengthRaw || []).map((row) => {
       const strengthRaw = row.ad_group_ad?.ad_strength;
@@ -301,11 +344,11 @@ export async function GET(request) {
       type: 'google_ads_audit',
       email: sessionEmail,
       customerId: String(customerId),
-      queriesRun: 7,
+      queriesRun: 8,
     }).catch(() => {});
 
     return NextResponse.json({
-      data: { keywords, campaignConfig, campaignAssets, adStrength, pmaxAssetGroups, pmaxBrandExclusions },
+      data: { keywords, campaignConfig, campaignAssets, accountAssetTypes: [...accountAssetTypes], adStrength, pmaxAssetGroups, pmaxBrandExclusions },
       requestId,
     });
   } catch (error) {

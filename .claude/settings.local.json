@@ -23,7 +23,11 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('history 401 has requestId:', 'requestId' in d\\); print\\('history 401 has error:', 'error' in d\\)\")",
       "Bash(cat /c/Users/frank/Documents/GitHub/Google-Ads-Api/.superpowers/brainstorm/*/state/server-info)",
       "Bash(git rm *)",
-      "Bash(bash *)"
+      "Bash(bash *)",
+      "Bash(cmd *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr \"LISTENING\")"
     ]
   }
 }

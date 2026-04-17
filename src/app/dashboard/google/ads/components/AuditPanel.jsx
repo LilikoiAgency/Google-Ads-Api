@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { runAudit, fmtCurrency, fmtPct, fmtCvr } from "../../../../../lib/googleAdsAudit";
 
 const TABS = ["Overview", "Campaigns", "Keywords", "Search Terms", "Bidding", "Assets", "Action Plan"];
@@ -223,7 +224,7 @@ function OverviewTab({ audit, auditLoading }) {
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />
               <p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>
-                {r.type?.replace(/_/g, " ")}
+                {String(r.type ?? "").replace(/_/g, " ")}
                 {r.campaignName && <span style={{ color: "rgba(255,255,255,0.3)" }}> · {r.campaignName}</span>}
               </p>
             </div>
@@ -685,6 +686,7 @@ function ActionPlanTab({ actions, auditLoading }) {
 export default function AuditPanel({ accountData, accountName, customerId, selectedCampaign, onClose }) {
   const [tab, setTab] = useState(0);
   const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [auditData, setAuditData] = useState(null);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -696,6 +698,7 @@ export default function AuditPanel({ accountData, accountName, customerId, selec
   );
 
   useEffect(() => {
+    setMounted(true);
     const t = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(t);
   }, []);
@@ -722,7 +725,9 @@ export default function AuditPanel({ accountData, accountName, customerId, selec
     setTimeout(onClose, 220);
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -794,7 +799,7 @@ export default function AuditPanel({ accountData, accountName, customerId, selec
         </div>
 
         {/* Scrollable content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 24px" }}>
           {tab === 0 && <OverviewTab audit={audit} auditLoading={auditLoading} />}
           {tab === 1 && <CampaignsTab campaigns={audit.campaigns} />}
           {tab === 2 && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} />}
@@ -804,6 +809,7 @@ export default function AuditPanel({ accountData, accountName, customerId, selec
           {tab === 6 && <ActionPlanTab actions={audit.actionPlan} auditLoading={auditLoading} />}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

@@ -10,7 +10,6 @@ import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
 import { GoogleAdsIcon } from "../../components/DashboardIcons";
 import MobileFilterSheet from "../../components/MobileFilterSheet";
-import AuditPanel from "./components/AuditPanel";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -357,7 +356,6 @@ export default function GoogleAdsDashboard() {
   const [pickerShowAll, setPickerShowAll]       = useState(false);
   const isAdminUser = isAdmin(session?.user?.email || '');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [auditOpen, setAuditOpen]   = useState(false);
 
   const updateLastUpdated = (
     date = new Date(),
@@ -731,7 +729,13 @@ export default function GoogleAdsDashboard() {
         {selectedCustomerId && allCampaignData.length > 0 && (
           <div className="desktop-only" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <button
-              onClick={() => setAuditOpen(true)}
+              onClick={() => {
+                const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
+                if (ad) sessionStorage.setItem("auditAccountData", JSON.stringify(ad));
+                const params = new URLSearchParams({ customerId: selectedCustomerId });
+                if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
+                router.push(`/dashboard/google/ads/audit?${params.toString()}`);
+              }}
               style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(233,69,96,0.15)", border: "1px solid rgba(233,69,96,0.35)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#e94560", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
               onMouseEnter={(e) => e.currentTarget.style.background = "rgba(233,69,96,0.25)"}
               onMouseLeave={(e) => e.currentTarget.style.background = "rgba(233,69,96,0.15)"}
@@ -883,15 +887,6 @@ export default function GoogleAdsDashboard() {
           </div>
         )}
       </div>
-
-      {/* ── Audit panel ── */}
-      {auditOpen && (() => {
-        const accountData = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
-        const accountName = accountData?.customer?.customer_client?.descriptive_name || "Account";
-        return accountData ? (
-          <AuditPanel accountData={accountData} accountName={accountName} customerId={selectedCustomerId} selectedCampaign={selectedCampaign} onClose={() => setAuditOpen(false)} />
-        ) : null;
-      })()}
 
       {/* ── Content ── */}
       <div className="bg-gray-50 min-h-[calc(100vh-120px)]">

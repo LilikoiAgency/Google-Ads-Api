@@ -27,7 +27,7 @@ export function getCampaignVerdict(campaign) {
   const lostBudget = campaign.searchBudgetLostImpressionShare;
   const lostRank   = campaign.searchRankLostImpressionShare;
 
-  if (conv === 0 && cost > 300_000) {
+  if (conv === 0 && cost > 300_000_000) {
     return { key: 'PAUSE', label: 'PAUSE', color: '#9ca3af', bg: 'rgba(156,163,175,0.12)', icon: '⚫' };
   }
   if (lostBudget != null && lostBudget > 0.25 && conv > 0) {
@@ -315,9 +315,11 @@ export function analyzeBidding(campaignConfig, campaigns) {
 }
 
 // ── Pillar 9: Asset coverage ──────────────────────────────────────────────────
-const REQUIRED_ASSET_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'IMAGE'];
+const REQUIRED_ASSET_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'MARKETING_IMAGE'];
 
-export function analyzeAssets(campaignAssets, campaigns) {
+export function analyzeAssets(campaignAssets, campaigns, accountAssetTypes = []) {
+  const accountTypes = new Set(accountAssetTypes);
+
   const assetsByCampaign = {};
   campaignAssets.forEach((a) => {
     const id = String(a.campaignId);
@@ -327,9 +329,10 @@ export function analyzeAssets(campaignAssets, campaigns) {
 
   return campaigns.map((c) => {
     const id = String(c.campaignId);
-    const present = assetsByCampaign[id] || new Set();
-    const presentTypes = REQUIRED_ASSET_TYPES.filter((t) => present.has(t));
-    const missingTypes = REQUIRED_ASSET_TYPES.filter((t) => !present.has(t));
+    const campaignTypes = assetsByCampaign[id] || new Set();
+    // An asset type is "present" if set at campaign OR account level
+    const presentTypes = REQUIRED_ASSET_TYPES.filter((t) => campaignTypes.has(t) || accountTypes.has(t));
+    const missingTypes = REQUIRED_ASSET_TYPES.filter((t) => !campaignTypes.has(t) && !accountTypes.has(t));
     const coverageScore = REQUIRED_ASSET_TYPES.length > 0
       ? presentTypes.length / REQUIRED_ASSET_TYPES.length
       : 1;
@@ -601,7 +604,7 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
   const keywordAnalysis     = auditData ? analyzeKeywords(keywords) : null;
   const adStrengthAnalysis  = auditData ? analyzeAdStrength(adStrengthRaw, campaigns) : null;
   const biddingAudits       = auditData ? analyzeBidding(campaignConfig, campaigns) : [];
-  const assetAnalysis       = auditData ? analyzeAssets(campaignAssets, campaigns) : [];
+  const assetAnalysis       = auditData ? analyzeAssets(campaignAssets, campaigns, auditData.accountAssetTypes || []) : [];
   const pmaxData            = auditData ? analyzePMax(campaigns, pmaxAssetGroups, pmaxBrandExclusions) : null;
 
   const actionPlan = buildActionPlan(
