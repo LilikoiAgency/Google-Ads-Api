@@ -101,7 +101,7 @@ export default function DashboardHome() {
         subtitle="Tools & documentation"
       >
         <span style={{ background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.35)", borderRadius: 20, padding: "4px 12px", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
-          ✦ WHAT'S NEW
+          ✦ WHAT&apos;S NEW
         </span>
       </DashboardToolHeader>
 
