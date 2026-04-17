@@ -153,8 +153,8 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
       </button>
       {isAdminUser && (
         <button
-          onClick={(e) => { e.stopPropagation(); onTogglePin(a.id); }}
-          title={isPinned ? "Remove from main accounts" : "Add to main accounts"}
+          onClick={(e) => { e.stopPropagation(); onTogglePin(a.id); setShowAll(true); }}
+          title={isPinned ? "Remove from main accounts (affects all users)" : "Pin to top for all users"}
           className={`flex-shrink-0 px-3 border-l border-gray-100 flex flex-col items-center justify-center gap-0.5 transition hover:bg-gray-50 ${isPinned ? "text-amber-500" : "text-gray-300 hover:text-amber-400"}`}
         >
           <span className="text-base leading-none">{isPinned ? "⭐" : "☆"}</span>
@@ -181,6 +181,7 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
           {pinned.length > 0 && (
             <div className="px-4 pt-2 pb-1">
               <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500">⭐ Main Accounts</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Pinned by admin · visible to everyone</p>
             </div>
           )}
           {pinned.map((a) => <AccountRow key={a.id} a={a} isPinned />)}
@@ -662,8 +663,8 @@ export default function GoogleAdsDashboard() {
                   </button>
                   {isAdminUser && (
                     <button
-                      onClick={() => handleTogglePin(c.id)}
-                      title={isPinned ? "Remove from main accounts" : "Add to main accounts"}
+                      onClick={() => { handleTogglePin(c.id); setPickerShowAll(true); }}
+                      title={isPinned ? "Remove from main accounts (affects all users)" : "Pin to top for all users"}
                       style={{
                         flexShrink: 0, width: 64, borderRadius: 16,
                         background: isPinned ? "rgba(251,191,36,0.15)" : "rgba(255,255,255,0.06)",
@@ -683,9 +684,10 @@ export default function GoogleAdsDashboard() {
               return (
                 <div>
                   {pinned.length > 0 && (
-                    <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(251,191,36,0.7)", margin: "0 0 10px" }}>
-                      ⭐ Main Accounts
-                    </p>
+                    <div style={{ marginBottom: 10 }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "rgba(251,191,36,0.7)", margin: 0 }}>⭐ Main Accounts</p>
+                      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", margin: "2px 0 0" }}>Pinned by admin · visible to everyone</p>
+                    </div>
                   )}
                   {pinned.map((c) => <PickerRow key={c.id} c={c} isPinned />)}
                   {unpinned.length > 0 && (
@@ -703,7 +705,7 @@ export default function GoogleAdsDashboard() {
                       )}
                       {pinned.length === 0 && isAdminUser && (
                         <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "0 0 12px", textAlign: "center" }}>
-                          Press <strong style={{ color: "rgba(255,255,255,0.5)" }}>Pin</strong> on any account to make it a Main Account
+                          Press <strong style={{ color: "rgba(255,255,255,0.5)" }}>Pin</strong> to set main accounts for all users
                         </p>
                       )}
                       {(pickerShowAll || pinned.length === 0) && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
