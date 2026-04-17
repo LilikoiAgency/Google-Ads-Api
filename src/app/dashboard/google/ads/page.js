@@ -186,13 +186,16 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
 
           {unpinned.length > 0 && (
             <>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowAll((v) => !v); }}
-                className="w-full px-4 py-2 text-xs text-gray-400 text-left hover:bg-gray-50 border-t border-gray-100 flex items-center gap-1"
-              >
-                {showAll ? "▲ Show less" : `▾ ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
-              </button>
-              {showAll && unpinned.map((a) => <AccountRow key={a.id} a={a} isPinned={false} />)}
+              {/* Only collapse unpinned if there are pinned accounts to separate from */}
+              {pinned.length > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowAll((v) => !v); }}
+                  className="w-full px-4 py-2 text-xs text-gray-400 text-left hover:bg-gray-50 border-t border-gray-100 flex items-center gap-1"
+                >
+                  {showAll ? "▲ Show less" : `▾ ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+                </button>
+              )}
+              {(showAll || pinned.length === 0) && unpinned.map((a) => <AccountRow key={a.id} a={a} isPinned={false} />)}
             </>
           )}
 
@@ -661,11 +664,13 @@ export default function GoogleAdsDashboard() {
                   {pinned.map((c) => <PickerRow key={c.id} c={c} isPinned />)}
                   {unpinned.length > 0 && (
                     <>
-                      <button onClick={() => setPickerShowAll((v) => !v)}
-                        style={{ width: "100%", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.35)", background: "none", border: "none", cursor: "pointer", padding: "8px 0" }}>
-                        {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
-                      </button>
-                      {pickerShowAll && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
+                      {pinned.length > 0 && (
+                        <button onClick={() => setPickerShowAll((v) => !v)}
+                          style={{ width: "100%", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.35)", background: "none", border: "none", cursor: "pointer", padding: "8px 0" }}>
+                          {pickerShowAll ? "▲ Show less" : `▾ Show ${unpinned.length} more account${unpinned.length === 1 ? "" : "s"}`}
+                        </button>
+                      )}
+                      {(pickerShowAll || pinned.length === 0) && unpinned.map((c) => <PickerRow key={c.id} c={c} isPinned={false} />)}
                     </>
                   )}
                   {pinned.length === 0 && unpinned.length === 0 && (
