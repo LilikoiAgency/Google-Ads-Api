@@ -23,8 +23,8 @@ export default function DashboardLayout({ children }) {
         {/* Sidebar — hidden on mobile via .sb-desktop CSS class */}
         <DashboardSidebar />
 
-        {/* Main content area */}
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative", zIndex: 1, minWidth: 0 }}>
+        {/* Main content area — offset by collapsed sidebar width */}
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative", zIndex: 1, minWidth: 0, marginLeft: 68 }}>
           {children}
         </main>
 

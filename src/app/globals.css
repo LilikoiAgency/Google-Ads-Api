@@ -5,27 +5,42 @@
 /* ── Theme tokens (set via data-theme on <html> by useTheme hook) ── */
 :root, [data-theme="light"] {
   --background: #ffffff;
-  --foreground: #171717;
-  --dash-bg: radial-gradient(ellipse at 25% 15%, #ede9fe 0%, #e0e7ff 45%, #f5f3ff 100%);
-  --dash-orb1: rgba(139,92,246,0.08);
-  --dash-orb2: rgba(79,70,229,0.06);
-  --header-bg: rgba(255,255,255,0.75);
+  --foreground: #111827;
+  --dash-bg: linear-gradient(135deg, #ffffff 0%, #faf9ff 100%);
+  --dash-orb1: rgba(139,92,246,0.06);
+  --dash-orb2: rgba(79,70,229,0.04);
+  --header-bg: rgba(255,255,255,0.92);
   --header-border: rgba(0,0,0,0.08);
-  --text-primary: rgba(0,0,0,0.85);
-  --text-secondary: rgba(0,0,0,0.4);
-  --text-muted: rgba(0,0,0,0.35);
-  --card-bg: rgba(0,0,0,0.04);
-  --card-border: rgba(0,0,0,0.10);
-  --card-bg-hover: rgba(0,0,0,0.07);
-  --card-border-hover: rgba(0,0,0,0.16);
-  --icon-bg: rgba(0,0,0,0.05);
-  --btn-bg: rgba(0,0,0,0.06);
-  --btn-border: rgba(0,0,0,0.1);
-  --dot-color: rgba(0,0,0,0.5);
-  --banner-title: rgba(0,0,0,0.8);
-  --banner-body: rgba(0,0,0,0.5);
-  --section-label: rgba(0,0,0,0.35);
-  --link-label: rgba(0,0,0,0.3);
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --card-bg-hover: #faf8ff;
+  --card-border-hover: #a855f7;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --icon-bg: rgba(139,92,246,0.08);
+  --btn-bg: rgba(0,0,0,0.05);
+  --btn-border: #e5e7eb;
+  --dot-color: #9ca3af;
+  --banner-title: #111827;
+  --banner-body: #6b7280;
+  --section-label: #9ca3af;
+  --link-label: #7c3aed;
+
+  /* Sidebar */
+  --sb-bg: #ffffff;
+  --sb-border: rgba(0,0,0,0.08);
+  --sb-text: rgba(55,65,81,0.8);
+  --sb-text-muted: rgba(107,114,128,0.65);
+  --sb-active-bg: rgba(139,92,246,0.10);
+  --sb-active-text: #6d28d9;
+  --sb-icon-active-bg: rgba(139,92,246,0.14);
+  --sb-section-label: rgba(107,114,128,0.55);
+  --sb-divider: rgba(0,0,0,0.07);
+  --sb-logo-text: #111827;
+  --sb-user-name: #111827;
+  --sb-user-sub: rgba(107,114,128,0.7);
 }
 
 [data-theme="dark"] {
@@ -47,10 +62,25 @@
   --btn-bg: rgba(255,255,255,0.07);
   --btn-border: rgba(255,255,255,0.1);
   --dot-color: rgba(255,255,255,0.6);
+  --card-shadow: none;
   --banner-title: rgba(255,255,255,0.85);
   --banner-body: rgba(255,255,255,0.45);
   --section-label: rgba(255,255,255,0.3);
   --link-label: rgba(255,255,255,0.3);
+
+  /* Sidebar */
+  --sb-bg: rgba(8,5,18,0.88);
+  --sb-border: rgba(255,255,255,0.07);
+  --sb-text: rgba(255,255,255,0.45);
+  --sb-text-muted: rgba(255,255,255,0.35);
+  --sb-active-bg: rgba(168,85,247,0.18);
+  --sb-active-text: #c084fc;
+  --sb-icon-active-bg: rgba(168,85,247,0.25);
+  --sb-section-label: rgba(255,255,255,0.2);
+  --sb-divider: rgba(255,255,255,0.06);
+  --sb-logo-text: rgba(255,255,255,0.9);
+  --sb-user-name: rgba(255,255,255,0.8);
+  --sb-user-sub: rgba(255,255,255,0.35);
 }
 
 body {
@@ -81,6 +111,18 @@ body {
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(140, 107, 161, 1));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+[data-theme="light"] .sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.14);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+[data-theme="light"] .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(109,40,217,0.3);
   border: 2px solid transparent;
   background-clip: padding-box;
 }

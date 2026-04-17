@@ -50,7 +50,7 @@ function ToolCard({ href, Icon, name, tag, tagColor, tagText, tagBorder, desc })
   return (
     <Link
       href={href}
-      style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: 20, padding: 26, display: "flex", flexDirection: "column", gap: 14, textDecoration: "none", transition: "background 0.15s, border-color 0.15s" }}
+      style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: 20, padding: 26, display: "flex", flexDirection: "column", gap: 14, textDecoration: "none", transition: "background 0.15s, border-color 0.15s", boxShadow: "var(--card-shadow)" }}
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--card-bg-hover)"; e.currentTarget.style.borderColor = "var(--card-border-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card-bg)";       e.currentTarget.style.borderColor = "var(--card-border)";       }}
     >
