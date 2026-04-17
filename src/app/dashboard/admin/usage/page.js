@@ -81,7 +81,7 @@ export default function UsageAnalyticsPage() {
     return <DashboardLoader label="Loading..." />;
   }
 
-  const { kpis, byTool, users, dailyTrend } = data || {};
+  const { kpis, byTool, users, dailyTrend, tokens } = data || {};
 
   return (
     <div className="flex flex-col flex-1">
@@ -196,6 +196,91 @@ export default function UsageAnalyticsPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* Claude AI Usage */}
+        {tokens && (
+          <>
+            <SectionTitle>Claude AI Usage</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+              <KpiCard
+                label="Claude Calls (7d)"
+                value={tokens.last7d?.calls?.toLocaleString() || "0"}
+                sub={`${(tokens.last7d?.inputTokens || 0).toLocaleString()} input · ${(tokens.last7d?.outputTokens || 0).toLocaleString()} output tokens`}
+                color="purple"
+              />
+              <KpiCard
+                label="Est. Cost (7d)"
+                value={`$${(tokens.last7d?.estimatedCost || 0).toFixed(4)}`}
+                sub="Based on Anthropic published pricing"
+                color="orange"
+              />
+            </div>
+
+            {tokens.byFeature?.length > 0 && (
+              <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", marginBottom: 20 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", marginBottom: 4 }}>By Feature (30 days)</p>
+                <p style={{ fontSize: 12, color: "#999", marginBottom: 16 }}>Cost estimates based on Anthropic published pricing. Actual billing may vary.</p>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#f8f9fb" }}>
+                        <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Feature</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Calls</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Input Tokens</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Output Tokens</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Est. Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tokens.byFeature.map((f) => (
+                        <tr key={f.feature} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                          <td style={{ padding: "10px 12px", fontWeight: 600, color: "#333" }}>{f.feature || "—"}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "#8e44ad", fontWeight: 700 }}>{f.calls}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "#555" }}>{f.inputTokens.toLocaleString()}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "#555" }}>{f.outputTokens.toLocaleString()}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "#e67e22", fontWeight: 700 }}>${f.estimatedCost.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ background: "#f8f9fb", fontWeight: 700 }}>
+                        <td style={{ padding: "10px 12px", color: "#333" }}>Total (30d)</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "#8e44ad" }}>{tokens.last30d?.calls?.toLocaleString() || "0"}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "#555" }}>{(tokens.last30d?.inputTokens || 0).toLocaleString()}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "#555" }}>{(tokens.last30d?.outputTokens || 0).toLocaleString()}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "#e67e22" }}>${(tokens.last30d?.estimatedCost || 0).toFixed(4)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {tokens.auditCalls?.length > 0 && (
+              <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", marginBottom: 28 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", marginBottom: 16 }}>Google Ads Audit Calls (30 days)</p>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#f8f9fb" }}>
+                        <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>User</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Audits Run</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Last Audit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tokens.auditCalls.map((u) => (
+                        <tr key={u.email} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                          <td style={{ padding: "10px 12px", fontWeight: 600, color: "#333" }}>{u.email || "—"}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "#0f3460", fontWeight: 700 }}>{u.calls}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "#999", fontSize: 12 }}>{timeAgo(u.lastAudit)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Empty state */}

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
 import { getCredentials } from '../../../../lib/dbFunctions';
 import dbConnect from '../../../../lib/mongoose';
+import { logApiUsage, estimateClaudeCost } from '../../../../lib/usageLogger';
 
 const DAILY_LIMIT = 10;
 
@@ -150,6 +151,17 @@ Bullet list. Specific red flags or trends that will worsen if ignored. State wha
             system: systemPrompt,
             messages: [{ role: 'user', content: userPrompt }],
         });
+
+        logApiUsage({
+            type: 'claude_tokens',
+            email,
+            model: 'claude-opus-4-6',
+            feature: 'report_analysis',
+            inputTokens: message.usage?.input_tokens ?? 0,
+            outputTokens: message.usage?.output_tokens ?? 0,
+            totalTokens: (message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0),
+            estimatedCostUsd: estimateClaudeCost('claude-opus-4-6', message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0),
+        }).catch(() => {});
 
         const analysis = message.content[0]?.text || '';
         return NextResponse.json({ analysis, remainingToday: DAILY_LIMIT - usedToday - 1 });

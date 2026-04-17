@@ -8,6 +8,7 @@ import { SEO_AUDIT_SYSTEM_PROMPT } from "../../../../lib/seoAuditPrompt";
 import { ADMIN_EMAILS } from "../../../../lib/admins";
 import { checkRateLimit } from '../../../../lib/seoRateLimit.js';
 import { z } from 'zod';
+import { logApiUsage, estimateClaudeCost } from '../../../../lib/usageLogger';
 
 const DAILY_LIMIT = 5;
 const DB = "tokensApi";
@@ -172,6 +173,17 @@ export async function POST(request) {
 
   try {
     const message = await callClaudeWithRetry();
+
+    logApiUsage({
+      type: 'claude_tokens',
+      email,
+      model: 'claude-sonnet-4-20250514',
+      feature: 'seo_audit',
+      inputTokens: message.usage?.input_tokens ?? 0,
+      outputTokens: message.usage?.output_tokens ?? 0,
+      totalTokens: (message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0),
+      estimatedCostUsd: estimateClaudeCost('claude-sonnet-4-20250514', message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0),
+    }).catch(() => {});
 
     const responseText = message.content
       .filter((block) => block.type === "text")

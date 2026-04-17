@@ -175,11 +175,50 @@ export async function GET(request) {
     const topTool7d = byTool.sort((a, b) => b.visits7d - a.visits7d)[0]?.tool || "—";
     const topUser7d = users.sort((a, b) => b.visits7d - a.visits7d)[0]?.email || "—";
 
+    // 5. Token usage stats
+    const apiUsageCol = client.db(DB).collection("ApiUsage");
+
+    const [tokenStats7d, tokenStats30d, tokenByFeature30d, tokenDailyTrend, auditCallStats] = await Promise.all([
+      apiUsageCol.aggregate([
+        { $match: { type: "claude_tokens", timestamp: { $gte: d7 } } },
+        { $group: { _id: null, inputTokens: { $sum: "$inputTokens" }, outputTokens: { $sum: "$outputTokens" }, totalCost: { $sum: "$estimatedCostUsd" }, calls: { $sum: 1 } } },
+      ]).toArray(),
+      apiUsageCol.aggregate([
+        { $match: { type: "claude_tokens", timestamp: { $gte: d30 } } },
+        { $group: { _id: null, inputTokens: { $sum: "$inputTokens" }, outputTokens: { $sum: "$outputTokens" }, totalCost: { $sum: "$estimatedCostUsd" }, calls: { $sum: 1 } } },
+      ]).toArray(),
+      apiUsageCol.aggregate([
+        { $match: { type: "claude_tokens", timestamp: { $gte: d30 } } },
+        { $group: { _id: "$feature", inputTokens: { $sum: "$inputTokens" }, outputTokens: { $sum: "$outputTokens" }, totalCost: { $sum: "$estimatedCostUsd" }, calls: { $sum: 1 } } },
+        { $sort: { totalCost: -1 } },
+      ]).toArray(),
+      apiUsageCol.aggregate([
+        { $match: { type: "claude_tokens", timestamp: { $gte: d30 } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } }, inputTokens: { $sum: "$inputTokens" }, outputTokens: { $sum: "$outputTokens" }, cost: { $sum: "$estimatedCostUsd" }, calls: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+        { $project: { date: "$_id", inputTokens: 1, outputTokens: 1, cost: 1, calls: 1, _id: 0 } },
+      ]).toArray(),
+      apiUsageCol.aggregate([
+        { $match: { type: "google_ads_audit", timestamp: { $gte: d30 } } },
+        { $group: { _id: "$email", calls: { $sum: 1 }, lastAudit: { $max: "$timestamp" } } },
+        { $sort: { calls: -1 } },
+      ]).toArray(),
+    ]);
+
+    const tokens = {
+      last7d:  tokenStats7d[0]  ? { inputTokens: tokenStats7d[0].inputTokens,  outputTokens: tokenStats7d[0].outputTokens,  estimatedCost: tokenStats7d[0].totalCost,  calls: tokenStats7d[0].calls  } : { inputTokens: 0, outputTokens: 0, estimatedCost: 0, calls: 0 },
+      last30d: tokenStats30d[0] ? { inputTokens: tokenStats30d[0].inputTokens, outputTokens: tokenStats30d[0].outputTokens, estimatedCost: tokenStats30d[0].totalCost, calls: tokenStats30d[0].calls } : { inputTokens: 0, outputTokens: 0, estimatedCost: 0, calls: 0 },
+      byFeature: tokenByFeature30d.map((f) => ({ feature: f._id, inputTokens: f.inputTokens, outputTokens: f.outputTokens, estimatedCost: f.totalCost, calls: f.calls })),
+      dailyTrend: tokenDailyTrend,
+      auditCalls: auditCallStats.map((u) => ({ email: u._id, calls: u.calls, lastAudit: u.lastAudit })),
+    };
+
     return NextResponse.json({
       kpis: { total7d, uniqueUsers7d, topTool7d, topUser7d },
       byTool,
       users,
       dailyTrend,
+      tokens,
     });
   } catch (err) {
     console.error("[usage/stats]", err.message);
