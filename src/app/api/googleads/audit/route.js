@@ -70,7 +70,7 @@ export async function GET(request) {
       login_customer_id: credentials.customer_id,
     });
 
-    const [keywordQsRaw, keywordMetricsRaw, campaignConfigRaw, campaignAssetsRaw, accountAssetsRaw, adStrengthRaw, pmaxAssetGroupsRaw, pmaxBrandExclusionsRaw] = await Promise.all([
+    const [keywordQsRaw, keywordMetricsRaw, campaignConfigRaw, campaignPerfRaw, campaignAssetsRaw, accountAssetsRaw, adStrengthRaw, pmaxAssetGroupsRaw, pmaxBrandExclusionsRaw] = await Promise.all([
       // QS + attributes — ad_group_criterion does NOT allow performance metrics with date filtering;
       // fetch criterion data only (no metrics) so quality_score is returned for all active keywords
       customer.query(`
@@ -112,6 +112,7 @@ export async function GET(request) {
         ORDER BY metrics.cost_micros DESC LIMIT 1000
       `).catch((e) => { console.error('[audit] keyword metrics query failed:', e?.message || JSON.stringify(e)); return []; }),
 
+      // Campaign config — no date filter needed (bidding strategy is structural)
       customer.query(`
         SELECT
           campaign.id, campaign.name,
@@ -124,6 +125,23 @@ export async function GET(request) {
           campaign.manual_cpc.enhanced_cpc_enabled
         FROM campaign
         WHERE campaign.status != 'REMOVED'
+      `).catch(() => []),
+
+      // Campaign performance metrics for the selected date range
+      customer.query(`
+        SELECT
+          campaign.id,
+          campaign.advertising_channel_type,
+          metrics.cost_micros,
+          metrics.clicks,
+          metrics.impressions,
+          metrics.all_conversions,
+          metrics.search_budget_lost_impression_share,
+          metrics.search_rank_lost_impression_share
+        FROM campaign
+        WHERE campaign.status != 'REMOVED'
+          AND segments.date >= '${startDate}'
+          AND segments.date <= '${endDate}'
       `).catch(() => []),
 
       // Campaign-level assets — use field_type (AssetFieldType) not asset_type (AssetType)
@@ -340,15 +358,32 @@ export async function GET(request) {
       campaignId: String(row.campaign?.id || ''),
     }));
 
+    const channelTypeMap = { 2: 'SEARCH', 3: 'DISPLAY', 4: 'SHOPPING', 5: 'HOTEL', 6: 'VIDEO', 7: 'MULTI_CHANNEL', 9: 'PERFORMANCE_MAX' };
+    const campaignMetrics = (campaignPerfRaw || []).map((row) => {
+      const c = row.campaign || {};
+      const m = row.metrics || {};
+      const channelRaw = c.advertising_channel_type;
+      return {
+        campaignId: String(c.id || ''),
+        channelType: typeof channelRaw === 'number' ? (channelTypeMap[channelRaw] || `CHANNEL_${channelRaw}`) : (channelRaw || ''),
+        cost: Number(m.cost_micros || 0),
+        clicks: Number(m.clicks || 0),
+        impressions: Number(m.impressions || 0),
+        conversions: Number(m.all_conversions || 0),
+        searchBudgetLostImpressionShare: m.search_budget_lost_impression_share ?? null,
+        searchRankLostImpressionShare: m.search_rank_lost_impression_share ?? null,
+      };
+    });
+
     logApiUsage({
       type: 'google_ads_audit',
       email: sessionEmail,
       customerId: String(customerId),
-      queriesRun: 8,
+      queriesRun: 9,
     }).catch(() => {});
 
     return NextResponse.json({
-      data: { keywords, campaignConfig, campaignAssets, accountAssetTypes: [...accountAssetTypes], adStrength, pmaxAssetGroups, pmaxBrandExclusions },
+      data: { keywords, campaignConfig, campaignMetrics, campaignAssets, accountAssetTypes: [...accountAssetTypes], adStrength, pmaxAssetGroups, pmaxBrandExclusions, dateWindow },
       requestId,
     });
   } catch (error) {

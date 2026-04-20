@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 function formatCurrency(amount) {
-  return `$${amount.toFixed(2)}`;
+  return '$' + Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const RECOMMENDATION_TYPE_LABELS = {

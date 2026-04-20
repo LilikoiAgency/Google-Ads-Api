@@ -1,7 +1,8 @@
 // src/lib/googleAdsHelpers.js
 
 export const ALLOWED_DATE_RANGES = new Set([
-  'LAST_7_DAYS', 'LAST_30_DAYS', 'LAST_90_DAYS', 'THIS_MONTH', 'CUSTOM',
+  'LAST_7_DAYS', 'LAST_30_DAYS', 'LAST_60_DAYS', 'LAST_90_DAYS',
+  'THIS_MONTH', 'LAST_MONTH', 'THIS_YEAR', 'CUSTOM',
 ]);
 
 export const ALLOWED_CAMPAIGN_STATUS_FILTERS = new Set([
@@ -32,8 +33,16 @@ export function getDateWindow(dateRange) {
   switch (dateRange) {
     case 'LAST_7_DAYS':   startDate.setDate(endDate.getDate() - 6); break;
     case 'LAST_30_DAYS':  startDate.setDate(endDate.getDate() - 29); break;
+    case 'LAST_60_DAYS':  startDate.setDate(endDate.getDate() - 59); break;
     case 'LAST_90_DAYS':  startDate.setDate(endDate.getDate() - 89); break;
     case 'THIS_MONTH':    startDate.setDate(1); break;
+    case 'LAST_MONTH': {
+      startDate.setDate(1);
+      startDate.setMonth(startDate.getMonth() - 1);
+      const lastDay = new Date(endDate.getFullYear(), endDate.getMonth(), 0);
+      return { startDate: formatDateLiteral(startDate), endDate: formatDateLiteral(lastDay) };
+    }
+    case 'THIS_YEAR':     startDate.setMonth(0, 1); break;
     default:              startDate.setDate(endDate.getDate() - 6);
   }
   return { startDate: formatDateLiteral(startDate), endDate: formatDateLiteral(endDate) };

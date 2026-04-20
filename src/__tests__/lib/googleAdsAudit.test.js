@@ -73,8 +73,8 @@ describe('fmtCurrency', () => {
   it('formats micros under $1000 as dollars', () => {
     expect(fmtCurrency(500 * MICROS)).toBe('$500');
   });
-  it('formats micros over $1000 as k', () => {
-    expect(fmtCurrency(1500 * MICROS)).toBe('$1.5k');
+  it('formats micros over $1000 with commas', () => {
+    expect(fmtCurrency(1500 * MICROS)).toBe('$1,500');
   });
   it('handles zero', () => {
     expect(fmtCurrency(0)).toBe('$0');

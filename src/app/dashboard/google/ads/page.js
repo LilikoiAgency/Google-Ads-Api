@@ -731,9 +731,17 @@ export default function GoogleAdsDashboard() {
             <button
               onClick={() => {
                 const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
-                if (ad) sessionStorage.setItem("auditAccountData", JSON.stringify(ad));
+                if (ad) {
+                  sessionStorage.setItem("auditAccountData", JSON.stringify(ad));
+                  sessionStorage.setItem(`auditAccountData:${selectedCustomerId}`, JSON.stringify(ad));
+                }
                 const params = new URLSearchParams({ customerId: selectedCustomerId });
                 if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
+                params.set("dateRange", dateRange);
+                if (dateRange === "CUSTOM" && customDateRange?.startDate && customDateRange?.endDate) {
+                  params.set("startDate", customDateRange.startDate);
+                  params.set("endDate", customDateRange.endDate);
+                }
                 router.push(`/dashboard/google/ads/audit?${params.toString()}`);
               }}
               style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(233,69,96,0.15)", border: "1px solid rgba(233,69,96,0.35)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#e94560", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}

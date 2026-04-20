@@ -199,7 +199,7 @@ export async function GET(request) {
         { $project: { date: "$_id", inputTokens: 1, outputTokens: 1, cost: 1, calls: 1, _id: 0 } },
       ]).toArray(),
       apiUsageCol.aggregate([
-        { $match: { type: "google_ads_audit", timestamp: { $gte: d30 } } },
+        { $match: { feature: "google_ads_audit", timestamp: { $gte: d30 } } },
         { $group: { _id: "$email", calls: { $sum: 1 }, lastAudit: { $max: "$timestamp" } } },
         { $sort: { calls: -1 } },
       ]).toArray(),

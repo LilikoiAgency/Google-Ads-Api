@@ -5,9 +5,7 @@ const MICROS = 1_000_000;
 
 export function fmtCurrency(micros) {
   const dollars = (micros || 0) / MICROS;
-  return dollars >= 1000
-    ? `$${(dollars / 1000).toFixed(1)}k`
-    : `$${dollars.toFixed(0)}`;
+  return '$' + dollars.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 export function fmtPct(ratio) {
@@ -166,6 +164,16 @@ export function analyzeKeywords(keywords) {
     .filter((k) => (k.conversions || 0) === 0 && (k.cost || 0) > 1_000_000)
     .sort((a, b) => (b.cost || 0) - (a.cost || 0));
 
+  const topBroad = keywords
+    .filter((k) => k.matchType === 'BROAD')
+    .sort((a, b) => (b.cost || 0) - (a.cost || 0))
+    .slice(0, 10);
+
+  const topByConversions = keywords
+    .filter((k) => (k.conversions || 0) > 0)
+    .sort((a, b) => (b.conversions || 0) - (a.conversions || 0))
+    .slice(0, 15);
+
   const components = ['expectedCtr', 'adRelevance', 'lpExperience'];
   const componentBreakdown = {};
   components.forEach((comp) => {
@@ -186,6 +194,8 @@ export function analyzeKeywords(keywords) {
     weightedAvgQS: weightedQS != null ? Math.round(weightedQS * 10) / 10 : null,
     matchTypeSpend,
     bottom10,
+    topBroad,
+    topByConversions,
     zeroConvHighSpend,
     componentBreakdown,
   };
@@ -398,11 +408,11 @@ export function buildActionPlan(
   });
 
   if (searchTermAnalysis.wasteRatio > 0.08) {
-    const top3 = searchTermAnalysis.wasted.slice(0, 3).map((t) => `"${t.term}"`).join(', ');
     actions.push({
       category: 'Search Terms',
       issue: `${fmtPct(searchTermAnalysis.wasteRatio)} of search term spend (${fmtCurrency(searchTermAnalysis.totalWastedCost)}) went to zero-conversion terms`,
-      fix: `Add top wasted terms as negatives immediately: ${top3}. Review all zero-conversion terms over $10 spend.`,
+      fix: 'Add top wasted terms as negatives immediately. Review all zero-conversion terms over $10 spend.',
+      examples: searchTermAnalysis.wasted.slice(0, 15).map((t) => `"${t.term}" — ${fmtCurrency(t.cost)} wasted`),
       path: 'Search terms report → Select terms → Add as negative keyword',
       impact: 8, confidence: 9, ease: 8,
     });
@@ -421,13 +431,16 @@ export function buildActionPlan(
   }
 
   if (keywordAnalysis?.qs1to3?.length > 0) {
-    const lowQsWithSpend = keywordAnalysis.qs1to3.filter((k) => (k.cost || 0) > 500_000);
+    const lowQsWithSpend = keywordAnalysis.qs1to3
+      .filter((k) => (k.cost || 0) > 500_000)
+      .sort((a, b) => (b.cost || 0) - (a.cost || 0));
     if (lowQsWithSpend.length > 0) {
       const totalSpend = lowQsWithSpend.reduce((s, k) => s + (k.cost || 0), 0);
       actions.push({
         category: 'Keywords',
         issue: `${lowQsWithSpend.length} keyword${lowQsWithSpend.length > 1 ? 's' : ''} with QS ≤3 spent ${fmtCurrency(totalSpend)} — poor Quality Score increases every click`,
-        fix: 'For each low-QS keyword: tighten the ad group theme, rewrite ad copy to match keyword intent exactly, and improve the landing page relevance. Pause if QS cannot be improved.',
+        fix: 'For each: tighten the ad group theme, rewrite ad copy to match keyword intent exactly, improve landing page relevance. Pause if QS cannot be improved.',
+        examples: lowQsWithSpend.slice(0, 15).map((k) => `"${k.text}" (${k.matchType}, QS ${k.qualityScore}, ${fmtCurrency(k.cost)})`),
         path: 'Keywords → Quality Score column → sort ascending',
         impact: 8, confidence: 8, ease: 6,
       });
@@ -440,6 +453,7 @@ export function buildActionPlan(
       category: 'Match Types',
       issue: `Broad match accounts for ${broadPct}% of keyword spend — leaving Google with too much targeting latitude`,
       fix: 'Add phrase and exact match variants of top-performing search terms. Set broad match keywords to observation to identify what Google is actually matching.',
+      examples: (keywordAnalysis.topBroad || []).slice(0, 10).map((k) => `"${k.text}" — ${fmtCurrency(k.cost)}`),
       path: 'Keywords → Match type column',
       impact: 7, confidence: 7, ease: 6,
     });
@@ -515,10 +529,14 @@ export function buildActionPlan(
   }
 
   if (lrData?.lrRatio != null && lrData.lrRatio > 2.5) {
+    const zeroConvExamples = (keywordAnalysis?.zeroConvHighSpend || []).slice(0, 10).map(
+      (k) => `"${k.text}" (${k.matchType}) — ${fmtCurrency(k.cost)}, 0 conv`
+    );
     actions.push({
       category: 'Efficiency',
       issue: `L/R ratio is ${lrData.lrRatio.toFixed(2)} — blended CPA (${fmtCurrency(lrData.blendedCPA)}) is more than 2.5× converting keyword CPA (${fmtCurrency(lrData.convertingKeywordCPA)})`,
       fix: 'Too much spend is on non-converting keywords, campaigns, or match types. Pause zero-conversion keywords, add negatives for wasted search terms, and shift budget to proven converters.',
+      examples: zeroConvExamples,
       path: 'Keywords → Columns → Conversions → sort by cost, filter conv = 0',
       impact: 8, confidence: 7, ease: 5,
     });
@@ -556,7 +574,27 @@ export function buildActionPlan(
 export function runAudit(accountData, auditData = null, campaignId = null) {
   const campaignFilter = campaignId ? (c) => String(c.campaignId) === String(campaignId) : () => true;
 
-  const campaigns = (accountData.campaigns || []).filter(campaignFilter);
+  // If the audit API returned date-range campaign metrics, overlay them onto the
+  // structural campaign data from accountData so KPIs reflect the selected date range.
+  const campaigns = (() => {
+    const base = (accountData.campaigns || []).filter(campaignFilter);
+    const perfRows = auditData?.campaignMetrics;
+    if (!perfRows?.length) return base;
+    const perfMap = new Map(perfRows.map((m) => [String(m.campaignId), m]));
+    return base.map((c) => {
+      const m = perfMap.get(String(c.campaignId));
+      if (!m) return { ...c, cost: 0, clicks: 0, impressions: 0, conversions: 0 };
+      return {
+        ...c,
+        cost: m.cost,
+        clicks: m.clicks,
+        impressions: m.impressions,
+        conversions: m.conversions,
+        searchBudgetLostImpressionShare: m.searchBudgetLostImpressionShare ?? c.searchBudgetLostImpressionShare,
+        searchRankLostImpressionShare: m.searchRankLostImpressionShare ?? c.searchRankLostImpressionShare,
+      };
+    });
+  })();
 
   const searchTerms = campaignId
     ? ((accountData.campaigns || []).find((c) => String(c.campaignId) === String(campaignId))?.searchTerms || [])
