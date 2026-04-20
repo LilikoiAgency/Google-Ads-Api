@@ -872,19 +872,21 @@ const DATE_OPTIONS = [
   { value: "CUSTOM",       label: "Custom range" },
 ];
 
-function RunAuditModal({ accountName, initialRange = "LAST_30_DAYS", onConfirm, onCancel }) {
-  const [range, setRange]   = useState(initialRange);
-  const [start, setStart]   = useState("");
-  const [end,   setEnd]     = useState("");
-  const canConfirm = range !== "CUSTOM" || (start && end && start <= end);
+function RunAuditModal({ accountName, initialRange = "LAST_30_DAYS", usage, onConfirm, onCancel }) {
+  const [range,      setRange]      = useState(initialRange);
+  const [start,      setStart]      = useState("");
+  const [end,        setEnd]        = useState("");
+  const [includeAi,  setIncludeAi]  = useState(false);
+  const canConfirm   = range !== "CUSTOM" || (start && end && start <= end);
+  const aiLimitReached = usage?.remaining === 0;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-      <div style={{ background: C.card, border: `1px solid rgba(255,255,255,0.12)`, borderRadius: 16, padding: 28, width: 400, maxWidth: "90vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
-        <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.5px", color: C.accent, margin: "0 0 4px" }}>Run Audit</p>
-        <h2 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: "0 0 22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName}</h2>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+      <div style={{ background: C.card, border: `1px solid rgba(255,255,255,0.12)`, borderRadius: 16, padding: 28, width: 440, maxWidth: "92vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)", maxHeight: "90vh", overflowY: "auto" }}>
+        <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.5px", color: C.accent, margin: "0 0 4px" }}>Run Audit</p>
+        <h2 style={{ fontSize: 17, fontWeight: 800, color: "#fff", margin: "0 0 22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName}</h2>
 
-        <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: C.textSec, margin: "0 0 10px" }}>Choose timeframe</p>
+        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: C.textSec, margin: "0 0 10px" }}>Choose timeframe</p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
           {DATE_OPTIONS.map((opt) => {
@@ -904,19 +906,42 @@ function RunAuditModal({ accountName, initialRange = "LAST_30_DAYS", onConfirm, 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
             {[["Start date", start, setStart], ["End date", end, setEnd]].map(([label, val, setter]) => (
               <div key={label}>
-                <p style={{ fontSize: 10, color: C.textSec, margin: "0 0 4px" }}>{label}</p>
+                <p style={{ fontSize: 11, color: C.textSec, margin: "0 0 4px" }}>{label}</p>
                 <input type="date" value={val} onChange={(e) => setter(e.target.value)}
-                  style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", color: "#fff", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                  style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
               </div>
             ))}
           </div>
         )}
 
+        {/* AI Analysis toggle */}
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 20 }}>
+          <button
+            onClick={() => !aiLimitReached && setIncludeAi(!includeAi)}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: includeAi && !aiLimitReached ? "rgba(233,69,96,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${includeAi && !aiLimitReached ? "rgba(233,69,96,0.3)" : C.border}`, borderRadius: 10, padding: "12px 16px", cursor: aiLimitReached ? "not-allowed" : "pointer", textAlign: "left" }}>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: aiLimitReached ? C.textSec : "#fff", margin: 0 }}>
+                🤖 Include AI Analysis
+              </p>
+              <p style={{ fontSize: 12, color: C.textSec, margin: "3px 0 0" }}>
+                {aiLimitReached
+                  ? "Daily limit reached — resets at midnight"
+                  : usage
+                  ? `${usage.remaining} of ${usage.limit} AI runs remaining today`
+                  : "Auto-runs Claude after data loads"}
+              </p>
+            </div>
+            <div style={{ width: 40, height: 22, borderRadius: 11, background: includeAi && !aiLimitReached ? C.accent : "rgba(255,255,255,0.15)", transition: "background 0.2s", flexShrink: 0, position: "relative" }}>
+              <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: includeAi && !aiLimitReached ? 20 : 2, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+            </div>
+          </button>
+        </div>
+
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onCancel} style={{ padding: "8px 18px", background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.textSec, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => onConfirm(range, range === "CUSTOM" ? start : null, range === "CUSTOM" ? end : null)} disabled={!canConfirm}
-            style={{ padding: "8px 22px", background: canConfirm ? C.accent : "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: canConfirm ? "#fff" : C.textSec, cursor: canConfirm ? "pointer" : "not-allowed" }}>
-            Run Audit
+          <button onClick={onCancel} style={{ padding: "9px 20px", background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, color: C.textSec, cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => onConfirm(range, range === "CUSTOM" ? start : null, range === "CUSTOM" ? end : null, includeAi && !aiLimitReached)} disabled={!canConfirm}
+            style={{ padding: "9px 24px", background: canConfirm ? C.accent : "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, color: canConfirm ? "#fff" : C.textSec, cursor: canConfirm ? "pointer" : "not-allowed" }}>
+            {includeAi && !aiLimitReached ? "Run Audit + AI" : "Run Audit"}
           </button>
         </div>
       </div>
@@ -1072,19 +1097,17 @@ function AuditPageInner() {
   const [accounts,        setAccounts]        = useState([]);
   const [showRunModal,    setShowRunModal]    = useState(false);
   const [pendingAutoSave, setPendingAutoSave] = useState(false);
+  const [pendingAi,       setPendingAi]       = useState(false);
   const [saving,          setSaving]          = useState(false);
 
-  // Load account data from sessionStorage; immediately prompt to run an audit
+  // Load account data from sessionStorage
   useEffect(() => {
     if (!customerId) return;
     try {
       const keyed = sessionStorage.getItem(`auditAccountData:${customerId}`);
       const generic = sessionStorage.getItem("auditAccountData");
       const raw = keyed || generic;
-      if (raw) {
-        setAccountData(JSON.parse(raw));
-        setShowRunModal(true);
-      }
+      if (raw) setAccountData(JSON.parse(raw));
     } catch {}
   }, [customerId]);
 
@@ -1134,11 +1157,18 @@ function AuditPageInner() {
       .catch(() => {});
   }, [historyVersion]);
 
-  // Auto-save after audit data loads (when triggered by Run Audit modal)
+  // Auto-save (and optionally auto-run AI) after audit data loads
   useEffect(() => {
     if (pendingAutoSave && !auditLoading && audit && auditData) {
       setPendingAutoSave(false);
-      saveAudit(null);
+      const shouldRunAi = pendingAi;
+      if (shouldRunAi) {
+        setPendingAi(false);
+        setTab(7);
+      }
+      saveAudit(null).then(() => {
+        if (shouldRunAi) runAiAnalysis();
+      });
     }
   }, [pendingAutoSave, auditLoading]);
 
@@ -1158,12 +1188,13 @@ function AuditPageInner() {
     return labels[dr] || dr;
   }
 
-  function handleRunAudit(newRange, newStart, newEnd) {
+  function handleRunAudit(newRange, newStart, newEnd, includeAi) {
     setDateRange(newRange);
     setCustomDates({ startDate: newStart || "", endDate: newEnd || "" });
     setDateWindow(newRange === "CUSTOM" && newStart && newEnd ? { startDate: newStart, endDate: newEnd } : null);
     setShowRunModal(false);
     setPendingAutoSave(true);
+    setPendingAi(!!includeAi);
     doFetch(customerId, newRange, newStart, newEnd);
   }
 
@@ -1384,6 +1415,7 @@ function AuditPageInner() {
         <RunAuditModal
           accountName={selectedCampaign ? selectedCampaign.campaignName : accountName}
           initialRange={dateRange}
+          usage={historyUsage}
           onConfirm={handleRunAudit}
           onCancel={() => setShowRunModal(false)}
         />
