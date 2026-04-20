@@ -45,7 +45,7 @@ export async function loadPacingConfig() {
       recipients: DEFAULT_RECIPIENTS,
       clients: DEFAULT_CLIENTS,
       subjectPrefix: 'Budget Pacing Report',
-      fromAddress: process.env.PACING_REPORT_FROM || 'reports@lilikoiagency.com',
+      fromAddress: process.env.PACING_REPORT_FROM || 'reports@updates.lilikoiagency.com',
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -119,7 +119,7 @@ export async function runPacingReport(opts = {}) {
 
   const subject = `${config.subjectPrefix || 'Budget Pacing Report'} — ${reportDate}`;
   const recipients = config.recipients || [];
-  const fromAddress = config.fromAddress || process.env.PACING_REPORT_FROM || 'reports@lilikoiagency.com';
+  const fromAddress = config.fromAddress || process.env.PACING_REPORT_FROM || 'reports@updates.lilikoiagency.com';
 
   let sendStatus = 'skipped';
   let sendError = null;

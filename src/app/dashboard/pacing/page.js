@@ -366,7 +366,14 @@ export default function PacingDashboardPage() {
               <iframe
                 title="pacing-report"
                 srcDoc={displayedHtml}
-                style={{ flex: 1, width: "100%", border: "none", background: "#f0f2f5", minHeight: 700 }}
+                onLoad={(e) => {
+                  try {
+                    const doc = e.currentTarget.contentDocument;
+                    const h = doc?.documentElement?.scrollHeight ?? doc?.body?.scrollHeight;
+                    if (h) e.currentTarget.style.height = h + 'px';
+                  } catch {}
+                }}
+                style={{ width: "100%", border: "none", background: "#f0f2f5", display: "block" }}
               />
             </>
           ) : (
