@@ -609,14 +609,17 @@ function ActionPlanTab({ actions, auditLoading }) {
 
 function buildAuditPayload(audit, accountName, customerId, dateRange) {
   const { summary, campaigns, keywords, searchTerms, bidding, assets, pmaxData, structure, adStrength } = audit;
+  const toDollars = (micros) => (micros == null ? null : Math.round((micros || 0) / 1_000_000));
   return {
     accountName,
     customerId,
     dateRange,
+    currency: 'USD',
+    unitsNote: 'All cost, CPA, and budget values are in whole US dollars.',
     summary: {
-      totalCost: summary.totalCost,
+      totalCost: toDollars(summary.totalCost),
       totalConversions: summary.totalConversions,
-      blendedCPA: summary.blendedCPA,
+      blendedCPA: toDollars(summary.blendedCPA),
       lrRatio: summary.lrRatio,
       optimizationScore: summary.optimizationScore,
     },
@@ -624,9 +627,9 @@ function buildAuditPayload(audit, accountName, customerId, dateRange) {
     campaigns: campaigns.map((c) => ({
       campaignName: c.campaignName,
       verdict: c.verdict?.key,
-      cost: c.cost,
+      cost: toDollars(c.cost),
       conversions: c.conversions,
-      cpa: c.cpa,
+      cpa: toDollars(c.cpa),
       biddingStrategyType: c.biddingStrategyType,
       searchBudgetLostImpressionShare: c.searchBudgetLostImpressionShare,
       searchRankLostImpressionShare: c.searchRankLostImpressionShare,
@@ -638,22 +641,22 @@ function buildAuditPayload(audit, accountName, customerId, dateRange) {
       qs4to6Count: keywords.qs4to6.length,
       qs7to10Count: keywords.qs7to10.length,
       matchTypeSpend: keywords.matchTypeSpend,
-      bottom10: keywords.bottom10?.slice(0, 10).map((k) => ({ text: k.text, matchType: k.matchType, qualityScore: k.qualityScore, cost: k.cost })),
-      topByConversions: keywords.topByConversions?.slice(0, 10).map((k) => ({ text: k.text, matchType: k.matchType, qualityScore: k.qualityScore, conversions: k.conversions, cost: k.cost })),
+      bottom10: keywords.bottom10?.slice(0, 10).map((k) => ({ text: k.text, matchType: k.matchType, qualityScore: k.qualityScore, cost: toDollars(k.cost) })),
+      topByConversions: keywords.topByConversions?.slice(0, 10).map((k) => ({ text: k.text, matchType: k.matchType, qualityScore: k.qualityScore, conversions: k.conversions, cost: toDollars(k.cost) })),
       componentBreakdown: keywords.componentBreakdown,
     } : null,
     searchTerms: searchTerms ? {
       wasteRatio: searchTerms.wasteRatio,
-      totalWastedCost: searchTerms.totalWastedCost,
-      topWasted: searchTerms.wasted?.slice(0, 10).map((t) => ({ term: t.term, cost: t.cost })),
-      topConverting: searchTerms.winners?.slice(0, 10).map((t) => ({ term: t.term, conversions: t.conversions, cost: t.cost })),
+      totalWastedCost: toDollars(searchTerms.totalWastedCost),
+      topWasted: searchTerms.wasted?.slice(0, 10).map((t) => ({ term: t.term, cost: toDollars(t.cost) })),
+      topConverting: searchTerms.winners?.slice(0, 10).map((t) => ({ term: t.term, conversions: t.conversions, cost: toDollars(t.cost) })),
     } : null,
     bidding: bidding?.slice(0, 15).map((b) => ({
       campaignName: b.campaignName,
       biddingStrategyType: b.biddingStrategyType,
-      targetCpa: b.targetCpa,
-      actualCpa: b.actualCpa,
-      budget: b.budget,
+      targetCpa: toDollars(b.targetCpa),
+      actualCpa: toDollars(b.actualCpa),
+      budget: toDollars(b.budget),
       status: b.status,
     })),
     adStrength: adStrength ? {
@@ -670,7 +673,7 @@ function buildAuditPayload(audit, accountName, customerId, dateRange) {
       campaignName: p.campaignName,
       hasBrandExclusion: p.hasBrandExclusion,
       assetGroupCount: p.assetGroupCount,
-      cost: p.cost,
+      cost: toDollars(p.cost),
       conversions: p.conversions,
       flags: p.flags,
     })),
@@ -1165,10 +1168,10 @@ function AuditPageInner() {
       if (shouldRunAi) {
         setPendingAi(false);
         setTab(7);
+        runAiAnalysis();
+      } else {
+        saveAudit(null);
       }
-      saveAudit(null).then(() => {
-        if (shouldRunAi) runAiAnalysis();
-      });
     }
   }, [pendingAutoSave, auditLoading]);
 
@@ -1218,12 +1221,14 @@ function AuditPageInner() {
       } else if (json?.limitReached) {
         setAiError(json.error);
         if (json.usage) setHistoryUsage(json.usage);
+        await saveAudit(null);
       } else {
         throw new Error("No data in response");
       }
     } catch (err) {
       console.error("[AIInsight]", err);
       setAiError(err.message);
+      saveAudit(null).catch(() => {});
     } finally {
       setAiLoading(false);
     }
@@ -1233,7 +1238,7 @@ function AuditPageInner() {
     if (!audit || !customerId) return;
     setSaving(true);
     try {
-      await fetch("/api/googleads/audit/save", {
+      const res = await fetch("/api/googleads/audit/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1242,6 +1247,7 @@ function AuditPageInner() {
           dateRange,
           dateWindow: dateWindow || null,
           dateLabel: buildDateLabel(dateRange, dateWindow),
+          auditId: activeHistoryId || null,
           summary: {
             totalCost: audit.summary.totalCost,
             blendedCPA: audit.summary.blendedCPA,
@@ -1252,6 +1258,10 @@ function AuditPageInner() {
           aiInsight: ai ?? aiInsight ?? null,
         }),
       });
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json?.id) setActiveHistoryId(String(json.id));
+      }
       setHistoryVersion((v) => v + 1);
     } catch (err) {
       console.error("[saveAudit]", err);

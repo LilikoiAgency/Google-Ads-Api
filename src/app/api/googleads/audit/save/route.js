@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { ObjectId } from 'mongodb';
 import { authOptions, allowedEmailDomain } from '../../../../../lib/auth';
 import dbConnect from '../../../../../lib/mongoose';
 
@@ -19,7 +20,7 @@ export async function POST(request) {
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'Invalid request body', requestId }, { status: 400 }); }
 
-  const { customerId, accountName, dateRange, dateWindow, dateLabel, summary, aiInsight } = body;
+  const { customerId, accountName, dateRange, dateWindow, dateLabel, summary, aiInsight, auditId } = body;
   if (!customerId) {
     return NextResponse.json({ error: 'customerId is required', requestId }, { status: 400 });
   }
@@ -27,7 +28,7 @@ export async function POST(request) {
   const client = await dbConnect();
   const db = client.db(DB);
 
-  const result = await db.collection(COLLECTION).insertOne({
+  const doc = {
     email,
     customerId: String(customerId),
     accountName: accountName || 'Account',
@@ -37,7 +38,22 @@ export async function POST(request) {
     summary: summary || {},
     aiInsight: aiInsight || null,
     savedAt: new Date(),
-  });
+  };
 
-  return NextResponse.json({ id: result.insertedId, requestId });
+  if (auditId) {
+    let oid;
+    try { oid = new ObjectId(auditId); } catch { oid = null; }
+    if (oid) {
+      const update = await db.collection(COLLECTION).updateOne(
+        { _id: oid, email, customerId: String(customerId) },
+        { $set: doc },
+      );
+      if (update.matchedCount > 0) {
+        return NextResponse.json({ id: String(oid), requestId, updated: true });
+      }
+    }
+  }
+
+  const result = await db.collection(COLLECTION).insertOne(doc);
+  return NextResponse.json({ id: String(result.insertedId), requestId, updated: false });
 }

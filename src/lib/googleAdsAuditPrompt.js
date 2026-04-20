@@ -105,6 +105,7 @@ Return ONLY valid JSON matching this exact structure. No markdown, no code fence
 
 ## CRITICAL RULES
 - Return ONLY the JSON object. No other text.
+- All monetary fields in the payload (totalCost, blendedCPA, cost, cpa, budget, targetCpa, actualCpa, totalWastedCost) are already in WHOLE US DOLLARS. Do NOT divide, multiply, or convert them — quote them as-is with a "$" prefix.
 - Every finding must reference specific data — actual campaign names, actual keywords, actual dollar amounts and percentages from the payload.
 - campaign_insights: include all PAUSE and SCALE campaigns; include top 2-3 OPTIMIZE campaigns by spend; skip REVIEW campaigns if there are more than 5.
 - recommendations: minimum 5, maximum 10. Sort critical first. Each must be specific enough to act on immediately.

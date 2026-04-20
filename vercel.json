@@ -24,7 +24,8 @@
     { "path": "/api/audience-lab/sync?mode=write&slot=16", "schedule": "40 12 * * 1" },
     { "path": "/api/audience-lab/sync?mode=write&slot=17", "schedule": "50 12 * * 1" },
     { "path": "/api/audience-lab/sync?mode=write&slot=18", "schedule": "0 13 * * 1" },
-    { "path": "/api/audience-lab/sync?mode=write&slot=19", "schedule": "10 13 * * 1" }
+    { "path": "/api/audience-lab/sync?mode=write&slot=19", "schedule": "10 13 * * 1" },
+    { "path": "/api/cron/pacing-report", "schedule": "0 13 * * 1-5" }
   ]
 }
  

@@ -24,6 +24,7 @@ const NAV = [
   { label: "Organic & Reports", items: [
     { href: "/dashboard/google/organic", label: "Google Organic",  icon: <SearchConsoleIcon />  },
     { href: "/dashboard/report",         label: "Paid vs Organic", icon: <ReportIcon />         },
+    { href: "/dashboard/pacing",         label: "Pacing Reports",  icon: <ReportIcon />         },
     { href: "/dashboard/seo-audit",      label: "SEO Audit",       icon: <SEOAuditIcon />       },
     { href: "/dashboard/admin/clients",  label: "Client Portals",  icon: <ClientPortalsIcon />  },
   ]},
