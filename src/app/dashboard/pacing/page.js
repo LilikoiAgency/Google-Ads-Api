@@ -312,7 +312,7 @@ export default function PacingDashboardPage() {
           {loading.reports ? (
             <div style={{ padding: 12, color: C.textSec, fontSize: 12 }}>Loading…</div>
           ) : reports.length === 0 ? (
-            <div style={{ padding: 12, color: C.textSec, fontSize: 12 }}>No reports yet. Click <strong>Send now</strong> or wait for tomorrow's cron.</div>
+            <div style={{ padding: 12, color: C.textSec, fontSize: 12 }}>No reports yet. Click <strong>Send now</strong> or wait for tomorrow&apos;s cron.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {reports.map((r) => {
@@ -379,7 +379,7 @@ export default function PacingDashboardPage() {
           ) : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, textAlign: "center", padding: 40 }}>
               <div>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>Select a past report, or click <strong>Preview</strong> to render today's data without sending.</div>
+                <div style={{ fontSize: 14, marginBottom: 8 }}>Select a past report, or click <strong>Preview</strong> to render today&apos;s data without sending.</div>
                 <div style={{ fontSize: 12, color: C.textMut }}>Reports generate automatically each weekday at 9 AM ET.</div>
               </div>
             </div>
