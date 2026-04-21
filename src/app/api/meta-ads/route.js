@@ -1,34 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCredentials } from "../../../lib/dbFunctions";
+import { graphGet, getTimeRange, getMetaAccessToken } from "../../../lib/metaGraph";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const GRAPH_BASE = "https://graph.facebook.com/v19.0";
-
-// ─── date range helpers ────────────────────────────────────────────────────────
-
-function getTimeRange(range, startDate, endDate) {
-  const today = new Date();
-  const fmt = (d) => d.toISOString().slice(0, 10);
-  const ago = (days) => fmt(new Date(today.getTime() - days * 86400000));
-
-  switch ((range || "28d").toLowerCase()) {
-    case "7d":     return { since: ago(7),   until: fmt(today) };
-    case "28d":    return { since: ago(28),  until: fmt(today) };
-    case "3m":     return { since: ago(90),  until: fmt(today) };
-    case "6m":     return { since: ago(180), until: fmt(today) };
-    case "mtd": {
-      const s = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { since: fmt(s), until: fmt(today) };
-    }
-    case "custom":
-      if (startDate && endDate) return { since: startDate, until: endDate };
-      return { since: ago(28), until: fmt(today) };
-    default:
-      return { since: ago(28), until: fmt(today) };
-  }
-}
 
 // Returns the equivalent previous period (same number of days, directly before)
 function getPrevTimeRange(timeRange) {
@@ -39,20 +13,6 @@ function getPrevTimeRange(timeRange) {
   const prevSince = new Date(prevUntil.getTime() - (days - 1) * 86400000);
   const fmt = (d) => d.toISOString().slice(0, 10);
   return { since: fmt(prevSince), until: fmt(prevUntil) };
-}
-
-// ─── meta api helpers ──────────────────────────────────────────────────────────
-
-async function graphGet(path, params, token) {
-  const url = new URL(`${GRAPH_BASE}/${path}`);
-  url.searchParams.set("access_token", token);
-  Object.entries(params).forEach(([k, v]) =>
-    url.searchParams.set(k, typeof v === "object" ? JSON.stringify(v) : String(v))
-  );
-  const res  = await fetch(url.toString(), { cache: "no-store" });
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message || `Meta API error on /${path}`);
-  return json;
 }
 
 // Sum specific action types from Meta's actions array
@@ -91,12 +51,13 @@ const ZERO_METRICS   = { spend: 0, clicks: 0, impressions: 0, reach: 0, ctr: 0, 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
 
-  // Pull token from MongoDB first, fall back to env var
-  let token = process.env.META_ACCESS_TOKEN;
+  let token;
   try {
-    const creds = await getCredentials();
-    if (creds.meta_access_token) token = creds.meta_access_token;
-  } catch {}
+    token = await getMetaAccessToken();
+  } catch {
+    // Fall back to env var if Mongo credentials are not configured
+    token = process.env.META_ACCESS_TOKEN;
+  }
 
   if (!token) {
     return NextResponse.json({ error: "Meta access token not configured. Add META_ACCESS_TOKEN to the Tokens collection in MongoDB." }, { status: 500 });
