@@ -208,12 +208,11 @@ User on /dashboard/meta
 ## Dependencies
 
 - Meta Graph API access — **existing**, already used by `/api/meta-ads`
-- `ads_management` permission — needed for `/previews` endpoint (likely already granted to existing access token, must verify)
+- **Read-only scope (`ads_read`)** — the existing token already has this for reading insights. `/{adId}/previews` works with `ads_read` when you're previewing an existing ad by ID, which is what we're doing. No token re-auth needed; no write scope requested.
 - No new npm packages required
 
 ## Open questions (to resolve in implementation)
 
-- Are the existing Meta access tokens scoped for `ads_management`? If not, may need to re-auth with additional scope. **Implementation plan should verify this as step 1.**
 - Video ads: Meta's preview endpoint handles video ads, but falls back gracefully for animated/dynamic creatives. Verify this works for CMK/BBT/SMP accounts specifically.
 - Ad set with > 50 ads: for v1, cap at 50 (most ad sets don't exceed this). Add pagination if needed later.
 
