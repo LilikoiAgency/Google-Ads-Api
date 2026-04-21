@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { ObjectId } from 'mongodb';
 import { authOptions, allowedEmailDomain } from '../../../../../lib/auth';
+import { isAdmin } from '../../../../../lib/admins';
 import dbConnect from '../../../../../lib/mongoose';
 
 const DB = 'tokensApi';
@@ -36,14 +37,14 @@ export async function GET(request) {
     let oid;
     try { oid = new ObjectId(id); }
     catch { return NextResponse.json({ error: 'Invalid id', requestId }, { status: 400 }); }
-    const doc = await db.collection(COLLECTION).findOne({ _id: oid, email });
+    const doc = await db.collection(COLLECTION).findOne({ _id: oid });
     if (!doc) return NextResponse.json({ error: 'Not found', requestId }, { status: 404 });
     return NextResponse.json({ data: doc, usage, requestId });
   }
 
   if (customerId) {
     const docs = await db.collection(COLLECTION)
-      .find({ email, customerId: String(customerId) })
+      .find({ customerId: String(customerId) })
       .sort({ savedAt: -1 })
       .limit(20)
       .project({ aiInsight: 0 })
@@ -72,9 +73,11 @@ export async function DELETE(request) {
   catch { return NextResponse.json({ error: 'Invalid id', requestId }, { status: 400 }); }
 
   const client = await dbConnect();
-  const result = await client.db(DB).collection(COLLECTION).deleteOne({ _id: oid, email });
+  const coll = client.db(DB).collection(COLLECTION);
+  const filter = isAdmin(email) ? { _id: oid } : { _id: oid, email };
+  const result = await coll.deleteOne(filter);
   if (result.deletedCount === 0) {
-    return NextResponse.json({ error: 'Not found', requestId }, { status: 404 });
+    return NextResponse.json({ error: 'Not found or not yours to delete', requestId }, { status: 404 });
   }
   return NextResponse.json({ ok: true, requestId });
 }

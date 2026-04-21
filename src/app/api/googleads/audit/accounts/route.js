@@ -19,7 +19,6 @@ export async function GET() {
   const db = client.db(DB);
 
   const accounts = await db.collection(COLLECTION).aggregate([
-    { $match: { email } },
     { $sort: { savedAt: -1 } },
     {
       $group: {

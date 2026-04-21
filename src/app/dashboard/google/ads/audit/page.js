@@ -1039,6 +1039,9 @@ function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onR
                   <p style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#fff" : "rgba(255,255,255,0.85)", margin: 0 }}>{dateStr}</p>
                   <p style={{ fontSize: 11, color: C.textSec, margin: "3px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={rangeLabel}>{rangeLabel}</p>
                   <p style={{ fontSize: 11, color: C.textSec, margin: "2px 0 0" }}>{fmtCurrency(entry.summary?.totalCost || 0)}</p>
+                  {entry.email && (
+                    <p style={{ fontSize: 10, color: C.textSec, opacity: 0.7, margin: "2px 0 0" }}>by {entry.email.split("@")[0]}</p>
+                  )}
                 </div>
                 {grade ? (
                   <span style={{ fontSize: 14, fontWeight: 900, width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: `${gradeColor}18`, color: gradeColor, flexShrink: 0, marginLeft: 6 }}>{grade}</span>
