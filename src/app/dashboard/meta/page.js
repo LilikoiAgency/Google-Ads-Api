@@ -12,6 +12,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import "../../globals.css";
+import MetaAdsPanel from "./components/MetaAdsPanel";
 
 // ─── priority sort ────────────────────────────────────────────────────────────
 
@@ -461,7 +462,7 @@ const ADSET_COLS = [
   { key: "roas",          label: "ROAS",        align: "right" },
 ];
 
-function AdSetTable({ adsets, loading }) {
+function AdSetTable({ adsets, loading, onRowClick }) {
   const [sort, setSort] = useState({ key: "spend", dir: "desc" });
   const toggle = (key) => setSort((s) => ({ key, dir: s.key === key && s.dir === "desc" ? "asc" : "desc" }));
 
@@ -490,15 +491,20 @@ function AdSetTable({ adsets, loading }) {
                 {sort.key === col.key && <span className="ml-1 text-gray-400">{sort.dir === "asc" ? "↑" : "↓"}</span>}
               </th>
             ))}
+            <th></th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={ADSET_COLS.length} className="px-4 py-8 text-center text-sm text-gray-400">No ad sets found.</td></tr>
+            <tr><td colSpan={ADSET_COLS.length + 1} className="px-4 py-8 text-center text-sm text-gray-400">No ad sets found.</td></tr>
           ) : rows.map((s) => {
             const freqHigh = s.frequency > 4;
             return (
-              <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
+              <tr
+                key={s.id}
+                onClick={() => onRowClick?.(s)}
+                className="border-b border-gray-50 hover:bg-gray-50/50 transition cursor-pointer"
+              >
                 <td className="px-4 py-3 font-medium text-gray-900 max-w-[240px] truncate">{s.name}</td>
                 <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
                 <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmtD(s.spend)}</td>
@@ -513,6 +519,7 @@ function AdSetTable({ adsets, loading }) {
                 <td className="px-4 py-3 text-right text-gray-700">{fmt(s.conversions)}</td>
                 <td className="px-4 py-3 text-right text-gray-600">{s.costPerResult ? fmtD(s.costPerResult) : "—"}</td>
                 <td className="px-4 py-3 text-right font-semibold text-gray-800">{s.roas ? `${s.roas}x` : "—"}</td>
+                <td className="px-3 py-3 text-right text-gray-300 text-base">›</td>
               </tr>
             );
           })}
@@ -579,6 +586,9 @@ export default function MetaDashboard() {
   // Ad sets
   const [adSets, setAdSets]           = useState(null);
   const [adSetsLoading, setAdSetsLoading] = useState(false);
+
+  // Ad-level panel
+  const [adsPanelAdSet, setAdsPanelAdSet] = useState(null);
 
   // Mobile filter sheet
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1002,7 +1012,7 @@ export default function MetaDashboard() {
                 </div>
                 {adSets && <p className="text-xs text-gray-400">{adSets.length} ad sets</p>}
               </div>
-              <AdSetTable adsets={adSets} loading={adSetsLoading} />
+              <AdSetTable adsets={adSets} loading={adSetsLoading} onRowClick={(s) => setAdsPanelAdSet(s)} />
             </div>
           )}
 
@@ -1027,6 +1037,16 @@ export default function MetaDashboard() {
           </>)}
         </div>
       </div>
+
+      <MetaAdsPanel
+        open={!!adsPanelAdSet}
+        onClose={() => setAdsPanelAdSet(null)}
+        adSet={adsPanelAdSet}
+        campaignName={selectedCampaign?.name || null}
+        range={preset}
+        startDate={custom?.startDate || undefined}
+        endDate={custom?.endDate || undefined}
+      />
     </div>
   );
 }
