@@ -10,21 +10,33 @@ import { graphGet, getTimeRange, getMetaAccessToken } from '../../../../../../li
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-function sumActions(actions, ...keywords) {
-  if (!Array.isArray(actions)) return 0;
-  return actions.reduce((sum, a) => {
-    if (keywords.some((k) => a.action_type?.includes(k))) {
-      return sum + parseFloat(a.value || 0);
-    }
-    return sum;
-  }, 0);
+// NaN/Infinity-safe numeric helpers
+function toNum(v) {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function toInt(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Exact action-type matching — mirrors CONVERSION_TYPES / REVENUE_TYPES in
+// src/app/api/meta-ads/route.js to avoid double-counting when both
+// omni_purchase and platform-specific purchase events are present.
+const CONVERSION_TYPES = ['purchase', 'lead', 'complete_registration', 'offsite_conversion', 'fb_pixel_purchase'];
+const REVENUE_TYPES    = ['purchase', 'offsite_conversion.fb_pixel_purchase', 'offsite_conversion'];
+
+function sumActions(actions, types) {
+  if (!Array.isArray(actions) || !Array.isArray(types)) return 0;
+  const set = new Set(types);
+  return actions.reduce((sum, a) => set.has(a.action_type) ? sum + toNum(a.value) : sum, 0);
 }
 
 function shapeAd(ad) {
   const ins = ad.insights?.data?.[0] || {};
-  const spend = parseFloat(ins.spend || 0);
-  const revenue = sumActions(ins.action_values, 'purchase', 'omni_purchase');
-  const conversions = sumActions(ins.actions, 'purchase', 'omni_purchase', 'lead', 'complete_registration');
+  const spend = toNum(ins.spend);
+  const revenue = sumActions(ins.action_values, REVENUE_TYPES);
+  const conversions = sumActions(ins.actions, CONVERSION_TYPES);
 
   return {
     id: ad.id,
@@ -43,11 +55,11 @@ function shapeAd(ad) {
       : null,
     insights: {
       spend,
-      impressions: parseInt(ins.impressions || 0, 10),
-      clicks: parseInt(ins.clicks || 0, 10),
-      ctr: parseFloat(ins.ctr || 0) / 100, // Meta returns % not ratio
-      cpc: parseFloat(ins.cpc || 0),
-      cpm: parseFloat(ins.cpm || 0),
+      impressions: toInt(ins.impressions),
+      clicks: toInt(ins.clicks),
+      ctr: toNum(ins.ctr) / 100, // Meta returns % not ratio
+      cpc: toNum(ins.cpc),
+      cpm: toNum(ins.cpm),
       conversions,
       cost_per_conversion: conversions > 0 ? spend / conversions : null,
       revenue,
@@ -87,16 +99,8 @@ export async function GET(request, { params }) {
       `insights.time_range(${JSON.stringify(timeRange)}){${insightsFields}}`,
     ].join(',');
 
-    const resp = await graphGet(adSetId, { fields, limit: 50 }, token);
-
-    // When calling the Node at `{adSetId}` with `fields=` Meta returns the
-    // ad set object with no `.data` array. We need the edge call instead.
-    // Fall back: if `resp.id === adSetId` without an `ads` edge, hit `/ads`.
-    let adsRaw = Array.isArray(resp?.data) ? resp.data : resp?.ads?.data;
-    if (!adsRaw) {
-      const edgeResp = await graphGet(`${adSetId}/ads`, { fields, limit: 50 }, token);
-      adsRaw = edgeResp?.data || [];
-    }
+    const resp = await graphGet(`${adSetId}/ads`, { fields, limit: 50 }, token);
+    const adsRaw = resp?.data || [];
 
     const data = adsRaw.map(shapeAd);
     return NextResponse.json({ data, dateRange: timeRange });
