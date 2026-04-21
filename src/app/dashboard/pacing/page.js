@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import PacingTrendChart from "./PacingTrendChart";
 
 const C = {
   bg:      "#0f0f17",
@@ -57,6 +58,7 @@ export default function PacingDashboardPage() {
   const [busy, setBusy] = useState({ preview: false, send: false });
   const [toast, setToast] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [view, setView] = useState('report'); // 'report' | 'trends'
 
   // Load config + report list
   useEffect(() => {
@@ -185,14 +187,14 @@ export default function PacingDashboardPage() {
   const displayedSummary = previewHtml ? previewSummary : activeReport?.summary;
 
   return (
-    <div style={{ padding: "24px 32px", color: C.textPri, fontFamily: "Inter, system-ui, sans-serif", minHeight: "100vh" }}>
+    <div className="pacing-page" style={{ color: C.textPri, fontFamily: "Inter, system-ui, sans-serif", minHeight: "100vh" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div className="pacing-page-header">
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>Daily Pacing Reports</h1>
           <p style={{ margin: "4px 0 0", color: C.textSec, fontSize: 13 }}>Automated Mon–Fri at 9 AM ET. Edit recipients and sheet IDs here.</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="pacing-actions">
           <button onClick={() => setShowConfig((v) => !v)} style={btnSecondary}>
             {showConfig ? "Hide config" : "Config"}
           </button>
@@ -251,8 +253,7 @@ export default function PacingDashboardPage() {
                 <label style={lbl}>Clients & sheet IDs</label>
                 <div style={{ display: "grid", gap: 8 }}>
                   {(configDraft.clients || []).map((c, i) => (
-                    <div key={c.key} style={{
-                      display: "grid", gridTemplateColumns: "80px 1fr 1fr 100px", gap: 10, alignItems: "center",
+                    <div key={c.key} className="pacing-config-row" style={{
                       background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 12px",
                     }}>
                       <div style={{ fontSize: 12, color: C.textSec, fontWeight: 700 }}>{c.key}</div>
@@ -281,7 +282,7 @@ export default function PacingDashboardPage() {
               </div>
 
               {/* Subject + From */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div className="pacing-meta-row">
                 <div>
                   <label style={lbl}>Subject prefix</label>
                   <input
@@ -305,9 +306,9 @@ export default function PacingDashboardPage() {
       )}
 
       {/* Main split: history list + preview */}
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16, minHeight: 600 }}>
+      <div className="pacing-main-grid">
         {/* History list */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, maxHeight: 800, overflowY: "auto" }}>
+        <div className="pacing-history-list">
           <h3 style={{ margin: "4px 8px 12px", fontSize: 13, fontWeight: 700, color: C.textSec, textTransform: "uppercase", letterSpacing: 0.5 }}>Past Reports</h3>
           {loading.reports ? (
             <div style={{ padding: 12, color: C.textSec, fontSize: 12 }}>Loading…</div>
@@ -344,8 +345,33 @@ export default function PacingDashboardPage() {
 
         {/* Main pane */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {loading.active ? (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec }}>Loading report…</div>
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, background: C.cardAlt }}>
+            {[
+              { key: 'report', label: 'Report' },
+              { key: 'trends', label: 'Trends' },
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setView(t.key)}
+                style={{
+                  background: view === t.key ? C.card : 'transparent',
+                  color: view === t.key ? C.textPri : C.textSec,
+                  border: 'none',
+                  borderBottom: view === t.key ? `2px solid ${C.teal}` : '2px solid transparent',
+                  padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  transition: 'background 0.1s, color 0.1s',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {view === 'trends' ? (
+            <PacingTrendChart />
+          ) : loading.active ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, padding: 40 }}>Loading report…</div>
           ) : displayedHtml ? (
             <>
               <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, background: C.cardAlt, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -363,18 +389,20 @@ export default function PacingDashboardPage() {
                   </div>
                 )}
               </div>
-              <iframe
-                title="pacing-report"
-                srcDoc={displayedHtml}
-                onLoad={(e) => {
-                  try {
-                    const doc = e.currentTarget.contentDocument;
-                    const h = doc?.documentElement?.scrollHeight ?? doc?.body?.scrollHeight;
-                    if (h) e.currentTarget.style.height = h + 'px';
-                  } catch {}
-                }}
-                style={{ width: "100%", border: "none", background: "#f0f2f5", display: "block" }}
-              />
+              <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", background: "#f0f2f5" }}>
+                <iframe
+                  title="pacing-report"
+                  srcDoc={displayedHtml}
+                  onLoad={(e) => {
+                    try {
+                      const doc = e.currentTarget.contentDocument;
+                      const h = doc?.documentElement?.scrollHeight ?? doc?.body?.scrollHeight;
+                      if (h) e.currentTarget.style.height = h + 'px';
+                    } catch {}
+                  }}
+                  style={{ width: "100%", minWidth: 600, border: "none", background: "#f0f2f5", display: "block" }}
+                />
+              </div>
             </>
           ) : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, textAlign: "center", padding: 40 }}>

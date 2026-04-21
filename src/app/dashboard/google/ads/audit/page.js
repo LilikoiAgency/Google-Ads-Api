@@ -959,7 +959,7 @@ function AccountsSidebar({ accounts, currentCustomerId, onSelect }) {
   const GRADE_COLOR = { A: C.teal, B: "#60d394", C: C.amber, D: "#f97316", F: C.accent };
 
   return (
-    <div style={{ width: 200, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
+    <div className="audit-sidebar" style={{ borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "14px 16px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: C.textSec }}>Accounts</span>
       </div>
@@ -995,7 +995,7 @@ function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onR
   const [hoveredId, setHoveredId] = useState(null);
 
   return (
-    <div style={{ width: 240, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
+    <div className="audit-history" style={{ borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column" }}>
       {/* Run Audit button */}
       <div style={{ padding: "14px 14px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <button onClick={onRunAudit} disabled={auditLoading}
@@ -1333,11 +1333,11 @@ function AuditPageInner() {
   const dateLabel = buildDateLabel(dateRange, dateWindow);
 
   return (
-    <div style={{ height: "100vh", background: C.bg, color: C.textPri, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div className="audit-root" style={{ background: C.bg, color: C.textPri }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ── Top bar ── */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "16px 28px", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+      <div className="audit-topbar" style={{ borderBottom: `1px solid ${C.border}` }}>
         <button onClick={() => router.back()} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.07)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: C.textSec, cursor: "pointer" }}>
           ← Back
         </button>
@@ -1355,7 +1355,7 @@ function AuditPageInner() {
           </div>
         )}
         {audit && (
-          <div style={{ display: "flex", gap: 22, alignItems: "center" }}>
+          <div className="audit-stats" style={{ display: "flex", gap: 22, alignItems: "center" }}>
             {audit.summary.criticalCount > 0 && (
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 22, fontWeight: 800, color: C.accent, margin: 0 }}>{audit.summary.criticalCount}</p>
@@ -1374,7 +1374,7 @@ function AuditPageInner() {
       </div>
 
       {/* ── Body ── */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div className="audit-three-pane">
         <AccountsSidebar accounts={accounts} currentCustomerId={customerId} onSelect={handleAccountSelect} />
         <AuditHistorySidebar
           entries={history}
@@ -1385,7 +1385,7 @@ function AuditPageInner() {
           onDelete={deleteHistoryEntry}
           onRunAudit={() => setShowRunModal(true)}
         />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="audit-content">
           {/* Tab bar */}
           <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 24px", display: "flex", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", flexShrink: 0 }}>
             {TABS.map((t, i) => (
@@ -1399,7 +1399,7 @@ function AuditPageInner() {
           {/* Tab content */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {audit ? (
-              <div style={{ padding: "28px 32px", maxWidth: 1100, margin: "0 auto" }}>
+              <div className="audit-tab-content">
                 {tab === 0 && <OverviewTab audit={audit} auditLoading={auditLoading} />}
                 {tab === 1 && <CampaignsTab campaigns={audit.campaigns} />}
                 {tab === 2 && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} />}

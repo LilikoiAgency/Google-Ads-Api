@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import DashboardToolHeader from "./components/DashboardToolHeader";
 import DashboardLoader from "./components/DashboardLoader";
+import PacingWidget from "./components/PacingWidget";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon,
@@ -14,8 +15,8 @@ import {
 } from "./components/DashboardIcons";
 
 // ── Editable "What's New" content ────────────────────────────────────────────
-const WHATS_NEW_TITLE = "SEO / GEO / AEO Audit is now live";
-const WHATS_NEW_BODY  = "Run AI-powered site audits powered by Claude. Get prioritized fixes for on-page SEO, generative engine optimization, and answer engine optimization. Crawls up to 50 pages per audit.";
+const WHATS_NEW_TITLE = "Daily Pacing Reports + dashboard widget";
+const WHATS_NEW_BODY  = "Automated budget pacing now runs every weekday at 8 AM ET, fetches data from each client sheet, and emails a per-account breakdown to the team. View past reports, edit recipients, render previews, and trigger manual sends from the new Pacing Reports tab. A pacing snapshot widget below shows the latest status at a glance, and a Trends tab tracks each client's pacing over time. Google Ads audits are now shared across the team — no more siloed history.";
 
 // ── Tool catalogue ────────────────────────────────────────────────────────────
 const TOOLS = [
@@ -98,35 +99,38 @@ export default function DashboardHome() {
         </span>
       </DashboardToolHeader>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "50px 40px 84px", width: "100%" }}>
+      <div className="home-container">
         {/* Hero */}
-        <div style={{ marginBottom: 50 }}>
-          <h1 style={{ fontSize: 40, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.5px", margin: "0 0 14px" }}>
+        <div className="home-section">
+          <h1 className="home-hero-h1" style={{ color: "var(--text-primary)" }}>
             Welcome back,{" "}
             <span style={{ background: "linear-gradient(135deg,#a855f7,#6366f1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               {firstName}
             </span>{" "}
             👋
           </h1>
-          <p style={{ fontSize: 20, color: "var(--banner-body)", lineHeight: 1.6, margin: 0, maxWidth: 620 }}>
+          <p className="home-hero-sub" style={{ color: "var(--banner-body)" }}>
             Everything you need to manage paid media, organic search, and audience data — all in one place. Use the sidebar or pick a tool below to get started.
           </p>
         </div>
 
         {/* What's New banner */}
-        <div style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 20, padding: "22px 28px", marginBottom: 56, display: "flex", alignItems: "flex-start", gap: 20 }}>
-          <span style={{ background: "rgba(168,85,247,0.25)", borderRadius: 11, padding: "8px 14px", fontSize: 14, fontWeight: 800, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap", flexShrink: 0 }}>NEW</span>
+        <div className="home-whats-new" style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 20 }}>
+          <span style={{ background: "rgba(168,85,247,0.25)", borderRadius: 11, padding: "6px 12px", fontSize: 12, fontWeight: 800, color: "#c084fc", letterSpacing: "0.5px", whiteSpace: "nowrap", flexShrink: 0, alignSelf: "flex-start" }}>NEW</span>
           <div>
-            <p style={{ fontSize: 17, fontWeight: 700, color: "var(--banner-title)", margin: "0 0 6px" }}>{WHATS_NEW_TITLE}</p>
-            <p style={{ fontSize: 15, color: "var(--banner-body)", lineHeight: 1.55, margin: 0 }}>{WHATS_NEW_BODY}</p>
+            <p style={{ fontSize: 16, fontWeight: 700, color: "var(--banner-title)", margin: "0 0 6px", lineHeight: 1.3 }}>{WHATS_NEW_TITLE}</p>
+            <p style={{ fontSize: 14, color: "var(--banner-body)", lineHeight: 1.55, margin: 0 }}>{WHATS_NEW_BODY}</p>
           </div>
         </div>
 
+        {/* Pacing snapshot widget — only renders if a report exists */}
+        <PacingWidget />
+
         {/* Tool sections */}
         {TOOLS.map(({ section, items }) => (
-          <div key={section} style={{ marginBottom: 50 }}>
+          <div key={section} className="home-section">
             <p style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: "var(--section-label)", margin: "0 0 16px" }}>{section}</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+            <div className="home-tools-grid">
               {items.map((tool) => <ToolCard key={tool.href} {...tool} />)}
             </div>
           </div>

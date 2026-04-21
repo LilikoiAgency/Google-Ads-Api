@@ -778,15 +778,38 @@ export default function GoogleAdsDashboard() {
       </DashboardToolHeader>
 
       {/* Mobile filter row */}
-      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0, alignItems: "center" }}>
         <button
           onClick={() => setFilterOpen(true)}
-          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
         >
           Filters <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
         </button>
+        {selectedCustomerId && allCampaignData.length > 0 && (
+          <button
+            onClick={() => {
+              const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
+              if (ad) {
+                sessionStorage.setItem("auditAccountData", JSON.stringify(ad));
+                sessionStorage.setItem(`auditAccountData:${selectedCustomerId}`, JSON.stringify(ad));
+              }
+              const params = new URLSearchParams({ customerId: selectedCustomerId });
+              if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
+              params.set("dateRange", dateRange);
+              if (dateRange === "CUSTOM" && customDateRange?.startDate && customDateRange?.endDate) {
+                params.set("startDate", customDateRange.startDate);
+                params.set("endDate", customDateRange.endDate);
+              }
+              router.push(`/dashboard/google/ads/audit?${params.toString()}`);
+            }}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(233,69,96,0.15)", border: "1px solid rgba(233,69,96,0.35)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 700, color: "#e94560", cursor: "pointer", flexShrink: 0 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            {selectedCampaign ? "Audit campaign" : "Audit"}
+          </button>
+        )}
         {selectedCustomerId && (
-          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>
+          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
             {allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.customer?.customer_client?.descriptive_name || ""}
           </span>
         )}

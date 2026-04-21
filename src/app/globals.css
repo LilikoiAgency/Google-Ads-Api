@@ -173,3 +173,104 @@ nav:hover .sb-active-dot {
   /* KPI grids — 2 columns on mobile */
   .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
+
+/* ── Pacing report layouts ── */
+.pacing-page          { padding: 24px 32px; }
+.pacing-page-header   { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
+.pacing-actions       { display: flex; gap: 10px; flex-wrap: wrap; }
+.pacing-main-grid     { display: grid; grid-template-columns: 280px 1fr; gap: 16px; min-height: 600px; }
+.pacing-config-row    { display: grid; grid-template-columns: 80px 1fr 1fr 100px; gap: 10px; align-items: center; }
+.pacing-meta-row      { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pacing-history-list  { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; max-height: 800px; overflow-y: auto; }
+.pacing-widget-cards  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+@media (max-width: 767px) {
+  .pacing-page         { padding: 16px; }
+  .pacing-page-header  { flex-direction: column; align-items: stretch; }
+  .pacing-page-header > div:first-child h1 { font-size: 20px !important; }
+  .pacing-actions      { width: 100%; }
+  .pacing-actions > button { flex: 1; min-width: 0; }
+  .pacing-main-grid    { grid-template-columns: 1fr; min-height: 0; }
+  .pacing-history-list { max-height: 320px; }
+  .pacing-config-row   { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pacing-config-row > input:nth-of-type(2) { grid-column: span 2; }
+  .pacing-meta-row     { grid-template-columns: 1fr; }
+  .pacing-widget-cards { grid-template-columns: 1fr; }
+}
+@media (min-width: 480px) and (max-width: 767px) {
+  .pacing-widget-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Google Ads Audit page — 3-pane layout responsive ── */
+.audit-root          { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.audit-topbar        { padding: 16px 28px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+.audit-three-pane    { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.audit-sidebar       { width: 200px; flex-shrink: 0; overflow: hidden; }
+.audit-history       { width: 240px; flex-shrink: 0; overflow: hidden; }
+.audit-content       { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.audit-tab-content   { padding: 28px 32px; max-width: 1100px; margin: 0 auto; }
+.audit-table-scroll  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 767px) {
+  /* Drop the desktop "fixed-height + independent panes" layout entirely. */
+  .audit-root        { height: auto; min-height: 100vh; overflow: visible; }
+  .audit-topbar      { padding: 12px 14px; gap: 10px; flex-wrap: wrap; }
+  .audit-topbar h1   { font-size: 16px !important; }
+  .audit-topbar .audit-stats { width: 100%; justify-content: flex-start; gap: 16px !important; }
+  .audit-three-pane  { flex-direction: column; overflow: visible; min-height: 0; }
+  .audit-sidebar     { width: 100%; max-height: 160px; border-right: none !important; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .audit-history     { width: 100%; max-height: 240px; border-right: none !important; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .audit-content     { overflow: visible; min-height: 0; }
+  .audit-tab-content { padding: 14px 12px; max-width: 100%; }
+
+  /* Collapse multi-column KPI grids inside audit content to 2 cols on mobile.
+     Targets the inline grid styles used throughout the audit tabs. */
+  .audit-tab-content [style*="repeat(4,1fr)"],
+  .audit-tab-content [style*="repeat(4, 1fr)"],
+  .audit-tab-content [style*="repeat(3,1fr)"],
+  .audit-tab-content [style*="repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Wide fixed-column tables (keyword tops/bottoms) — let them scroll instead of overflow-clipping. */
+  .audit-tab-content > div > div[style*="overflow: hidden"],
+  .audit-tab-content > div > div[style*="overflow:hidden"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── Dashboard home — responsive ── */
+.home-container { max-width: 1100px; margin: 0 auto; padding: 50px 40px 84px; width: 100%; }
+.home-hero-h1   { font-size: 40px; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 14px; }
+.home-hero-sub  { font-size: 20px; line-height: 1.6; margin: 0; max-width: 620px; }
+.home-whats-new { padding: 22px 28px; margin-bottom: 56px; display: flex; align-items: flex-start; gap: 20px; }
+.home-tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.home-section   { margin-bottom: 50px; }
+
+@media (max-width: 767px) {
+  .home-container  { padding: 24px 16px 60px; }
+  .home-hero-h1    { font-size: 26px; line-height: 1.2; margin-bottom: 10px; }
+  .home-hero-sub   { font-size: 15px; line-height: 1.5; }
+  .home-whats-new  { padding: 14px 16px; margin-bottom: 32px; gap: 12px; flex-direction: column; }
+  .home-tools-grid { grid-template-columns: 1fr; gap: 12px; }
+  .home-section    { margin-bottom: 28px; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .home-tools-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 767px) {
+  /* Tighten ToolCard padding on mobile (cards use inline padding: 26) */
+  .home-tools-grid > a { padding: 18px !important; gap: 10px !important; border-radius: 14px !important; }
+  .home-tools-grid > a > p:nth-of-type(1) { font-size: 16px !important; }
+  .home-tools-grid > a > p:nth-of-type(2) { font-size: 13px !important; }
+  .home-tools-grid > a > p:nth-of-type(3) { font-size: 13px !important; }
+}
+
+/* ── Google Ads main page — date / filter bar responsive ── */
+.gads-control-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 767px) {
+  .gads-control-bar > *      { min-width: 0; }
+  .gads-control-bar select,
+  .gads-control-bar input    { font-size: 16px; /* prevent iOS zoom */ }
+}
