@@ -14,6 +14,7 @@ export const revalidate = 0;
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 // Key: `${adId}:${format}` → { html, expiresAt }
 const previewCache = new Map();
+const CACHE_MAX = 500;
 
 const ALLOWED_FORMATS = new Set([
   'MOBILE_FEED_STANDARD',
@@ -43,8 +44,11 @@ export async function GET(request, { params }) {
 
   const cacheKey = `${adId}:${format}`;
   const hit = previewCache.get(cacheKey);
-  if (hit && hit.expiresAt > Date.now()) {
-    return NextResponse.json({ html: hit.html, format, cached: true });
+  if (hit) {
+    if (hit.expiresAt > Date.now()) {
+      return NextResponse.json({ html: hit.html, format, cached: true });
+    }
+    previewCache.delete(cacheKey);
   }
 
   try {
@@ -57,16 +61,27 @@ export async function GET(request, { params }) {
       return NextResponse.json({ html: null, format, unsupported: true });
     }
 
+    if (previewCache.size >= CACHE_MAX) {
+      const firstKey = previewCache.keys().next().value;
+      if (firstKey !== undefined) previewCache.delete(firstKey);
+    }
     previewCache.set(cacheKey, { html, expiresAt: Date.now() + CACHE_TTL_MS });
     return NextResponse.json({ html, format, cached: false });
   } catch (err) {
     // Common: "Unsupported ad format" when an ad can't render in this placement.
-    if (/unsupported|Invalid parameter/i.test(err?.message || '')) {
+    // Note: err.status===400 is also treated as unsupported here — adId comes from our own
+    // route param so genuine 400s are unlikely, and the client's unsupported fallback
+    // (show creative image + body) is preferable to leaking a 500.
+    const msg = err?.message || '';
+    const isUnsupported =
+      /unsupported|invalid|must be one of|not available|cannot (generate|preview)|no preview|nonexisting field/i.test(msg) ||
+      err?.status === 400; // Meta returns 400 for unrenderable previews on this endpoint; safer to classify as unsupported.
+    if (isUnsupported) {
       return NextResponse.json({ html: null, format, unsupported: true });
     }
     const status = err?.status || 500;
     return NextResponse.json(
-      { error: err?.message || 'Meta API error' },
+      { error: err?.message || 'Meta API error', code: err?.code },
       { status: status >= 400 && status < 600 ? status : 500 },
     );
   }
