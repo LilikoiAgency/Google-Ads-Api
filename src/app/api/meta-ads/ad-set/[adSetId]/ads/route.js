@@ -20,16 +20,19 @@ function toInt(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Exact action-type matching — mirrors CONVERSION_TYPES / REVENUE_TYPES in
-// src/app/api/meta-ads/route.js to avoid double-counting when both
-// omni_purchase and platform-specific purchase events are present.
+// Keyword-includes matching — mirrors CONVERSION_TYPES / REVENUE_TYPES in
+// src/app/api/meta-ads/route.js; strings are keyword fragments that match
+// Meta action_type variants as substrings (e.g. "purchase" matches
+// "omni_purchase", "onsite_web_purchase", etc.).
 const CONVERSION_TYPES = ['purchase', 'lead', 'complete_registration', 'offsite_conversion', 'fb_pixel_purchase'];
 const REVENUE_TYPES    = ['purchase', 'offsite_conversion.fb_pixel_purchase', 'offsite_conversion'];
 
 function sumActions(actions, types) {
   if (!Array.isArray(actions) || !Array.isArray(types)) return 0;
-  const set = new Set(types);
-  return actions.reduce((sum, a) => set.has(a.action_type) ? sum + toNum(a.value) : sum, 0);
+  return actions.reduce((sum, a) => {
+    if (types.some((k) => a.action_type?.includes(k))) return sum + toNum(a.value);
+    return sum;
+  }, 0);
 }
 
 function shapeAd(ad) {
