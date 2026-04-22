@@ -15,8 +15,8 @@ import {
 } from "./components/DashboardIcons";
 
 // ── Editable "What's New" content ────────────────────────────────────────────
-const WHATS_NEW_TITLE = "Daily Pacing Reports + dashboard widget";
-const WHATS_NEW_BODY  = "Automated budget pacing now runs every weekday at 8 AM ET, fetches data from each client sheet, and emails a per-account breakdown to the team. View past reports, edit recipients, render previews, and trigger manual sends from the new Pacing Reports tab. A pacing snapshot widget below shows the latest status at a glance, and a Trends tab tracks each client's pacing over time. Google Ads audits are now shared across the team — no more siloed history.";
+const WHATS_NEW_TITLE = "Meta ad-level view with live creative previews";
+const WHATS_NEW_BODY  = "Click any ad set row on the Meta Ads page to open a slide-out panel with every ad's real Meta-rendered preview, per-placement tabs (Mobile Feed, Desktop, Instagram, Reels), and full per-ad metrics — spend, CTR, conversions, ROAS. Read-only; never pages through Meta Ads Manager.";
 
 // ── Tool catalogue ────────────────────────────────────────────────────────────
 const TOOLS = [
