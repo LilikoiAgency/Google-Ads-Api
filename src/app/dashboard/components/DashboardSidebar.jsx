@@ -19,6 +19,7 @@ const NAV = [
   { label: "Paid Media", items: [
     { href: "/dashboard/google/ads",     label: "Google Ads",      icon: <GoogleAdsIcon />      },
     { href: "/dashboard/meta",           label: "Meta Ads",        icon: <MetaAdsIcon />        },
+    { href: "/dashboard/meta/audit",    label: "Meta Ads Audit",  icon: <SEOAuditIcon /> },
     { href: "/dashboard/bing",           label: "Microsoft Ads",   icon: <MicrosoftAdsIcon />   },
   ]},
   { label: "Organic & Reports", items: [

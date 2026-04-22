@@ -15,8 +15,8 @@ import {
 } from "./components/DashboardIcons";
 
 // ── Editable "What's New" content ────────────────────────────────────────────
-const WHATS_NEW_TITLE = "Meta ad-level view with live creative previews";
-const WHATS_NEW_BODY  = "Click any ad set row on the Meta Ads page to open a slide-out panel with every ad's real Meta-rendered preview, per-placement tabs (Mobile Feed, Desktop, Instagram, Reels), and full per-ad metrics — spend, CTR, conversions, ROAS. Read-only; never pages through Meta Ads Manager.";
+const WHATS_NEW_TITLE = "Meta Ads Audit is live";
+const WHATS_NEW_BODY  = "Score any Meta ad account across 8 pillars — structure, ad fatigue, creative diversity, audience targeting, placements, bidding, tracking, and performance. Add a Claude-generated executive summary, recommendations, and per-campaign verdicts. Click through to the ad-level view to review creatives in-line. Shared audit history across the team.";
 
 // ── Tool catalogue ────────────────────────────────────────────────────────────
 const TOOLS = [
