@@ -307,9 +307,10 @@ function AllCreativesInner() {
                 batchReviewInProgress={reviewLoading}
                 onOpenReviewModal={() => setReviewModal(ad.id)}
                 onReviewDone={(result, usage) => {
-                  setReviews((prev) => ({ ...prev, [ad.id]: result }));
+                  if (result) setReviews((prev) => ({ ...prev, [ad.id]: result }));
                   if (usage) setReviewUsage(usage);
                 }}
+                onReviewError={(msg) => setReviewError(msg)}
               />
             ))}
           </div>
@@ -347,7 +348,7 @@ function SelectPill({ label, value, options, onChange }) {
 
 // ── Lazy-loading card: only fetches live preview when scrolled near viewport ──
 
-function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, onOpenReviewModal, onReviewDone }) {
+function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, onOpenReviewModal, onReviewDone, onReviewError }) {
   const ins = ad.insights || {};
   const statusOk = ad.effective_status === "ACTIVE" || ad.status === "ACTIVE";
   const [activeFormat, setActiveFormat] = useState(PLACEMENT_FORMATS[0].key);
@@ -409,7 +410,16 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
         }),
       });
       const json = await res.json();
-      if (res.ok && json.reviews?.length) {
+      if (res.status === 429 || json.limitReached) {
+        if (onReviewError) onReviewError(json.error || 'Daily review limit reached.');
+        if (json.usage) onReviewDone(null, json.usage);
+        return;
+      }
+      if (!res.ok) {
+        if (onReviewError) onReviewError(json.error || `Error ${res.status}`);
+        return;
+      }
+      if (json.reviews?.length) {
         onReviewDone(json.reviews[0], json.usage);
       }
     } catch (err) {
