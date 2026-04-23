@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
@@ -13,6 +14,7 @@ import {
 } from "recharts";
 import "../../globals.css";
 import MetaAdsPanel from "./components/MetaAdsPanel";
+import MetaAdPreview from "./components/MetaAdPreview";
 
 // ─── priority sort ────────────────────────────────────────────────────────────
 
@@ -370,6 +372,273 @@ const TABLE_COLS = [
   { key: "costPerResult", label: "Cost/Result",    align: "right" },
   { key: "roas",          label: "ROAS",           align: "right" },
 ];
+
+function fmtMoney(n) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return "$" + Math.round(n).toLocaleString("en-US");
+}
+function fmtCount(n) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(Math.round(n));
+}
+function fmtRatio(n) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return (n * 100).toFixed(2) + "%";
+}
+function fmtRoas(n) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n.toFixed(2) + "x";
+}
+
+const CREATIVE_FORMATS = [
+  { key: "MOBILE_FEED_STANDARD",  label: "Mobile" },
+  { key: "DESKTOP_FEED_STANDARD", label: "Desktop" },
+  { key: "INSTAGRAM_STANDARD",    label: "IG Feed" },
+  { key: "FACEBOOK_REELS_MOBILE", label: "Reels" },
+];
+
+const RANK_ACCENT = "#1877F2";
+
+function TopCreativeCard({ ad, rank }) {
+  const ins = ad.insights || {};
+  const [activeFormat, setActiveFormat] = useState(CREATIVE_FORMATS[0].key);
+  const [previews, setPreviews] = useState({});
+  const statusOk = ad.effective_status === "ACTIVE" || ad.status === "ACTIVE";
+
+  useEffect(() => {
+    if (previews[activeFormat]) return;
+    let cancelled = false;
+    setPreviews((p) => ({ ...p, [activeFormat]: { loading: true } }));
+    fetch(`/api/meta-ads/ad/${ad.id}/preview?format=${activeFormat}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        setPreviews((p) => ({
+          ...p,
+          [activeFormat]: {
+            html: j.html || null,
+            unsupported: !!j.unsupported,
+            error: j.error || null,
+            loading: false,
+          },
+        }));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPreviews((p) => ({ ...p, [activeFormat]: { loading: false, error: err.message } }));
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFormat, ad.id]);
+
+  const current = previews[activeFormat] || { loading: true };
+
+  return (
+    <div
+      className="rounded-2xl bg-white border border-gray-100 overflow-hidden flex flex-col shadow-sm"
+      style={{ transition: "box-shadow .15s, transform .15s" }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 10px 30px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)"; e.currentTarget.style.transform = "translateY(0)"; }}
+    >
+      {/* Header: rank + name + status */}
+      <div className="px-5 pt-4 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2">
+            <span style={{ background: RANK_ACCENT, color: "#fff", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 999, letterSpacing: 0.3 }}>
+              #{rank}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Top by spend</span>
+          </div>
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
+            style={{
+              background: statusOk ? "rgba(34,197,94,0.12)" : "rgba(100,116,139,0.12)",
+              color: statusOk ? "#16a34a" : "#64748b",
+            }}
+          >
+            {ad.effective_status || ad.status || "—"}
+          </span>
+        </div>
+        <p className="text-sm font-semibold text-gray-900 truncate" title={ad.name}>
+          {ad.name || "Untitled ad"}
+        </p>
+      </div>
+
+      {/* Placement tabs — light, Meta-blue active indicator */}
+      <div className="flex border-b border-gray-100 bg-gray-50 overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        {CREATIVE_FORMATS.map((f) => {
+          const active = f.key === activeFormat;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setActiveFormat(f.key)}
+              className="flex-shrink-0 font-semibold whitespace-nowrap transition"
+              style={{
+                padding: "10px 16px",
+                fontSize: 12,
+                background: "transparent",
+                color: active ? RANK_ACCENT : "#64748b",
+                border: "none",
+                borderBottom: `2px solid ${active ? RANK_ACCENT : "transparent"}`,
+                cursor: "pointer",
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Preview */}
+      <div
+        className={`top-creative-preview ${activeFormat === "FACEBOOK_REELS_MOBILE" ? "is-reels" : ""}`}
+        style={{
+          background: "#f1f5f9",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 20,
+          minHeight: 320,
+        }}
+      >
+        <style>{`
+          .top-creative-preview iframe {
+            max-width: 100% !important;
+            display: block;
+            border: 0;
+            border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(15,23,42,0.1);
+          }
+          .top-creative-preview.is-reels iframe {
+            zoom: 1.5;
+          }
+        `}</style>
+        {current.loading && (
+          <div className="flex flex-col items-center gap-2" style={{ padding: "60px 0" }}>
+            <div style={{ width: 26, height: 26, border: `3px solid rgba(24,119,242,0.2)`, borderTopColor: RANK_ACCENT, borderRadius: "50%", animation: "topCreativeSpin 0.8s linear infinite" }} />
+            <p className="text-xs text-gray-500">Loading preview…</p>
+            <style>{"@keyframes topCreativeSpin { to { transform: rotate(360deg); } }"}</style>
+          </div>
+        )}
+        {!current.loading && current.html && (
+          <div dangerouslySetInnerHTML={{ __html: current.html }} style={{ display: "flex", justifyContent: "center", width: "100%" }} />
+        )}
+        {!current.loading && !current.html && current.unsupported && (
+          <div className="text-center" style={{ padding: "40px 20px" }}>
+            <p className="text-xs text-gray-500 mb-3">This ad doesn&apos;t render in {CREATIVE_FORMATS.find((f) => f.key === activeFormat)?.label}.</p>
+            {ad.creative?.image_url && (
+              <img src={ad.creative.image_url} alt="" style={{ maxWidth: "100%", maxHeight: 400, borderRadius: 10, boxShadow: "0 4px 14px rgba(15,23,42,0.1)" }} />
+            )}
+          </div>
+        )}
+        {!current.loading && !current.html && current.error && (
+          <div className="text-center" style={{ padding: "40px 20px" }}>
+            <p className="text-xs text-orange-600 mb-3">Preview unavailable.</p>
+            {ad.creative?.image_url && (
+              <img src={ad.creative.image_url} alt="" style={{ maxWidth: "100%", maxHeight: 400, borderRadius: 10 }} />
+            )}
+            {ad.creative?.body && <p className="text-xs text-gray-500 mt-3 max-w-sm mx-auto">{ad.creative.body}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Metrics */}
+      <div className="grid grid-cols-4 gap-3 px-5 py-4 border-t border-gray-100">
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Spend</p>
+          <p className="text-base font-bold text-gray-900 leading-tight mt-1">{fmtMoney(ins.spend)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">CTR</p>
+          <p className="text-base font-bold text-gray-900 leading-tight mt-1">{fmtRatio(ins.ctr)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Conv</p>
+          <p className="text-base font-bold text-gray-900 leading-tight mt-1">{fmtCount(ins.conversions)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">ROAS</p>
+          <p className="text-base font-bold text-gray-900 leading-tight mt-1">{fmtRoas(ins.roas)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TopCreatives({ accountId, range, startDate, endDate }) {
+  const [ads, setAds] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!accountId) { setAds(null); return; }
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({ accountId, range: range || "28d", limit: "3" });
+    if (range === "custom" && startDate && endDate) {
+      params.set("startDate", startDate);
+      params.set("endDate", endDate);
+    }
+    fetch(`/api/meta-ads/top-creatives?${params.toString()}`, { signal: controller.signal })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => { throw new Error(j.error || `HTTP ${r.status}`); }))
+      .then((j) => setAds(j.data || []))
+      .catch((err) => { if (err.name !== "AbortError") setError(err.message || "Failed to load"); })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [accountId, range, startDate, endDate]);
+
+  if (!accountId) return null;
+
+  return (
+    <>
+      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-800">Top Creatives</p>
+            <p className="text-xs text-gray-400 mt-0.5">Highest-spend ads in the current window</p>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {ads && <p className="text-xs text-gray-400 whitespace-nowrap">{ads.length} of 3</p>}
+            <Link
+              href={{ pathname: "/dashboard/meta/creatives", query: { accountId, range: range || "28d", ...(range === "custom" && startDate && endDate ? { startDate, endDate } : {}) } }}
+              className="text-xs font-semibold whitespace-nowrap rounded-md px-3 py-1.5 transition"
+              style={{ background: "rgba(24,119,242,0.08)", color: "#1877F2", border: "1px solid rgba(24,119,242,0.2)" }}
+            >
+              View all creatives →
+            </Link>
+          </div>
+        </div>
+
+        <div className="p-5 bg-white">
+          {loading && (
+            <div className="flex items-center justify-center" style={{ padding: 40 }}>
+              <div style={{ width: 24, height: 24, border: "3px solid rgba(24,119,242,0.2)", borderTopColor: "#1877F2", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              <p className="ml-3 text-sm text-gray-500">Fetching top creatives…</p>
+              <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
+            </div>
+          )}
+          {!loading && error && (
+            <p className="text-sm text-red-500 text-center" style={{ padding: 32 }}>{error}</p>
+          )}
+          {!loading && !error && ads?.length === 0 && (
+            <p className="text-sm text-gray-500 text-center" style={{ padding: 32 }}>No ad-level spend in this window.</p>
+          )}
+          {!loading && !error && ads?.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mx-auto" style={{ maxWidth: 1800 }}>
+              {ads.map((ad, i) => (
+                <div key={ad.id} style={{ minWidth: 0 }}>
+                  <TopCreativeCard ad={ad} rank={i + 1} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
 
 function CampaignTable({ campaigns, loading }) {
   const [sort, setSort]     = useState({ key: "spend", dir: "desc" });
@@ -738,6 +1007,17 @@ export default function MetaDashboard() {
         subtitle="Facebook & Instagram Campaigns"
       >
         <div className="desktop-only" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {selectedAccount && (
+            <button
+              onClick={() => router.push(`/dashboard/meta/audit?accountId=${encodeURIComponent(selectedAccount.accountId)}`)}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(24,119,242,0.15)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#1877F2", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(24,119,242,0.25)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(24,119,242,0.15)"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              Audit Account
+            </button>
+          )}
           <AccountPicker
             accounts={accounts}
             selected={selectedAccount}
@@ -756,15 +1036,24 @@ export default function MetaDashboard() {
       </DashboardToolHeader>
 
       {/* Mobile filter row */}
-      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0, alignItems: "center" }}>
         <button
           onClick={() => setFilterOpen(true)}
-          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
         >
           Filters <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
         </button>
         {selectedAccount && (
-          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>
+          <button
+            onClick={() => router.push(`/dashboard/meta/audit?accountId=${encodeURIComponent(selectedAccount.accountId)}`)}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(24,119,242,0.15)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 700, color: "#1877F2", cursor: "pointer", flexShrink: 0 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            Audit
+          </button>
+        )}
+        {selectedAccount && (
+          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
             {selectedAccount.name}
           </span>
         )}
@@ -1014,6 +1303,16 @@ export default function MetaDashboard() {
               </div>
               <AdSetTable adsets={adSets} loading={adSetsLoading} onRowClick={(s) => setAdsPanelAdSet(s)} />
             </div>
+          )}
+
+          {/* ── Top creatives ── */}
+          {selectedAccount && (
+            <TopCreatives
+              accountId={selectedAccount.accountId}
+              range={preset}
+              startDate={custom?.startDate}
+              endDate={custom?.endDate}
+            />
           )}
 
           {/* ── Campaign table ── */}
