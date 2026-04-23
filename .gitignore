@@ -136,3 +136,4 @@ dist
 .playwright-mcp/
 test-*.png
 *.csv
+.worktrees
