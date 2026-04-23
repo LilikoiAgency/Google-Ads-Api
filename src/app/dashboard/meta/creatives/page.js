@@ -533,7 +533,62 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
       <div className="px-5 pb-3 -mt-2 text-[10px] text-gray-400 font-medium">
         Frequency {fmtFreq(ins.frequency)} · {fmtCount(ins.impressions)} impressions
       </div>
+      {review && (
+        <ReviewFooterStrip review={review} onClick={onOpenReviewModal} />
+      )}
     </div>
+  );
+}
+
+const VERDICT_COLORS = {
+  APPROVED: { bg: "rgba(22,163,74,0.1)",  border: "#16a34a", text: "#15803d" },
+  REVISE:   { bg: "rgba(217,119,6,0.1)",  border: "#d97706", text: "#b45309" },
+  REJECT:   { bg: "rgba(220,38,38,0.1)",  border: "#dc2626", text: "#b91c1c" },
+};
+
+function ReviewFooterStrip({ review, onClick }) {
+  const colors = VERDICT_COLORS[review.status] || VERDICT_COLORS.REVISE;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+        padding: "10px 20px",
+        background: colors.bg,
+        borderTop: `2px solid ${colors.border}`,
+        cursor: "pointer",
+        textAlign: "left",
+        border: "none",
+        borderTop: `2px solid ${colors.border}`,
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: 1,
+          color: colors.text,
+          background: colors.bg,
+          border: `1px solid ${colors.border}`,
+          borderRadius: 4,
+          padding: "2px 7px",
+        }}>
+          {review.status}
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+          {review.overallScore}/100
+        </span>
+        <span style={{ fontSize: 11, color: "#64748b", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {review.summary}
+        </span>
+      </span>
+      <span style={{ fontSize: 11, color: colors.text, fontWeight: 600, flexShrink: 0 }}>
+        View full review →
+      </span>
+    </button>
   );
 }
 
