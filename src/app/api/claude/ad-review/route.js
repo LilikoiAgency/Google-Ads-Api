@@ -9,10 +9,53 @@ import { getCredentials } from '../../../../lib/dbFunctions';
 import { logApiUsage, estimateClaudeCost } from '../../../../lib/usageLogger';
 import { isAdmin } from '../../../../lib/admins';
 import dbConnect from '../../../../lib/mongoose';
+import { graphGet, getMetaAccessToken } from '../../../../lib/metaGraph';
 
 const DAILY_LIMIT = parseInt(process.env.META_AD_REVIEW_DAILY_LIMIT || '10');
 const MAX_BATCH_SIZE = 20;
 const DB = 'tokensApi';
+
+// Maps Meta's internal CTA enum values to the button label actually shown in the ad.
+// Meta's API returns the enum (e.g. BOOK_TRAVEL) — not the display text ("Book Now").
+const CTA_LABELS = {
+  BOOK_TRAVEL:        'Book Now',
+  SHOP_NOW:           'Shop Now',
+  LEARN_MORE:         'Learn More',
+  SIGN_UP:            'Sign Up',
+  DOWNLOAD:           'Download',
+  CONTACT_US:         'Contact Us',
+  GET_QUOTE:          'Get Quote',
+  SUBSCRIBE:          'Subscribe',
+  WATCH_MORE:         'Watch More',
+  APPLY_NOW:          'Apply Now',
+  BUY_NOW:            'Buy Now',
+  GET_OFFER:          'Get Offer',
+  ORDER_NOW:          'Order Now',
+  CALL_NOW:           'Call Now',
+  MESSAGE_PAGE:       'Send Message',
+  SEND_MESSAGE:       'Send Message',
+  GET_DIRECTIONS:     'Get Directions',
+  WATCH_VIDEO:        'Watch Video',
+  LISTEN_NOW:         'Listen Now',
+  OPEN_LINK:          'Learn More',
+  USE_APP:            'Use App',
+  INSTALL_APP:        'Install Now',
+  PLAY_GAME:          'Play Game',
+  REQUEST_TIME:       'Request Time',
+  SEE_MENU:           'See Menu',
+  SAVE:               'Save',
+  LIKE_PAGE:          'Like Page',
+  NO_BUTTON:          '(no button)',
+  WHATSAPP_MESSAGE:   'WhatsApp Us',
+  GET_SHOWTIMES:      'Get Showtimes',
+  FIND_YOUR_GROUPS:   'Find Your Groups',
+  VISIT_PAGES_FEED:   'Learn More',
+};
+
+function ctaLabel(raw) {
+  if (!raw) return '(none)';
+  return CTA_LABELS[raw] || raw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const SYSTEM_PROMPT = `You are an expert ad creative reviewer applying the LeadsIcon ad-review rubric.
 
@@ -31,6 +74,118 @@ scores {hook, proof, cta, visual}, summary (one sentence), hook {strengths[], is
 proof {elements[], missing[], recommendation}, cta {placement, clarity, urgency, recommendation},
 visual {productionQuality, authenticity, issues[]}, platformFit (string[]),
 actionItems {required[], recommended[]}, prediction ("High potential"|"Medium"|"Low").`;
+
+// Fetch fresh creative data from Meta for the given ad IDs and merge into ads array.
+// Covers all ad formats: standard link ads, call ads, video ads, DPA / asset_feed_spec.
+async function enrichAdsWithCreativeData(ads) {
+  let token;
+  try { token = await getMetaAccessToken(); } catch { return ads; }
+
+  const ids = ads.map((a) => a.id).filter(Boolean).join(',');
+  if (!ids) return ads;
+
+  let freshData = {};
+  try {
+    const creativeFields = 'id,creative{title,body,call_to_action_type,object_story_spec{link_data{message,name,description,call_to_action{type,value{link}}},photo_data{caption,url},video_data{title,message,call_to_action{type,value{link}}}},asset_feed_spec{bodies,titles,call_to_action_types},image_url,thumbnail_url}';
+    freshData = await graphGet('', {
+      ids,
+      fields: creativeFields,
+    }, token);
+  } catch (err) {
+    console.warn('[claude/ad-review] Meta creative enrich failed, using cached data:', err?.message);
+    return ads;
+  }
+
+  return ads.map((ad) => {
+    const fresh = freshData?.[ad.id];
+    if (!fresh) return ad;
+    const cr = fresh.creative || {};
+
+    // Pull copy from whichever format has it
+    const ld = cr.object_story_spec?.link_data || {};
+    const pd = cr.object_story_spec?.photo_data || {};
+    const vd = cr.object_story_spec?.video_data || {};
+    const af = cr.asset_feed_spec || {};
+
+    const title =
+      cr.title ||
+      ld.name ||
+      vd.title ||
+      (af.titles && af.titles[0]?.text) ||
+      ad.title ||
+      null;
+
+    const body =
+      cr.body ||
+      ld.message ||
+      pd.caption ||
+      vd.message ||
+      (af.bodies && af.bodies[0]?.text) ||
+      ad.body ||
+      null;
+
+    const ctaType =
+      cr.call_to_action_type ||
+      ld.call_to_action?.type ||
+      vd.call_to_action?.type ||
+      (af.call_to_action_types && af.call_to_action_types[0]) ||
+      ad.ctaType ||
+      null;
+
+    const imageUrl =
+      cr.image_url || cr.thumbnail_url || ad.imageUrl || null;
+
+    // Expose all copy variants for dynamic creative ads so Claude knows what's in rotation
+    const allTitles = (af.titles || []).map((t) => t?.text).filter(Boolean);
+    const allBodies = (af.bodies || []).map((b) => b?.text).filter(Boolean);
+
+    return { ...ad, title, body, ctaType, imageUrl, allTitles, allBodies };
+  });
+}
+
+// For single-mode reviews: extract the actual image shown in the Meta preview iframe.
+// The iframe src is a public shareable URL that Meta SSR-renders with the full ad HTML,
+// including the real image (which for "Related Media" ads differs from creative.image_url).
+async function fetchImageFromPreviewIframe(previewHtml) {
+  if (!previewHtml) return null;
+
+  // Pull the iframe src out of the embed snippet
+  const srcMatch = previewHtml.match(/\bsrc="([^"]*facebook\.com[^"]*)"/i)
+    || previewHtml.match(/\bsrc='([^']*facebook\.com[^']*)'/i);
+  if (!srcMatch) return null;
+
+  const iframeSrc = srcMatch[1].replace(/&amp;/g, '&');
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(iframeSrc, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+
+    const html = await res.text();
+
+    // 1. og:image meta tag (most reliable)
+    const ogImg = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)
+      || html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i);
+    if (ogImg) return ogImg[1].replace(/&amp;/g, '&');
+
+    // 2. Largest scontent (Meta CDN) image URL in the page
+    const scontent = [...html.matchAll(/["'](https:\/\/scontent[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)/gi)];
+    if (scontent.length) return scontent[scontent.length - 1][1].replace(/&amp;/g, '&');
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function stripHtml(html) {
   if (!html) return '';
@@ -53,10 +208,11 @@ function buildBatchUserMessage(ads, accountId) {
     lines.push(`Name: ${ad.name || '(none)'}`);
     lines.push(`Headline: ${ad.title || '(none)'}`);
     lines.push(`Copy: ${ad.body || '(none)'}`);
-    lines.push(`CTA Button: ${ad.ctaType || '(none)'}`);
+    lines.push(`CTA Button: ${ctaLabel(ad.ctaType)}`);
+    // If there are additional copy variants (dynamic creative / asset_feed_spec), list them
+    if (ad.allBodies?.length > 1) lines.push(`Additional copy variants: ${ad.allBodies.slice(1).map((b) => `"${b}"`).join(' | ')}`);
+    if (ad.allTitles?.length > 1) lines.push(`Additional headline variants: ${ad.allTitles.slice(1).map((t) => `"${t}"`).join(' | ')}`);
     lines.push(`Performance: $${(ins.spend || 0).toFixed(2)} spend · ${((ins.ctr || 0) * 100).toFixed(2)}% CTR · ${ins.conversions || 0} conversions · ${ins.roas != null ? ins.roas.toFixed(2) + 'x' : '—'} ROAS · ${(ins.frequency || 0).toFixed(2)}x frequency`);
-    const previewText = stripHtml(ad.previewHtml);
-    if (previewText) lines.push(`Live Ad Preview Text: ${previewText}`);
     lines.push('');
   });
   return lines.join('\n');
@@ -124,8 +280,11 @@ export async function POST(request) {
 
   const client = new Anthropic({ apiKey });
 
+  // Enrich ads with fresh creative data from Meta (covers all ad formats)
+  const enrichedAds = await enrichAdsWithCreativeData(ads);
+
   // Build messages array based on mode
-  const userMessageText = buildBatchUserMessage(ads, accountId);
+  const userMessageText = buildBatchUserMessage(enrichedAds, accountId);
   console.log('[claude/ad-review] prompt preview:\n', userMessageText.slice(0, 1000));
 
   let messages;
@@ -133,12 +292,19 @@ export async function POST(request) {
     messages = [{ role: 'user', content: userMessageText }];
   } else {
     // single mode: text + optional image
-    const ad = ads[0];
+    const ad = enrichedAds[0];
     const textBlock = { type: 'text', text: userMessageText };
     const contentBlocks = [textBlock];
-    if (ad.imageUrl) {
+
+    // Prefer the actual image shown in the preview iframe (matches what the user sees),
+    // falling back to the creative's stored image_url.
+    const previewIframeImageUrl = await fetchImageFromPreviewIframe(ads[0]?.previewHtml || null);
+    const imageUrlToUse = previewIframeImageUrl || ad.imageUrl || null;
+    console.log(`[claude/ad-review] single image source: ${previewIframeImageUrl ? 'preview-iframe' : ad.imageUrl ? 'creative-url' : 'none'}`);
+
+    if (imageUrlToUse) {
       let parsedImageUrl = null;
-      try { parsedImageUrl = new URL(ad.imageUrl); } catch { parsedImageUrl = null; }
+      try { parsedImageUrl = new URL(imageUrlToUse); } catch { parsedImageUrl = null; }
       if (parsedImageUrl && (parsedImageUrl.protocol === 'https:' || parsedImageUrl.protocol === 'http:')) {
         // Fetch image server-side and pass as base64 — Meta CDN blocks Anthropic's direct URL fetches
         try {

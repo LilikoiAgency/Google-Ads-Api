@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCredentials } from "../../../lib/dbFunctions";
+import { apiCache } from "../../../lib/apiCache";
+
+const ACCOUNTS_TTL = 30 * 60 * 1000; // 30 minutes
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -65,6 +68,12 @@ export async function GET(request) {
   // Pass ?debug=1 to see which accounts were filtered and why
   const debug = searchParams.get("debug") === "1";
 
+  // Serve from cache unless debug mode requested
+  if (!debug) {
+    const cached = await apiCache.get('meta-accounts');
+    if (cached) return NextResponse.json(cached);
+  }
+
   try {
     const firstUrl = new URL(`${GRAPH_BASE}/me/adaccounts`);
     firstUrl.searchParams.set("fields", "id,name,currency,account_status,business");
@@ -109,7 +118,9 @@ export async function GET(request) {
       return NextResponse.json({ accounts: filtered, excluded, raw: raw.length });
     }
 
-    return NextResponse.json({ accounts: filtered });
+    const payload = { accounts: filtered };
+    apiCache.setBackground('meta-accounts', payload, ACCOUNTS_TTL);
+    return NextResponse.json(payload);
 
   } catch (err) {
     console.error("[meta-accounts] Error:", err.message);

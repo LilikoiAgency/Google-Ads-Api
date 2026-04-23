@@ -48,8 +48,22 @@ function MetaAuditPageInner() {
   const sp = useSearchParams();
   const initialAccountId = sp.get("accountId") || "";
 
-  const [accountId,      setAccountId]      = useState(initialAccountId);
-  const [accountName,    setAccountName]    = useState("");
+  function getInitialAccount() {
+    if (initialAccountId) return { id: initialAccountId, name: "" };
+    try {
+      const stored = sessionStorage.getItem("meta_selected_account");
+      if (stored) {
+        const a = JSON.parse(stored);
+        return { id: String(a.accountId || a.id || ""), name: a.name || "" };
+      }
+    } catch {}
+    return { id: "", name: "" };
+  }
+
+  const init = getInitialAccount();
+
+  const [accountId,      setAccountId]      = useState(init.id);
+  const [accountName,    setAccountName]    = useState(init.name);
   const [audit,          setAudit]          = useState(null);
   const [auditLoading,   setAuditLoading]   = useState(false);
   const [auditError,     setAuditError]     = useState(null);

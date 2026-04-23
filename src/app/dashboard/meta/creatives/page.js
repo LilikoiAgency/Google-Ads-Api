@@ -214,6 +214,7 @@ function AllCreativesInner() {
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#f7f8fa" }}>
+      <style>{"@keyframes ccSpin { to { transform: rotate(360deg); } }"}</style>
       {/* Top bar */}
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <div className="flex items-center gap-4 flex-wrap">
@@ -287,7 +288,6 @@ function AllCreativesInner() {
           <div className="flex items-center justify-center py-20">
             <div style={{ width: 26, height: 26, border: "3px solid rgba(24,119,242,0.2)", borderTopColor: ACCENT, borderRadius: "50%", animation: "ccSpin 0.8s linear infinite" }} />
             <p className="ml-3 text-sm text-gray-500">Fetching all creatives…</p>
-            <style>{"@keyframes ccSpin { to { transform: rotate(360deg); } }"}</style>
           </div>
         )}
         {!loading && error && (
@@ -358,6 +358,9 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
   const [visible, setVisible] = useState(false);
   const cardRef = useRef(null);
   const [singleReviewLoading, setSingleReviewLoading] = useState(false);
+  // Tracks in-flight preview fetches synchronously so React StrictMode double-invocation
+  // and rapid re-renders can't kick off duplicate requests for the same format.
+  const fetchingFormats = useRef(new Set());
 
   // IntersectionObserver: flip `visible` true once the card approaches the viewport
   useEffect(() => {
@@ -371,9 +374,10 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
     return () => observer.disconnect();
   }, [visible]);
 
-  // Fetch preview only once the card is visible
+  // Fetch preview only once per format, guarded by both state and a ref
   useEffect(() => {
-    if (!visible || previews[activeFormat]) return;
+    if (!visible || previews[activeFormat] || fetchingFormats.current.has(activeFormat)) return;
+    fetchingFormats.current.add(activeFormat);
     let cancelled = false;
     setPreviews((p) => ({ ...p, [activeFormat]: { loading: true } }));
     fetch(`/api/meta-ads/ad/${ad.id}/preview?format=${activeFormat}`)
@@ -385,8 +389,9 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
       .catch((err) => {
         if (cancelled) return;
         setPreviews((p) => ({ ...p, [activeFormat]: { loading: false, error: err.message } }));
-      });
-    return () => { cancelled = true; };
+      })
+      .finally(() => { fetchingFormats.current.delete(activeFormat); });
+    return () => { cancelled = true; fetchingFormats.current.delete(activeFormat); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, activeFormat, ad.id]);
 
@@ -524,7 +529,8 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
         <style>{`
           .cc-preview iframe { max-width: 100% !important; display: block; border: 0; border-radius: 8px; box-shadow: 0 4px 14px rgba(15,23,42,0.1); }
           .cc-preview.is-reels iframe { zoom: 1.5; }
-        `}</style>
+        `}
+        </style>
         {!visible && <PreviewPlaceholder imageUrl={ad.creative?.image_url} />}
         {visible && current?.loading && <PreviewSpinner />}
         {visible && !current?.loading && current?.html && (
@@ -851,7 +857,6 @@ function PreviewSpinner() {
     <div className="flex flex-col items-center gap-2" style={{ padding: "60px 0" }}>
       <div style={{ width: 26, height: 26, border: `3px solid rgba(24,119,242,0.2)`, borderTopColor: ACCENT, borderRadius: "50%", animation: "ccSpin 0.8s linear infinite" }} />
       <p className="text-xs text-gray-500">Loading preview…</p>
-      <style>{"@keyframes ccSpin { to { transform: rotate(360deg); } }"}</style>
     </div>
   );
 }

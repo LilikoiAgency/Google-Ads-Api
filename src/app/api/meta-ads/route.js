@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { graphGet, getTimeRange, getMetaAccessToken } from "../../../lib/metaGraph";
+import { apiCache } from "../../../lib/apiCache";
+
+const DATA_TTL = 10 * 60 * 1000; // 10 minutes
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -105,6 +108,10 @@ export async function GET(request) {
     }
   }
 
+  const cacheKey = `meta-ads:${accountId}:${range}:${startDate || ''}:${endDate || ''}`;
+  const cached = await apiCache.get(cacheKey);
+  if (cached) return NextResponse.json(cached);
+
   try {
     const prevTimeRange = getPrevTimeRange(timeRange);
 
@@ -181,7 +188,7 @@ export async function GET(request) {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    return NextResponse.json({
+    const payload = {
       account,
       totals,
       prevTotals,
@@ -189,7 +196,9 @@ export async function GET(request) {
       trend,
       startDate: timeRange.since,
       endDate:   timeRange.until,
-    });
+    };
+    apiCache.setBackground(cacheKey, payload, DATA_TTL);
+    return NextResponse.json(payload);
 
   } catch (err) {
     console.error("[meta-ads] Error:", err.message);

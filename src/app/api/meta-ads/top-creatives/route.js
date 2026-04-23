@@ -6,6 +6,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
 import { graphGet, getTimeRange, getMetaAccessToken } from '../../../../lib/metaGraph';
+import { apiCache } from '../../../../lib/apiCache';
+
+const DATA_TTL = 10 * 60 * 1000; // 10 minutes
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -85,6 +88,10 @@ export async function GET(request) {
   const timeRange = getTimeRange(range, startDate, endDate);
   const actId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
 
+  const cacheKey = `top-creatives:${accountId}:${range}:${limit}:${startDate || ''}:${endDate || ''}`;
+  const cached = await apiCache.get(cacheKey);
+  if (cached) return NextResponse.json(cached);
+
   try {
     const token = await getMetaAccessToken();
 
@@ -131,7 +138,9 @@ export async function GET(request) {
       };
     });
 
-    return NextResponse.json({ data });
+    const payload = { data };
+    apiCache.setBackground(cacheKey, payload, DATA_TTL);
+    return NextResponse.json(payload);
   } catch (err) {
     const status = err?.status || 500;
     return NextResponse.json(

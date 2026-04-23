@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { clientCache } from "../../../lib/clientCache";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
@@ -404,10 +405,12 @@ function TopCreativeCard({ ad, rank }) {
   const ins = ad.insights || {};
   const [activeFormat, setActiveFormat] = useState(CREATIVE_FORMATS[0].key);
   const [previews, setPreviews] = useState({});
+  const fetchingFormats = useRef(new Set());
   const statusOk = ad.effective_status === "ACTIVE" || ad.status === "ACTIVE";
 
   useEffect(() => {
-    if (previews[activeFormat]) return;
+    if (previews[activeFormat] || fetchingFormats.current.has(activeFormat)) return;
+    fetchingFormats.current.add(activeFormat);
     let cancelled = false;
     setPreviews((p) => ({ ...p, [activeFormat]: { loading: true } }));
     fetch(`/api/meta-ads/ad/${ad.id}/preview?format=${activeFormat}`)
@@ -427,8 +430,9 @@ function TopCreativeCard({ ad, rank }) {
       .catch((err) => {
         if (cancelled) return;
         setPreviews((p) => ({ ...p, [activeFormat]: { loading: false, error: err.message } }));
-      });
-    return () => { cancelled = true; };
+      })
+      .finally(() => { fetchingFormats.current.delete(activeFormat); });
+    return () => { cancelled = true; fetchingFormats.current.delete(activeFormat); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFormat, ad.id]);
 
@@ -573,6 +577,9 @@ function TopCreatives({ accountId, range, startDate, endDate }) {
 
   useEffect(() => {
     if (!accountId) { setAds(null); return; }
+    const cacheKey = `top-creatives:${accountId}:${range || '28d'}:3:${startDate || ''}:${endDate || ''}`;
+    const hit = clientCache.get(cacheKey);
+    if (hit) { setAds(hit); return; }
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -583,7 +590,7 @@ function TopCreatives({ accountId, range, startDate, endDate }) {
     }
     fetch(`/api/meta-ads/top-creatives?${params.toString()}`, { signal: controller.signal })
       .then((r) => r.ok ? r.json() : r.json().then((j) => { throw new Error(j.error || `HTTP ${r.status}`); }))
-      .then((j) => setAds(j.data || []))
+      .then((j) => { clientCache.set(cacheKey, j.data || []); setAds(j.data || []); })
       .catch((err) => { if (err.name !== "AbortError") setError(err.message || "Failed to load"); })
       .finally(() => setLoading(false));
     return () => controller.abort();
@@ -901,8 +908,13 @@ export default function MetaDashboard() {
       .finally(() => setAccountsLoading(false));
   }, [status]);
 
-  const fetchData = useCallback(async (p, c, account) => {
+  const fetchData = useCallback(async (p, c, account, { force = false } = {}) => {
     if (!account) return;
+    const cacheKey = `meta-ads:${account.accountId}:${p}:${p === 'custom' ? `${c.startDate}-${c.endDate}` : ''}`;
+    if (!force) {
+      const hit = clientCache.get(cacheKey);
+      if (hit) { setData(hit); return; }
+    }
     setLoading(true);
     setError(null);
     setSelectedCampaign(null);
@@ -916,6 +928,7 @@ export default function MetaDashboard() {
       const res  = await fetch(`/api/meta-ads?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to fetch");
+      clientCache.set(cacheKey, json);
       setData(json);
     } catch (err) {
       setError(err.message);
