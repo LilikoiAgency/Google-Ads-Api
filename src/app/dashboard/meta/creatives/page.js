@@ -315,6 +315,14 @@ function AllCreativesInner() {
           </div>
         )}
       </div>
+      {reviewModal && reviews[reviewModal] && (
+        <ReviewModal
+          adId={reviewModal}
+          ads={filtered}
+          review={reviews[reviewModal]}
+          onClose={() => setReviewModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -598,6 +606,209 @@ function MetricCell({ label, value }) {
     <div>
       <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">{label}</p>
       <p className="text-sm font-bold text-gray-900 leading-tight mt-1">{value}</p>
+    </div>
+  );
+}
+
+function ScoreBar({ label, score, max = 25 }) {
+  const pct = Math.round((score / max) * 100);
+  const color = pct >= 80 ? "#16a34a" : pct >= 60 ? "#d97706" : "#dc2626";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ width: 50, fontSize: 12, fontWeight: 600, color: "#64748b" }}>{label}</span>
+      <div style={{ flex: 1, height: 8, background: "#e2e8f0", borderRadius: 99 }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 99, transition: "width .4s" }} />
+      </div>
+      <span style={{ width: 36, fontSize: 12, fontWeight: 700, color, textAlign: "right" }}>{score}/{max}</span>
+    </div>
+  );
+}
+
+function ReviewSection({ title, children }) {
+  return (
+    <div>
+      <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function TagList({ label, items, color }) {
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}: </span>
+      {items.map((item, i) => (
+        <span key={i} style={{ fontSize: 12, color: "#475569", marginRight: 6 }}>{item}{i < items.length - 1 ? " ·" : ""}</span>
+      ))}
+    </div>
+  );
+}
+
+function Rec({ text }) {
+  return (
+    <p style={{ fontSize: 12, color: "#475569", fontStyle: "italic", marginTop: 4 }}>→ {text}</p>
+  );
+}
+
+function ReviewModal({ adId, ads, review, onClose }) {
+  const ad = (ads || []).find((a) => a.id === adId);
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  if (!review) return null;
+
+  const verdictColors = VERDICT_COLORS[review.status] || VERDICT_COLORS.REVISE;
+  const imageUrl = ad?.creative?.image_url || null;
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        overflowY: "auto", padding: "40px 16px",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff", borderRadius: 16, width: "100%", maxWidth: 700,
+          boxShadow: "0 25px 60px rgba(0,0,0,0.25)", overflow: "hidden",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Ad Review</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>{ad?.name || adId}</p>
+            </div>
+            <button
+              onClick={onClose}
+              style={{ background: "none", border: "none", fontSize: 22, color: "#94a3b8", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 800, letterSpacing: 1, color: verdictColors.text,
+              background: verdictColors.bg, border: `1px solid ${verdictColors.border}`,
+              borderRadius: 6, padding: "3px 10px",
+            }}>
+              {review.status}
+            </span>
+            <span style={{ fontSize: 24, fontWeight: 900, color: verdictColors.text }}>{review.overallScore}<span style={{ fontSize: 14, fontWeight: 600, color: "#94a3b8" }}>/100</span></span>
+            <span style={{ fontSize: 13, color: "#64748b", flex: 1 }}>{review.summary}</span>
+          </div>
+        </div>
+
+        <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
+          {imageUrl && (
+            <img src={imageUrl} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 10 }} />
+          )}
+
+          {/* Score grid */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>Scores</p>
+            <ScoreBar label="Hook"   score={review.scores?.hook  ?? 0} />
+            <ScoreBar label="Proof"  score={review.scores?.proof ?? 0} />
+            <ScoreBar label="CTA"    score={review.scores?.cta   ?? 0} />
+            <ScoreBar label="Visual" score={review.scores?.visual ?? 0} />
+          </div>
+
+          {review.hook && (
+            <ReviewSection title="Hook">
+              {review.hook.strengths?.length > 0 && <TagList label="Strengths" items={review.hook.strengths} color="#16a34a" />}
+              {review.hook.issues?.length > 0 && <TagList label="Issues" items={review.hook.issues} color="#dc2626" />}
+              {review.hook.recommendation && <Rec text={review.hook.recommendation} />}
+            </ReviewSection>
+          )}
+
+          {review.proof && (
+            <ReviewSection title="Proof">
+              {review.proof.elements?.length > 0 && <TagList label="Present" items={review.proof.elements} color="#16a34a" />}
+              {review.proof.missing?.length > 0 && <TagList label="Missing" items={review.proof.missing} color="#d97706" />}
+              {review.proof.recommendation && <Rec text={review.proof.recommendation} />}
+            </ReviewSection>
+          )}
+
+          {review.cta && (
+            <ReviewSection title="CTA">
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
+                {[["Placement", review.cta.placement], ["Clarity", review.cta.clarity], ["Urgency", review.cta.urgency]].map(([k, v]) => v && (
+                  <span key={k} style={{ fontSize: 12, color: "#475569" }}><b>{k}:</b> {v}</span>
+                ))}
+              </div>
+              {review.cta.recommendation && <Rec text={review.cta.recommendation} />}
+            </ReviewSection>
+          )}
+
+          {review.visual && (
+            <ReviewSection title="Visual / Authenticity">
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
+                {review.visual.productionQuality && <span style={{ fontSize: 12, color: "#475569" }}><b>Quality:</b> {review.visual.productionQuality}</span>}
+                {review.visual.authenticity && <span style={{ fontSize: 12, color: "#475569" }}><b>Authenticity:</b> {review.visual.authenticity}</span>}
+              </div>
+              {review.visual.issues?.length > 0 && <TagList label="Issues" items={review.visual.issues} color="#dc2626" />}
+            </ReviewSection>
+          )}
+
+          {review.platformFit?.length > 0 && (
+            <ReviewSection title="Platform Fit">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {review.platformFit.map((p) => (
+                  <span key={p} style={{ fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#1d4ed8", borderRadius: 6, padding: "3px 10px" }}>{p}</span>
+                ))}
+              </div>
+            </ReviewSection>
+          )}
+
+          {review.actionItems && (
+            <ReviewSection title="Action Items">
+              {review.actionItems.required?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Required</p>
+                  {review.actionItems.required.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 3 }}>
+                      <span style={{ color: "#dc2626", fontSize: 14, lineHeight: 1.2 }}>•</span>
+                      <span style={{ fontSize: 13, color: "#1e293b" }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {review.actionItems.recommended?.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#d97706", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Recommended</p>
+                  {review.actionItems.recommended.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 3 }}>
+                      <span style={{ color: "#d97706", fontSize: 14, lineHeight: 1.2 }}>•</span>
+                      <span style={{ fontSize: 13, color: "#1e293b" }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ReviewSection>
+          )}
+
+          {review.prediction && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "#f8fafc", borderRadius: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#64748b" }}>Prediction:</span>
+              <span style={{
+                fontSize: 13, fontWeight: 800,
+                color: review.prediction === "High potential" ? "#16a34a" : review.prediction === "Medium" ? "#d97706" : "#dc2626",
+              }}>
+                {review.prediction}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
