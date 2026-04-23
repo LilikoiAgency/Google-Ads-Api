@@ -559,10 +559,11 @@ function ReviewFooterStrip({ review, onClick }) {
         padding: "10px 20px",
         background: colors.bg,
         borderTop: `2px solid ${colors.border}`,
+        borderRight: "none",
+        borderBottom: "none",
+        borderLeft: "none",
         cursor: "pointer",
         textAlign: "left",
-        border: "none",
-        borderTop: `2px solid ${colors.border}`,
       }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
