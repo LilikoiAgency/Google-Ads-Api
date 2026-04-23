@@ -104,24 +104,27 @@ export async function GET(request) {
     const ids = rows.map((r) => r.ad_id).filter(Boolean).join(',');
     const adsResp = ids ? await graphGet('', {
       ids,
-      fields: 'id,name,status,effective_status,creative{id,title,body,call_to_action_type,image_url,thumbnail_url,object_story_id}',
+      fields: 'id,name,status,effective_status,creative{id,title,body,call_to_action_type,image_url,thumbnail_url,object_story_id,object_story_spec{link_data{message,name,call_to_action,picture}}}',
     }, token).catch(() => ({})) : {};
 
     const data = rows.map((r) => {
       const ad = adsResp?.[r.ad_id] || {};
+      const cr = ad.creative || null;
+      // For some ad formats (call ads, link ads) copy lives in object_story_spec.link_data
+      const ld = cr?.object_story_spec?.link_data || {};
       return {
         id: r.ad_id,
         name: ad.name || r.ad_name || '',
         status: ad.status || 'ACTIVE',
         effective_status: ad.effective_status || 'ACTIVE',
-        creative: ad.creative
+        creative: cr
           ? {
-              id: ad.creative.id,
-              title: ad.creative.title || null,
-              body: ad.creative.body || null,
-              call_to_action_type: ad.creative.call_to_action_type || null,
-              image_url: ad.creative.image_url || ad.creative.thumbnail_url || null,
-              object_story_id: ad.creative.object_story_id || null,
+              id: cr.id,
+              title: cr.title || ld.name || null,
+              body: cr.body || ld.message || null,
+              call_to_action_type: cr.call_to_action_type || ld.call_to_action?.type || null,
+              image_url: cr.image_url || cr.thumbnail_url || ld.picture || null,
+              object_story_id: cr.object_story_id || null,
             }
           : null,
         insights: shapeInsights(r),
