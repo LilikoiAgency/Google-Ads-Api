@@ -51,11 +51,13 @@ export async function GET(request, { params }) {
     previewCache.delete(cacheKey);
   }
 
+  const t0 = Date.now();
   try {
     const token = await getMetaAccessToken();
     const resp = await graphGet(`${adId}/previews`, { ad_format: format }, token);
-    // Meta returns { data: [{ body: "<iframe ...></iframe>" }] }
+    const elapsed = Date.now() - t0;
     const html = resp?.data?.[0]?.body || null;
+    console.log(`[meta/preview] ad=${adId} format=${format} elapsed=${elapsed}ms hasHtml=${!!html} bodyLen=${html?.length ?? 0}`);
 
     if (!html) {
       return NextResponse.json({ html: null, format, unsupported: true });
@@ -68,6 +70,8 @@ export async function GET(request, { params }) {
     previewCache.set(cacheKey, { html, expiresAt: Date.now() + CACHE_TTL_MS });
     return NextResponse.json({ html, format, cached: false });
   } catch (err) {
+    const elapsed = Date.now() - t0;
+    console.warn(`[meta/preview] ad=${adId} format=${format} elapsed=${elapsed}ms ERROR: ${err?.message} (code ${err?.code}, status ${err?.status})`);
     // Common: "Unsupported ad format" when an ad can't render in this placement.
     // Note: err.status===400 is also treated as unsupported here — adId comes from our own
     // route param so genuine 400s are unlikely, and the client's unsupported fallback

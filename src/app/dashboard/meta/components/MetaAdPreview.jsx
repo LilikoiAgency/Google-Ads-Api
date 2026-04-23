@@ -47,7 +47,7 @@ function fmtRoas(n) {
   return n.toFixed(2) + "x";
 }
 
-export default function MetaAdPreview({ ad }) {
+export default function MetaAdPreview({ ad, hideMetrics = false, fill = false, previewMinHeight = 360 }) {
   const [activeFormat, setActiveFormat] = useState(FORMATS[0].key);
   // Local cache: { [format]: { html, unsupported, loading, error } }
   const [previews, setPreviews] = useState({});
@@ -76,13 +76,25 @@ export default function MetaAdPreview({ ad }) {
         setPreviews((p) => ({ ...p, [activeFormat]: { loading: false, error: err.message } }));
       });
     return () => { cancelled = true; };
-  }, [activeFormat, ad.id, previews]);
+    // `previews` intentionally excluded: including it causes the effect to re-run
+    // after setPreviews({loading:true}), which cancels the in-flight fetch and
+    // short-circuits before starting a new one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFormat, ad.id]);
 
   const current = previews[activeFormat] || { loading: true };
   const statusColor = STATUS_COLORS[ad.effective_status] || STATUS_COLORS[ad.status] || C.textMut;
 
+  const containerStyle = fill
+    ? { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }
+    : { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14, overflow: "hidden" };
+
+  const previewAreaStyle = fill
+    ? { background: "#0a0a12", flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto" }
+    : { background: "#0a0a12", minHeight: previewMinHeight, display: "flex", alignItems: "center", justifyContent: "center" };
+
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
+    <div style={containerStyle}>
       {/* Header */}
       <div style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -125,15 +137,22 @@ export default function MetaAdPreview({ ad }) {
       </div>
 
       {/* Preview */}
-      <div style={{ background: "#0a0a12", minHeight: 360, display: "flex", alignItems: "stretch", justifyContent: "center" }}>
+      <div style={previewAreaStyle}>
         {current.loading && (
-          <div style={{ padding: 40, textAlign: "center", color: C.textMut, fontSize: 12, alignSelf: "center" }}>Loading preview…</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: C.textMut, fontSize: 12, padding: 40, alignSelf: "center" }}>
+            <div style={{ width: 26, height: 26, border: `3px solid rgba(255,255,255,0.14)`, borderTopColor: C.accent, borderRadius: "50%", animation: "metaAdPreviewSpin 0.8s linear infinite" }} />
+            <span>Loading preview&hellip;</span>
+            <style>{"@keyframes metaAdPreviewSpin { to { transform: rotate(360deg); } }"}</style>
+          </div>
         )}
         {!current.loading && current.html && (
           <div
-            style={{ width: "100%", minHeight: 360 }}
-            dangerouslySetInnerHTML={{ __html: current.html }}
-          />
+            className="meta-preview-frame"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "12px 8px", overflow: "hidden" }}
+          >
+            <style>{".meta-preview-frame iframe { max-width: 100% !important; display: block; margin: 0 auto; border: 0; }"}</style>
+            <div dangerouslySetInnerHTML={{ __html: current.html }} style={{ width: "100%", display: "flex", justifyContent: "center" }} />
+          </div>
         )}
         {!current.loading && !current.html && current.unsupported && (
           <div style={{ padding: 40, textAlign: "center", color: C.textMut, fontSize: 12, alignSelf: "center" }}>
@@ -152,6 +171,7 @@ export default function MetaAdPreview({ ad }) {
       </div>
 
       {/* Metrics */}
+      {!hideMetrics && (
       <div style={{ padding: "12px 14px", background: C.card }}>
         <MetricRow items={[
           { label: "Spend",   value: fmtCurrency(ad.insights?.spend) },
@@ -166,6 +186,7 @@ export default function MetaAdPreview({ ad }) {
           { label: "ROAS",   value: fmtRoas(ad.insights?.roas) },
         ]} />
       </div>
+      )}
     </div>
   );
 }
