@@ -315,7 +315,7 @@ function AllCreativesInner() {
           </div>
         )}
       </div>
-      {reviewModal && reviews[reviewModal] && (
+      {reviewModal && reviews[reviewModal] && filtered.some((a) => a.id === reviewModal) && (
         <ReviewModal
           adId={reviewModal}
           ads={filtered}
