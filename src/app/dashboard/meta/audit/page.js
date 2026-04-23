@@ -105,7 +105,6 @@ function MetaAuditPageInner() {
     setAuditError(null);
     setAiInsight(null);
     setAiError(null);
-    setActiveHistoryId(null);
     const params = new URLSearchParams({ accountId: acctId, range: apiRange });
     if (apiRange === "custom" && start && end) {
       params.set("startDate", start);
@@ -142,6 +141,7 @@ function MetaAuditPageInner() {
     setActiveHistoryId(String(entry._id));
     setAudit(null);
     setAuditLoading(true);
+    setAuditError(null);
     setAiInsight(null);
     setAiError(null);
     try {
@@ -345,7 +345,7 @@ function MetaAuditPageInner() {
                 {tab === 8 && <AIInsightTab aiInsight={aiInsight} aiLoading={aiLoading} aiError={aiError} onRunAnalysis={runAiAnalysis} auditReady={!!audit && !auditLoading} />}
               </div>
             ) : auditLoading ? (
-              <div style={{ padding: 60, textAlign: "center", color: C.textSec }}>Running audit&hellip;</div>
+              <div style={{ padding: 60, textAlign: "center", color: C.textSec }}>{activeHistoryId ? "Loading audit…" : "Running audit…"}</div>
             ) : auditError ? (
               <div style={{ padding: 40 }}>
                 <div style={{ background: "rgba(233,69,96,0.1)", border: "1px solid rgba(233,69,96,0.35)", borderRadius: 10, padding: 18, color: C.pink, fontSize: 13, lineHeight: 1.6 }}>
@@ -381,6 +381,7 @@ function MetaAuditPageInner() {
           onRun={(range, start, end, includeAi) => {
             setShowRunModal(false);
             setDateRange(range);
+            setActiveHistoryId(null);
             setPendingAutoSave(true);
             setPendingAi(!!includeAi);
             const apiRange = RANGE_MAP[range] || "28d";
