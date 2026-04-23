@@ -38,6 +38,7 @@ export async function POST(request) {
     summary: summary || {},
     auditData: auditData || null,
     aiInsight: aiInsight || null,
+    hasAI: !!aiInsight,
     savedAt: new Date(),
   };
 

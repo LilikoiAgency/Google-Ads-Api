@@ -21,6 +21,20 @@ const C = {
 
 const RANGE_MAP = { LAST_7_DAYS: "7d", LAST_30_DAYS: "28d", LAST_90_DAYS: "3m" };
 
+const RANGE_LABELS = {
+  LAST_7_DAYS:  "Last 7 days",
+  LAST_30_DAYS: "Last 30 days",
+  LAST_90_DAYS: "Last 90 days",
+};
+
+function fmtDateWindow(w) {
+  if (!w?.since || !w?.until) return null;
+  const opts = { month: "short", day: "numeric" };
+  const s = new Date(w.since + "T12:00:00");
+  const u = new Date(w.until + "T12:00:00");
+  return s.toLocaleDateString("en-US", opts) + " – " + u.toLocaleDateString("en-US", opts) + ", " + u.getFullYear();
+}
+
 export default function MetaAuditPage() {
   return (
     <Suspense fallback={<div style={{ padding: 40, color: C.textSec }}>Loading&hellip;</div>}>
@@ -55,6 +69,7 @@ function MetaAuditPageInner() {
   const [pendingAi,      setPendingAi]      = useState(false);
   const [, setSaving]                       = useState(false);
   const [adsPanelAdSet,  setAdsPanelAdSet]  = useState(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   useEffect(() => {
     fetch("/api/meta/audit/accounts")
@@ -192,6 +207,24 @@ function MetaAuditPageInner() {
     }
   }
 
+  async function deleteAudit(id) {
+    try {
+      const res = await fetch(`/api/meta/audit/history?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setHistory((h) => h.filter((e) => String(e._id) !== id));
+        if (activeHistoryId === id) {
+          setActiveHistoryId(null);
+          setAudit(null);
+          setAuditError(null);
+        }
+      }
+    } catch (err) {
+      console.error("[deleteAudit]", err);
+    } finally {
+      setPendingDeleteId(null);
+    }
+  }
+
   async function saveAudit(ai) {
     if (!audit || !accountId) return;
     setSaving(true);
@@ -312,14 +345,44 @@ function MetaAuditPageInner() {
           <div style={{ flex: 1, overflowY: "auto" }}>
             {history.length === 0 ? (
               <p style={{ fontSize: 12, color: C.textSec, padding: "20px 14px", textAlign: "center" }}>No audits yet for this account.</p>
-            ) : history.map((entry) => (
-              <div key={entry._id} onClick={() => loadHistoryEntry(entry)}
-                style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", background: entry._id === activeHistoryId ? "rgba(24,119,242,0.08)" : "transparent" }}>
-                <p style={{ fontSize: 12, fontWeight: 600, color: "#fff", margin: 0 }}>{new Date(entry.savedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                <p style={{ fontSize: 11, color: C.textSec, margin: "2px 0 0" }}>{entry.dateLabel || entry.dateRange} &middot; Grade {entry.summary?.accountGrade || "\u2014"}</p>
-                {entry.email && <p style={{ fontSize: 10, color: C.textMut, margin: "2px 0 0" }}>by {entry.email.split("@")[0]}</p>}
-              </div>
-            ))}
+            ) : history.map((entry) => {
+              const eid = String(entry._id);
+              const isPendingDelete = pendingDeleteId === eid;
+              const dateStr = fmtDateWindow(entry.dateWindow);
+              const rangeLabel = RANGE_LABELS[entry.dateLabel || entry.dateRange] || entry.dateLabel || entry.dateRange;
+              return (
+                <div key={eid}
+                  onClick={() => { setPendingDeleteId(null); loadHistoryEntry(entry); }}
+                  style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", background: eid === activeHistoryId ? "rgba(24,119,242,0.08)" : "transparent" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "#fff", margin: 0 }}>
+                        {new Date(entry.savedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                      <p style={{ fontSize: 11, color: C.textSec, margin: "3px 0 0" }}>{rangeLabel}</p>
+                      {dateStr && <p style={{ fontSize: 10, color: C.textMut, margin: "2px 0 0" }}>{dateStr}</p>}
+                      <div style={{ display: "flex", gap: 5, marginTop: 5, alignItems: "center", flexWrap: "wrap" }}>
+                        {entry.summary?.accountGrade && (
+                          <span style={{ fontSize: 11, fontWeight: 800, color: C.teal }}>Grade {entry.summary.accountGrade}</span>
+                        )}
+                        {entry.hasAI === true && (
+                          <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", padding: "2px 6px", borderRadius: 4, color: C.accent, border: `1px solid ${C.accent}55`, background: `${C.accent}18` }}>AI</span>
+                        )}
+                        {entry.hasAI === false && (
+                          <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", padding: "2px 6px", borderRadius: 4, color: C.textMut, border: "1px solid rgba(255,255,255,0.1)" }}>Data</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); isPendingDelete ? deleteAudit(eid) : setPendingDeleteId(eid); }}
+                      title="Delete audit"
+                      style={{ flexShrink: 0, background: isPendingDelete ? "rgba(233,69,96,0.15)" : "transparent", border: isPendingDelete ? "1px solid rgba(233,69,96,0.4)" : "1px solid transparent", borderRadius: 5, padding: "3px 7px", fontSize: isPendingDelete ? 10 : 12, fontWeight: 700, color: isPendingDelete ? C.pink : C.textMut, cursor: "pointer", whiteSpace: "nowrap", marginTop: 1 }}>
+                      {isPendingDelete ? "Delete?" : "\ud83d\uddd1"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
