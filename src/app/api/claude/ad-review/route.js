@@ -122,7 +122,19 @@ export async function POST(request) {
       let parsedImageUrl = null;
       try { parsedImageUrl = new URL(ad.imageUrl); } catch { parsedImageUrl = null; }
       if (parsedImageUrl && (parsedImageUrl.protocol === 'https:' || parsedImageUrl.protocol === 'http:')) {
-        contentBlocks.unshift({ type: 'image', source: { type: 'url', url: parsedImageUrl.href } });
+        // Fetch image server-side and pass as base64 — Meta CDN blocks Anthropic's direct URL fetches
+        try {
+          const imgRes = await fetch(parsedImageUrl.href, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          if (imgRes.ok) {
+            const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+            const mediaType = contentType.split(';')[0].trim();
+            const buffer = await imgRes.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            contentBlocks.unshift({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } });
+          }
+        } catch (imgErr) {
+          console.warn('[claude/ad-review] Could not fetch image, proceeding text-only:', imgErr?.message);
+        }
       }
     }
     messages = [{ role: 'user', content: contentBlocks }];
