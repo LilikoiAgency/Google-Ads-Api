@@ -38,6 +38,7 @@ function MetaAuditPageInner() {
   const [accountName,    setAccountName]    = useState("");
   const [audit,          setAudit]          = useState(null);
   const [auditLoading,   setAuditLoading]   = useState(false);
+  const [auditError,     setAuditError]     = useState(null);
   const [dateRange,      setDateRange]      = useState("LAST_30_DAYS");
   const [dateWindow,     setDateWindow]     = useState(null);
   const [tab,            setTab]            = useState(0);
@@ -62,6 +63,31 @@ function MetaAuditPageInner() {
       .catch(() => {});
   }, [historyVersion]);
 
+  // Sync accountName when arriving from URL (?accountId=...) or when the accounts list loads.
+  useEffect(() => {
+    if (!accountId || accountName) return;
+    const match = accounts.find((a) => String(a.accountId) === String(accountId));
+    if (match) setAccountName(match.accountName);
+  }, [accounts, accountId, accountName]);
+
+  // Fallback: if the account has no prior audits (so it's not in the audited-accounts list),
+  // look up the name in the full Meta accounts list (lightweight — same endpoint the Meta
+  // dashboard already uses for its picker).
+  useEffect(() => {
+    if (!accountId || accountName) return;
+    const controller = new AbortController();
+    fetch(`/api/meta-accounts`, { signal: controller.signal })
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => {
+        const list = j?.data || j || [];
+        const match = list.find((a) => String(a.accountId || a.id) === String(accountId));
+        if (match?.name) setAccountName(match.name);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+
   useEffect(() => {
     if (!accountId) return;
     fetch(`/api/meta/audit/history?accountId=${encodeURIComponent(accountId)}`)
@@ -76,6 +102,7 @@ function MetaAuditPageInner() {
   async function doFetch(acctId, apiRange, start, end) {
     setAudit(null);
     setAuditLoading(true);
+    setAuditError(null);
     setAiInsight(null);
     setAiError(null);
     setActiveHistoryId(null);
@@ -86,8 +113,11 @@ function MetaAuditPageInner() {
     }
     try {
       const r = await fetch(`/api/meta/audit?${params.toString()}`);
-      if (!r.ok) throw new Error(r.status);
       const j = await r.json();
+      if (!r.ok) {
+        const detail = [j?.error, j?.code && `code ${j.code}`, j?.subcode && `subcode ${j.subcode}`].filter(Boolean).join(" · ");
+        throw new Error(detail || `HTTP ${r.status}`);
+      }
       if (j?.data) {
         setAccountName(j.data.account?.name || "");
         setAudit(runAudit(j.data));
@@ -95,22 +125,71 @@ function MetaAuditPageInner() {
       }
     } catch (err) {
       console.warn("[MetaAuditPage]", err);
+      setAuditError(err.message || "Audit fetch failed");
     } finally {
       setAuditLoading(false);
     }
   }
 
   async function loadHistoryEntry(entry) {
+    console.log("[loadHistoryEntry] clicked entry:", {
+      id: String(entry._id),
+      accountId: entry.accountId,
+      dateRange: entry.dateRange,
+      hasSummary: !!entry.summary,
+      savedAt: entry.savedAt,
+    });
     setActiveHistoryId(String(entry._id));
-    if (!entry.summary?.accountGrade) return;
+    setAudit(null);
+    setAuditLoading(true);
+    setAiInsight(null);
+    setAiError(null);
     try {
       const res = await fetch(`/api/meta/audit/history?id=${String(entry._id)}`);
       const j = await res.json();
-      if (j?.data?.aiInsight) {
-        setAiInsight(j.data.aiInsight);
-        setTab(8);
+      console.log("[loadHistoryEntry] response:", {
+        ok: res.ok,
+        status: res.status,
+        hasData: !!j?.data,
+        hasAuditData: !!j?.data?.auditData,
+        auditDataKeys: j?.data?.auditData ? Object.keys(j.data.auditData) : null,
+        campaignCount: j?.data?.auditData?.campaigns?.length,
+        adSetCount: j?.data?.auditData?.adSets?.length,
+        hasAI: !!j?.data?.aiInsight,
+        errorMsg: j?.error,
+      });
+      if (j?.data) {
+        if (j.data.accountName) setAccountName(j.data.accountName);
+        if (j.data.dateRange) setDateRange(j.data.dateRange);
+        if (j.data.dateWindow) setDateWindow(j.data.dateWindow);
+        if (j.data.aiInsight) {
+          setAiInsight(j.data.aiInsight);
+        }
+
+        if (j.data.auditData) {
+          console.log("[loadHistoryEntry] hydrating from stored auditData");
+          setAudit(j.data.auditData);
+        } else {
+          // Legacy entry (saved before we started persisting full audit data).
+          // Re-fetch live from Meta using the saved date range so every tab populates.
+          const savedRange = j.data.dateRange || "LAST_30_DAYS";
+          const apiRange = RANGE_MAP[savedRange] || "28d";
+          const targetAccountId = j.data.accountId || accountId;
+          console.log(`[loadHistoryEntry] legacy entry — refetching live for account=${targetAccountId} range=${apiRange}`);
+          if (targetAccountId) {
+            await doFetch(targetAccountId, apiRange,
+              j.data.dateWindow?.since || undefined,
+              j.data.dateWindow?.until || undefined,
+            );
+            return; // doFetch manages auditLoading itself
+          }
+        }
       }
-    } catch (err) { console.error("[loadHistoryEntry]", err); }
+    } catch (err) {
+      console.error("[loadHistoryEntry] fetch/parse error:", err);
+    } finally {
+      setAuditLoading(false);
+    }
   }
 
   async function saveAudit(ai) {
@@ -131,6 +210,8 @@ function MetaAuditPageInner() {
             criticalCount: audit.summary.criticalCount,
             warningCount: audit.summary.warningCount,
           },
+          // Full audit payload so past entries can re-hydrate every tab when clicked.
+          auditData: audit,
           aiInsight: ai ?? aiInsight ?? null,
         }),
       });
@@ -265,6 +346,14 @@ function MetaAuditPageInner() {
               </div>
             ) : auditLoading ? (
               <div style={{ padding: 60, textAlign: "center", color: C.textSec }}>Running audit&hellip;</div>
+            ) : auditError ? (
+              <div style={{ padding: 40 }}>
+                <div style={{ background: "rgba(233,69,96,0.1)", border: "1px solid rgba(233,69,96,0.35)", borderRadius: 10, padding: 18, color: C.pink, fontSize: 13, lineHeight: 1.6 }}>
+                  <strong style={{ display: "block", marginBottom: 6 }}>Meta API error</strong>
+                  <span style={{ color: "rgba(255,255,255,0.8)" }}>{auditError}</span>
+                </div>
+                <p style={{ fontSize: 12, color: C.textSec, marginTop: 12 }}>Check the dev server terminal for the full <code>[meta/audit]</code> log.</p>
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 14, padding: 60 }}>
                 <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(24,119,242,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>&#128216;</div>

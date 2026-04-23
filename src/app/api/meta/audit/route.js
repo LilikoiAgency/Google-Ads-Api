@@ -65,29 +65,91 @@ export async function GET(request) {
 
     const insightsFields = 'spend,impressions,clicks,ctr,cpm,cpc,frequency,actions,action_values';
     const timeRangeJson = JSON.stringify(timeRange);
+    // Meta rejects deep combined expansions (code 1 "data too big") so we:
+    // 1) Filter entities to active-only to trim the result set.
+    // 2) Fetch entity metadata without inline insights.
+    // 3) Pull insights in one batch per level (campaign / adset) and merge by id.
+    const activeFilter = JSON.stringify([
+      { field: 'effective_status', operator: 'IN', value: ['ACTIVE'] },
+    ]);
 
-    const [accountRow, campaignsResp, adSetsResp, adsResp, pixelsResp, accountInsightsResp] = await Promise.all([
+    const [
+      accountRow,
+      campaignsResp,
+      adSetsResp,
+      adsResp,
+      pixelsResp,
+      accountInsightsResp,
+      campaignInsightsResp,
+      adSetInsightsResp,
+      adInsightsResp,
+    ] = await Promise.all([
       graphGet(actId, { fields: 'name,currency,account_status,business' }, token),
       graphGet(`${actId}/campaigns`, {
-        fields: `id,name,objective,status,effective_status,buying_type,special_ad_categories,bid_strategy,daily_budget,lifetime_budget,insights.time_range(${timeRangeJson}){${insightsFields}}`,
+        fields: 'id,name,objective,status,effective_status,buying_type,special_ad_categories,bid_strategy,daily_budget,lifetime_budget',
+        filtering: activeFilter,
         limit: 200,
       }, token),
       graphGet(`${actId}/adsets`, {
-        fields: `id,name,campaign_id,status,effective_status,optimization_goal,billing_event,bid_strategy,daily_budget,lifetime_budget,frequency_control_specs,learning_stage_info,is_dynamic_creative,targeting{flexible_spec,custom_audiences,targeting_automation,publisher_platforms},insights.time_range(${timeRangeJson}){${insightsFields}}`,
-        limit: 500,
+        fields: 'id,name,campaign_id,status,effective_status,optimization_goal,billing_event,bid_strategy,daily_budget,lifetime_budget,frequency_control_specs,learning_stage_info,is_dynamic_creative,targeting{flexible_spec,custom_audiences,targeting_automation,publisher_platforms}',
+        filtering: activeFilter,
+        limit: 300,
       }, token),
       graphGet(`${actId}/ads`, {
-        fields: 'id,name,ad_set_id,status,effective_status,creative{id}',
-        limit: 1000,
+        fields: 'id,name,ad_set_id,status,effective_status,creative{id,title,body,call_to_action_type,image_url,thumbnail_url,object_story_id}',
+        filtering: activeFilter,
+        limit: 500,
       }, token),
       graphGet(`${actId}/adspixels`, { fields: 'id,name,last_fired_time' }, token).catch(() => ({ data: [] })),
       graphGet(`${actId}/insights`, {
         time_range: timeRangeJson,
         fields: insightsFields,
       }, token),
+      graphGet(`${actId}/insights`, {
+        time_range: timeRangeJson,
+        level: 'campaign',
+        fields: `campaign_id,${insightsFields}`,
+        limit: 500,
+      }, token).catch((err) => {
+        console.warn('[meta/audit] campaign-level insights fetch failed:', err?.message);
+        return { data: [] };
+      }),
+      graphGet(`${actId}/insights`, {
+        time_range: timeRangeJson,
+        level: 'adset',
+        fields: `adset_id,${insightsFields}`,
+        limit: 1000,
+      }, token).catch((err) => {
+        console.warn('[meta/audit] adset-level insights fetch failed:', err?.message);
+        return { data: [] };
+      }),
+      graphGet(`${actId}/insights`, {
+        time_range: timeRangeJson,
+        level: 'ad',
+        fields: `ad_id,${insightsFields}`,
+        limit: 1000,
+      }, token).catch((err) => {
+        console.warn('[meta/audit] ad-level insights fetch failed:', err?.message);
+        return { data: [] };
+      }),
     ]);
 
     const campaignNameById = Object.fromEntries((campaignsResp.data || []).map((c) => [c.id, c.name]));
+
+    const campaignInsightsById = {};
+    for (const row of campaignInsightsResp.data || []) {
+      if (row.campaign_id) campaignInsightsById[row.campaign_id] = shapeInsights(row);
+    }
+    const adSetInsightsById = {};
+    for (const row of adSetInsightsResp.data || []) {
+      if (row.adset_id) adSetInsightsById[row.adset_id] = shapeInsights(row);
+    }
+    const adInsightsById = {};
+    for (const row of adInsightsResp.data || []) {
+      if (row.ad_id) adInsightsById[row.ad_id] = shapeInsights(row);
+    }
+
+    const zeroInsights = shapeInsights({});
 
     const campaigns = (campaignsResp.data || []).map((c) => ({
       id: c.id,
@@ -100,7 +162,7 @@ export async function GET(request) {
       bid_strategy: c.bid_strategy,
       daily_budget: toNum(c.daily_budget) / 100,
       lifetime_budget: toNum(c.lifetime_budget) / 100,
-      ...shapeInsights(c.insights?.data?.[0]),
+      ...(campaignInsightsById[c.id] || zeroInsights),
     }));
 
     const adSets = (adSetsResp.data || []).map((as) => ({
@@ -118,17 +180,34 @@ export async function GET(request) {
       targeting: as.targeting || {},
       learning_stage_info: as.learning_stage_info || null,
       is_dynamic_creative: !!as.is_dynamic_creative,
-      ...shapeInsights(as.insights?.data?.[0]),
+      ...(adSetInsightsById[as.id] || zeroInsights),
     }));
 
-    const ads = (adsResp.data || []).map((ad) => ({
-      id: ad.id,
-      name: ad.name,
-      ad_set_id: ad.ad_set_id,
-      status: ad.status,
-      effective_status: ad.effective_status,
-      creative_id: ad.creative?.id || null,
-    }));
+    const ads = (adsResp.data || []).map((ad) => {
+      const ins = adInsightsById[ad.id] || zeroInsights;
+      return {
+        id: ad.id,
+        name: ad.name,
+        ad_set_id: ad.ad_set_id,
+        status: ad.status,
+        effective_status: ad.effective_status,
+        creative_id: ad.creative?.id || null,
+        creative: ad.creative
+          ? {
+              id: ad.creative.id,
+              title: ad.creative.title || null,
+              body: ad.creative.body || null,
+              call_to_action_type: ad.creative.call_to_action_type || null,
+              image_url: ad.creative.image_url || ad.creative.thumbnail_url || null,
+              object_story_id: ad.creative.object_story_id || null,
+            }
+          : null,
+        // Spread insights into top-level fields so audit logic keeps working,
+        // and also keep them under `insights` so MetaAdPreview can consume them.
+        ...ins,
+        insights: ins,
+      };
+    });
 
     const pixels = (pixelsResp.data || []);
     const accountInsights = shapeInsights(accountInsightsResp.data?.[0]);
@@ -151,9 +230,16 @@ export async function GET(request) {
       },
     });
   } catch (err) {
+    console.error('[meta/audit] Meta API error:', {
+      message: err?.message,
+      status: err?.status,
+      code: err?.code,
+      subcode: err?.subcode,
+      stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
+    });
     const status = err?.status || 500;
     return NextResponse.json(
-      { error: err?.message || 'Meta API error', code: err?.code },
+      { error: err?.message || 'Meta API error', code: err?.code, subcode: err?.subcode },
       { status: status >= 400 && status < 600 ? status : 500 },
     );
   }

@@ -39,6 +39,10 @@ export async function GET(request) {
     catch { return NextResponse.json({ error: 'Invalid id', requestId }, { status: 400 }); }
     const doc = await db.collection(COLLECTION).findOne({ _id: oid });
     if (!doc) return NextResponse.json({ error: 'Not found', requestId }, { status: 404 });
+    console.log(`[meta/audit/history GET id] id=${id} hasAuditData=${!!doc.auditData} ` +
+      `auditDataSize=${doc.auditData ? JSON.stringify(doc.auditData).length : 0} ` +
+      `campaignCount=${doc.auditData?.campaigns?.length ?? 0} adSetCount=${doc.auditData?.adSets?.length ?? 0} ` +
+      `hasAI=${!!doc.aiInsight}`);
     return NextResponse.json({ data: doc, usage, requestId });
   }
 
@@ -47,7 +51,7 @@ export async function GET(request) {
       .find({ accountId: String(accountId) })
       .sort({ savedAt: -1 })
       .limit(20)
-      .project({ aiInsight: 0 })
+      .project({ aiInsight: 0, auditData: 0 })
       .toArray();
     return NextResponse.json({ data: docs, usage, requestId });
   }
