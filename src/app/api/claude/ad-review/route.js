@@ -11,6 +11,7 @@ import { isAdmin } from '../../../../lib/admins';
 import dbConnect from '../../../../lib/mongoose';
 
 const DAILY_LIMIT = parseInt(process.env.META_AD_REVIEW_DAILY_LIMIT || '10');
+const MAX_BATCH_SIZE = 20;
 const DB = 'tokensApi';
 
 const SYSTEM_PROMPT = `You are an expert ad creative reviewer applying the LeadsIcon ad-review rubric.
@@ -81,6 +82,9 @@ export async function POST(request) {
   if (!['batch', 'single'].includes(mode)) {
     return NextResponse.json({ error: 'mode must be "batch" or "single"', requestId }, { status: 400 });
   }
+  if (ads.length > MAX_BATCH_SIZE) {
+    return NextResponse.json({ error: `ads array exceeds maximum size of ${MAX_BATCH_SIZE}`, requestId }, { status: 400 });
+  }
 
   const dbClient = await dbConnect();
   const db = dbClient.db(DB);
@@ -100,7 +104,7 @@ export async function POST(request) {
   const credentials = await getCredentials();
   const apiKey = credentials.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: 'Anthropic API key not configured.' }, { status: 500 });
+    return NextResponse.json({ error: 'Anthropic API key not configured.', requestId }, { status: 500 });
   }
 
   const client = new Anthropic({ apiKey });
@@ -115,7 +119,11 @@ export async function POST(request) {
     const textBlock = { type: 'text', text: buildBatchUserMessage([ad], accountId) };
     const contentBlocks = [textBlock];
     if (ad.imageUrl) {
-      contentBlocks.unshift({ type: 'image', source: { type: 'url', url: ad.imageUrl } });
+      let parsedImageUrl = null;
+      try { parsedImageUrl = new URL(ad.imageUrl); } catch { parsedImageUrl = null; }
+      if (parsedImageUrl && (parsedImageUrl.protocol === 'https:' || parsedImageUrl.protocol === 'http:')) {
+        contentBlocks.unshift({ type: 'image', source: { type: 'url', url: parsedImageUrl.href } });
+      }
     }
     messages = [{ role: 'user', content: contentBlocks }];
   }
@@ -126,7 +134,7 @@ export async function POST(request) {
     try {
       response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         messages,
       });
