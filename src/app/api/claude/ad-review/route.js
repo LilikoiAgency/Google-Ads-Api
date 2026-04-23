@@ -32,6 +32,18 @@ proof {elements[], missing[], recommendation}, cta {placement, clarity, urgency,
 visual {productionQuality, authenticity, issues[]}, platformFit (string[]),
 actionItems {required[], recommended[]}, prediction ("High potential"|"Medium"|"Low").`;
 
+function stripHtml(html) {
+  if (!html) return '';
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 3000);
+}
+
 function buildBatchUserMessage(ads, accountId) {
   const lines = [`Review these ${ads.length} ads for account ${accountId}:\n`];
   ads.forEach((ad, i) => {
@@ -42,7 +54,10 @@ function buildBatchUserMessage(ads, accountId) {
     lines.push(`Headline: ${ad.title || '(none)'}`);
     lines.push(`Copy: ${ad.body || '(none)'}`);
     lines.push(`CTA Button: ${ad.ctaType || '(none)'}`);
-    lines.push(`Performance: $${(ins.spend || 0).toFixed(2)} spend · ${((ins.ctr || 0) * 100).toFixed(2)}% CTR · ${ins.conversions || 0} conversions · ${ins.roas != null ? ins.roas.toFixed(2) + 'x' : '—'} ROAS · ${(ins.frequency || 0).toFixed(2)}x frequency\n`);
+    lines.push(`Performance: $${(ins.spend || 0).toFixed(2)} spend · ${((ins.ctr || 0) * 100).toFixed(2)}% CTR · ${ins.conversions || 0} conversions · ${ins.roas != null ? ins.roas.toFixed(2) + 'x' : '—'} ROAS · ${(ins.frequency || 0).toFixed(2)}x frequency`);
+    const previewText = stripHtml(ad.previewHtml);
+    if (previewText) lines.push(`Live Ad Preview Text: ${previewText}`);
+    lines.push('');
   });
   return lines.join('\n');
 }
