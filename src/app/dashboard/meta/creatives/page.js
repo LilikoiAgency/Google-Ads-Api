@@ -721,7 +721,7 @@ function ReviewModal({ adId, ads, review, onClose }) {
 
         <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
           {imageUrl && (
-            <img src={imageUrl} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 10 }} />
+            <img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: 400, height: "auto", display: "block", margin: "0 auto", borderRadius: 10 }} />
           )}
 
           {/* Score grid */}
