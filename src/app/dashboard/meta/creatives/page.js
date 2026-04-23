@@ -421,7 +421,10 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
         return;
       }
       if (json.reviews?.length) {
-        onReviewDone(json.reviews[0], json.usage);
+        const result = json.reviews[0];
+        const extracted = extractAdImageFromHtml(previews[activeFormat]?.html);
+        if (extracted) result.previewImageUrl = extracted;
+        onReviewDone(result, json.usage);
       }
     } catch (err) {
       console.error('[reviewSingle]', err);
@@ -661,6 +664,17 @@ function Rec({ text }) {
   );
 }
 
+function extractAdImageFromHtml(html) {
+  if (!html) return null;
+  // Prefer the main ad image (data-ad-preview="image" tag)
+  const previewImg = html.match(/data-ad-preview="image"[^>]*src="([^"]+)"/);
+  if (previewImg) return previewImg[1].replace(/&amp;/g, '&');
+  // Fallback: largest scontent image (Meta CDN)
+  const allSrc = [...html.matchAll(/src="(https:\/\/scontent[^"]+\.(?:jpg|png|jpeg)[^"]*)"/g)];
+  if (allSrc.length) return allSrc[allSrc.length - 1][1].replace(/&amp;/g, '&');
+  return null;
+}
+
 function ReviewModal({ adId, ads, review, onClose }) {
   const ad = (ads || []).find((a) => a.id === adId);
 
@@ -673,7 +687,7 @@ function ReviewModal({ adId, ads, review, onClose }) {
   if (!review) return null;
 
   const verdictColors = VERDICT_COLORS[review.status] || VERDICT_COLORS.REVISE;
-  const imageUrl = ad?.creative?.image_url || null;
+  const imageUrl = review.previewImageUrl || ad?.creative?.image_url || null;
 
   return (
     <div
