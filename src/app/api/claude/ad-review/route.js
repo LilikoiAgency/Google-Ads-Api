@@ -125,13 +125,16 @@ export async function POST(request) {
   const client = new Anthropic({ apiKey });
 
   // Build messages array based on mode
+  const userMessageText = buildBatchUserMessage(ads, accountId);
+  console.log('[claude/ad-review] prompt preview:\n', userMessageText.slice(0, 1000));
+
   let messages;
   if (mode === 'batch') {
-    messages = [{ role: 'user', content: buildBatchUserMessage(ads, accountId) }];
+    messages = [{ role: 'user', content: userMessageText }];
   } else {
     // single mode: text + optional image
     const ad = ads[0];
-    const textBlock = { type: 'text', text: buildBatchUserMessage([ad], accountId) };
+    const textBlock = { type: 'text', text: userMessageText };
     const contentBlocks = [textBlock];
     if (ad.imageUrl) {
       let parsedImageUrl = null;
