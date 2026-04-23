@@ -88,6 +88,14 @@ function AllCreativesInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // ── Ad review state ────────────────────────────────────────────
+  const [reviews, setReviews] = useState({});            // { [adId]: reviewResult }
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewProgress, setReviewProgress] = useState({ current: 0, total: 0 });
+  const [reviewModal, setReviewModal] = useState(null);  // adId | null
+  const [reviewUsage, setReviewUsage] = useState(null);  // { count, limit, remaining }
+  const [reviewError, setReviewError] = useState(null);
+
   useEffect(() => {
     if (!accountId) return;
     const controller = new AbortController();
@@ -134,6 +142,63 @@ function AllCreativesInner() {
     return list;
   }, [ads, search, status, sortKey]);
 
+  async function reviewAll() {
+    if (!filtered.length || reviewLoading) return;
+    setReviewLoading(true);
+    setReviewError(null);
+    setReviewProgress({ current: 0, total: filtered.length });
+
+    const CHUNK = 10;
+    const chunks = [];
+    for (let i = 0; i < filtered.length; i += CHUNK) chunks.push(filtered.slice(i, i + CHUNK));
+
+    let processed = 0;
+    for (const chunk of chunks) {
+      const adPayloads = chunk.map((ad) => ({
+        id: ad.id,
+        name: ad.name || '',
+        title: ad.creative?.title || '',
+        body: ad.creative?.body || '',
+        ctaType: ad.creative?.call_to_action_type || '',
+        imageUrl: null,
+        metrics: ad.insights || {},
+      }));
+
+      try {
+        const res = await fetch('/api/claude/ad-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ads: adPayloads, mode: 'batch', accountId }),
+        });
+        const json = await res.json();
+
+        if (res.status === 429 || json.limitReached) {
+          setReviewError(json.error || 'Daily review limit reached.');
+          if (json.usage) setReviewUsage(json.usage);
+          break;
+        }
+        if (!res.ok) {
+          setReviewError(json.error || `Error ${res.status}`);
+          break;
+        }
+
+        if (json.usage) setReviewUsage(json.usage);
+        const newReviews = {};
+        (json.reviews || []).forEach((r) => { newReviews[r.adId] = r; });
+        setReviews((prev) => ({ ...prev, ...newReviews }));
+      } catch (err) {
+        setReviewError(err.message || 'Network error');
+        break;
+      }
+
+      processed += chunk.length;
+      setReviewProgress({ current: processed, total: filtered.length });
+      if (processed < filtered.length) await new Promise((r) => setTimeout(r, 500));
+    }
+
+    setReviewLoading(false);
+  }
+
   const activeCount = (ads || []).filter((a) => a.effective_status === "ACTIVE" || a.status === "ACTIVE").length;
   const totalCount = ads?.length || 0;
 
@@ -177,7 +242,42 @@ function AllCreativesInner() {
             placeholder="Search by ad name…"
             className="text-xs border border-gray-200 rounded-md px-3 py-1.5 bg-white flex-1 min-w-[180px] max-w-[320px]"
           />
+          <button
+            onClick={reviewAll}
+            disabled={reviewLoading || !ads?.length}
+            style={{
+              marginLeft: "auto",
+              background: reviewLoading ? "#93c5fd" : ACCENT,
+              color: "#fff",
+              border: "none",
+              borderRadius: 8,
+              padding: "7px 14px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: reviewLoading || !ads?.length ? "not-allowed" : "pointer",
+              opacity: !ads?.length ? 0.5 : 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 0,
+            }}
+          >
+            {reviewLoading ? (
+              <>
+                <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "ccSpin 0.8s linear infinite" }} />
+                Reviewing {reviewProgress.current}–{Math.min(reviewProgress.current + 10, reviewProgress.total)} of {reviewProgress.total}…
+              </>
+            ) : (
+              <>★ Review All</>
+            )}
+          </button>
         </div>
+        {reviewError && (
+          <div className="mt-2 text-xs text-red-500 font-medium">{reviewError}</div>
+        )}
+        {reviewUsage && !reviewError && (
+          <div className="mt-2 text-[11px] text-gray-400">{reviewUsage.remaining} reviews remaining today</div>
+        )}
       </div>
 
       {/* Body */}
@@ -198,7 +298,19 @@ function AllCreativesInner() {
         {!loading && !error && filtered.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mx-auto" style={{ maxWidth: 1800 }}>
             {filtered.map((ad, i) => (
-              <LazyCreativeCard key={ad.id} ad={ad} rank={i + 1} />
+              <LazyCreativeCard
+                key={ad.id}
+                ad={ad}
+                rank={i + 1}
+                accountId={accountId}
+                review={reviews[ad.id] || null}
+                batchReviewInProgress={reviewLoading}
+                onOpenReviewModal={() => setReviewModal(ad.id)}
+                onReviewDone={(result, usage) => {
+                  setReviews((prev) => ({ ...prev, [ad.id]: result }));
+                  if (usage) setReviewUsage(usage);
+                }}
+              />
             ))}
           </div>
         )}
