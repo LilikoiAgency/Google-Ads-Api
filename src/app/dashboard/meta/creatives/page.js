@@ -339,13 +339,14 @@ function SelectPill({ label, value, options, onChange }) {
 
 // ── Lazy-loading card: only fetches live preview when scrolled near viewport ──
 
-function LazyCreativeCard({ ad, rank }) {
+function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, onOpenReviewModal, onReviewDone }) {
   const ins = ad.insights || {};
   const statusOk = ad.effective_status === "ACTIVE" || ad.status === "ACTIVE";
   const [activeFormat, setActiveFormat] = useState(PLACEMENT_FORMATS[0].key);
   const [previews, setPreviews] = useState({});
   const [visible, setVisible] = useState(false);
   const cardRef = useRef(null);
+  const [singleReviewLoading, setSingleReviewLoading] = useState(false);
 
   // IntersectionObserver: flip `visible` true once the card approaches the viewport
   useEffect(() => {
@@ -378,6 +379,38 @@ function LazyCreativeCard({ ad, rank }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, activeFormat, ad.id]);
 
+  async function reviewSingle() {
+    if (singleReviewLoading || batchReviewInProgress) return;
+    setSingleReviewLoading(true);
+    try {
+      const res = await fetch('/api/claude/ad-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ads: [{
+            id: ad.id,
+            name: ad.name || '',
+            title: ad.creative?.title || '',
+            body: ad.creative?.body || '',
+            ctaType: ad.creative?.call_to_action_type || '',
+            imageUrl: ad.creative?.image_url || null,
+            metrics: ad.insights || {},
+          }],
+          mode: 'single',
+          accountId,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.reviews?.length) {
+        onReviewDone(json.reviews[0], json.usage);
+      }
+    } catch (err) {
+      console.error('[reviewSingle]', err);
+    } finally {
+      setSingleReviewLoading(false);
+    }
+  }
+
   const current = visible ? (previews[activeFormat] || { loading: true }) : null;
 
   return (
@@ -389,10 +422,36 @@ function LazyCreativeCard({ ad, rank }) {
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)"; e.currentTarget.style.transform = "translateY(0)"; }}
     >
       <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-2">
           <span style={{ background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 999, letterSpacing: 0.3 }}>
             #{rank}
           </span>
+          <button
+            onClick={review ? onOpenReviewModal : reviewSingle}
+            disabled={singleReviewLoading || batchReviewInProgress}
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "3px 10px",
+              borderRadius: 999,
+              border: `1px solid ${ACCENT}`,
+              background: review ? ACCENT : "transparent",
+              color: review ? "#fff" : ACCENT,
+              cursor: singleReviewLoading || batchReviewInProgress ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              opacity: batchReviewInProgress && !singleReviewLoading ? 0.5 : 1,
+              flexShrink: 0,
+            }}
+          >
+            {singleReviewLoading ? (
+              <span style={{ display: "inline-block", width: 10, height: 10, border: `2px solid ${ACCENT}40`, borderTopColor: ACCENT, borderRadius: "50%", animation: "ccSpin 0.8s linear infinite" }} />
+            ) : (
+              "★"
+            )}
+            {review ? "Reviewed" : "Review"}
+          </button>
           <span
             className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
             style={{
