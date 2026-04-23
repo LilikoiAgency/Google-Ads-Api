@@ -5,11 +5,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <title>Lik: Google Ads Dashboard</title>
+        <title>lilikoi agency — the control room</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta
           name="description"
-          content="Lik: Google Ads Dashboard for managing campaigns and analyzing data."
+          content="One dashboard, every channel. AI-powered site audits, automated daily pacing reports, cross-channel attribution, and live campaign intel across Google, Meta, Microsoft, and organic — the control room for lilikoi agency's paid, organic, and data operations."
         />
         <link
           rel="icon"
