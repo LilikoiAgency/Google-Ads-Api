@@ -92,7 +92,8 @@ function AllCreativesInner() {
   const [reviews, setReviews] = useState({});            // { [adId]: reviewResult }
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewProgress, setReviewProgress] = useState({ current: 0, total: 0 });
-  const [reviewModal, setReviewModal] = useState(null);  // adId | null
+  const [reviewModal, setReviewModal] = useState(null);       // adId | null
+  const [reviewModalPreview, setReviewModalPreview] = useState(null); // previewHtml | null
   const [reviewUsage, setReviewUsage] = useState(null);  // { count, limit, remaining }
   const [reviewError, setReviewError] = useState(null);
 
@@ -305,7 +306,7 @@ function AllCreativesInner() {
                 accountId={accountId}
                 review={reviews[ad.id] || null}
                 batchReviewInProgress={reviewLoading}
-                onOpenReviewModal={() => setReviewModal(ad.id)}
+                onOpenReviewModal={(previewHtml) => { setReviewModal(ad.id); setReviewModalPreview(previewHtml || null); }}
                 onReviewDone={(result, usage) => {
                   if (result) setReviews((prev) => ({ ...prev, [ad.id]: result }));
                   if (usage) setReviewUsage(usage);
@@ -321,7 +322,8 @@ function AllCreativesInner() {
           adId={reviewModal}
           ads={filtered}
           review={reviews[reviewModal]}
-          onClose={() => setReviewModal(null)}
+          previewHtml={reviewModalPreview}
+          onClose={() => { setReviewModal(null); setReviewModalPreview(null); }}
         />
       )}
     </div>
@@ -449,7 +451,7 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
             #{rank}
           </span>
           <button
-            onClick={review ? onOpenReviewModal : reviewSingle}
+            onClick={review ? () => onOpenReviewModal(previews[activeFormat]?.html || null) : reviewSingle}
             disabled={singleReviewLoading || batchReviewInProgress}
             style={{
               fontSize: 11,
@@ -556,7 +558,7 @@ function LazyCreativeCard({ ad, rank, accountId, review, batchReviewInProgress, 
         Frequency {fmtFreq(ins.frequency)} · {fmtCount(ins.impressions)} impressions
       </div>
       {review && (
-        <ReviewFooterStrip review={review} onClick={onOpenReviewModal} />
+        <ReviewFooterStrip review={review} onClick={() => onOpenReviewModal(previews[activeFormat]?.html || null)} />
       )}
     </div>
   );
@@ -675,7 +677,7 @@ function extractAdImageFromHtml(html) {
   return null;
 }
 
-function ReviewModal({ adId, ads, review, onClose }) {
+function ReviewModal({ adId, ads, review, previewHtml, onClose }) {
   const ad = (ads || []).find((a) => a.id === adId);
 
   useEffect(() => {
@@ -734,9 +736,13 @@ function ReviewModal({ adId, ads, review, onClose }) {
         </div>
 
         <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
-          {imageUrl && (
-            <div style={{ background: "#f1f5f9", borderRadius: 12, padding: "16px", display: "flex", justifyContent: "center" }}>
-              <img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: 480, borderRadius: 8 }} />
+          {(previewHtml || imageUrl) && (
+            <div style={{ background: "#f1f5f9", borderRadius: 12, padding: "20px", display: "flex", justifyContent: "center" }}>
+              {previewHtml ? (
+                <div dangerouslySetInnerHTML={{ __html: previewHtml }} style={{ display: "flex", justifyContent: "center", width: "100%" }} />
+              ) : (
+                <img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: 480, borderRadius: 8 }} />
+              )}
             </div>
           )}
 
