@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
 import { graphGet, getTimeRange, getMetaAccessToken } from '../../../../lib/metaGraph';
+import { apiCache } from '../../../../lib/apiCache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -59,6 +60,10 @@ export async function GET(request) {
   const endDate = searchParams.get('endDate') || undefined;
   const timeRange = getTimeRange(range, startDate, endDate);
   const actId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+
+  const cacheKey = `meta-audit:${actId}:${range}:${startDate || ''}:${endDate || ''}`;
+  const cached = await apiCache.get(cacheKey);
+  if (cached) return NextResponse.json(cached);
 
   try {
     const token = await getMetaAccessToken();
@@ -212,7 +217,7 @@ export async function GET(request) {
     const pixels = (pixelsResp.data || []);
     const accountInsights = shapeInsights(accountInsightsResp.data?.[0]);
 
-    return NextResponse.json({
+    const responseData = {
       data: {
         account: {
           id: accountRow.id,
@@ -228,7 +233,9 @@ export async function GET(request) {
         accountInsights,
         dateRange: timeRange,
       },
-    });
+    };
+    apiCache.setBackground(cacheKey, responseData, 10 * 60 * 1000);
+    return NextResponse.json(responseData);
   } catch (err) {
     console.error('[meta/audit] Meta API error:', {
       message: err?.message,
@@ -239,7 +246,7 @@ export async function GET(request) {
     });
     const status = err?.status || 500;
     return NextResponse.json(
-      { error: err?.message || 'Meta API error', code: err?.code, subcode: err?.subcode },
+      { error: err?.message || 'Meta API error', code: err?.code, subcode: err?.subcode, waitMinutes: err?.waitMinutes },
       { status: status >= 400 && status < 600 ? status : 500 },
     );
   }
