@@ -84,6 +84,7 @@ function AllCreativesInner() {
   const [status, setStatus] = useState("active");
   const [sortKey, setSortKey] = useState("spend_desc");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const [ads, setAds] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -103,7 +104,7 @@ function AllCreativesInner() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ accountId, range, limit: "200" });
+    const params = new URLSearchParams({ accountId, range, limit: "500" });
     if (range === "custom" && initialStart && initialEnd) {
       params.set("startDate", initialStart);
       params.set("endDate", initialEnd);
@@ -143,6 +144,13 @@ function AllCreativesInner() {
     });
     return list;
   }, [ads, search, status, sortKey]);
+
+  const PAGE_SIZE = 24;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Reset to page 1 whenever filters or sort change
+  useEffect(() => { setPage(1); }, [search, status, sortKey, range]);
 
   async function reviewAll() {
     if (!filtered.length || reviewLoading) return;
@@ -228,7 +236,7 @@ function AllCreativesInner() {
           </div>
           {ads && (
             <p className="text-xs text-gray-400 whitespace-nowrap">
-              {filtered.length} shown · {activeCount} active · {totalCount} total
+              {filtered.length} filtered · {activeCount} active · {totalCount} total
             </p>
           )}
         </div>
@@ -298,24 +306,47 @@ function AllCreativesInner() {
           <p className="text-sm text-gray-500 text-center py-10">No creatives match the current filter.</p>
         )}
         {!loading && !error && filtered.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mx-auto" style={{ maxWidth: 1800 }}>
-            {filtered.map((ad, i) => (
-              <LazyCreativeCard
-                key={ad.id}
-                ad={ad}
-                rank={i + 1}
-                accountId={accountId}
-                review={reviews[ad.id] || null}
-                batchReviewInProgress={reviewLoading}
-                onOpenReviewModal={(previewHtml) => { setReviewModal(ad.id); setReviewModalPreview(previewHtml || null); }}
-                onReviewDone={(result, usage) => {
-                  if (result) setReviews((prev) => ({ ...prev, [ad.id]: result }));
-                  if (usage) setReviewUsage(usage);
-                }}
-                onReviewError={(msg) => setReviewError(msg)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mx-auto" style={{ maxWidth: 1800 }}>
+              {paginated.map((ad, i) => (
+                <LazyCreativeCard
+                  key={ad.id}
+                  ad={ad}
+                  rank={(page - 1) * PAGE_SIZE + i + 1}
+                  accountId={accountId}
+                  review={reviews[ad.id] || null}
+                  batchReviewInProgress={reviewLoading}
+                  onOpenReviewModal={(previewHtml) => { setReviewModal(ad.id); setReviewModalPreview(previewHtml || null); }}
+                  onReviewDone={(result, usage) => {
+                    if (result) setReviews((prev) => ({ ...prev, [ad.id]: result }));
+                    if (usage) setReviewUsage(usage);
+                  }}
+                  onReviewError={(msg) => setReviewError(msg)}
+                />
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-8 pb-4">
+                <button
+                  onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  disabled={page === 1}
+                  className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  ← Prev
+                </button>
+                <span className="text-sm text-gray-500">
+                  Page {page} of {totalPages} · <span className="text-gray-700 font-medium">{filtered.length} creatives</span>
+                </span>
+                <button
+                  onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  disabled={page === totalPages}
+                  className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
       {reviewModal && reviews[reviewModal] && filtered.some((a) => a.id === reviewModal) && (
