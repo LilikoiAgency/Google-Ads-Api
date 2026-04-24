@@ -33,7 +33,7 @@ export async function graphGet(path, params, token) {
   });
   const t0 = Date.now();
   const res = await fetch(url.toString(), { cache: 'no-store' });
-  const json = await res.json();
+  const json = await res.json(); // t0 window includes fetch + JSON parse (total wall time)
   logMetaCall(path || '/', res.status, Date.now() - t0).catch(() => {});
   if (json.error) {
     const err = new Error(json.error.message || `Meta API error on /${path}`);
