@@ -7,7 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
 import { getCredentials } from '../../../../lib/dbFunctions';
 import { GOOGLE_ADS_AUDIT_SYSTEM_PROMPT } from '../../../../lib/googleAdsAuditPrompt';
-import { logApiUsage, estimateClaudeCost } from '../../../../lib/usageLogger';
+import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
 import { isAdmin } from '../../../../lib/admins';
 import dbConnect from '../../../../lib/mongoose';
 
@@ -60,6 +60,14 @@ export async function POST(request) {
         requestId,
       }, { status: 429 });
     }
+  }
+
+  const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
+  if (monthlyCost >= budgetCap) {
+    return NextResponse.json(
+      { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true, requestId },
+      { status: 429 },
+    );
   }
 
   const credentials = await getCredentials();

@@ -8,7 +8,7 @@ import { SEO_AUDIT_SYSTEM_PROMPT } from "../../../../lib/seoAuditPrompt";
 import { ADMIN_EMAILS } from "../../../../lib/admins";
 import { checkRateLimit } from '../../../../lib/seoRateLimit.js';
 import { z } from 'zod';
-import { logApiUsage, estimateClaudeCost } from '../../../../lib/usageLogger';
+import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
 
 const DAILY_LIMIT = 5;
 const DB = "tokensApi";
@@ -126,6 +126,14 @@ export async function POST(request) {
         requestId,
       },
       { status: 500 }
+    );
+  }
+
+  const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
+  if (monthlyCost >= budgetCap) {
+    return NextResponse.json(
+      { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true, requestId },
+      { status: 429 },
     );
   }
 

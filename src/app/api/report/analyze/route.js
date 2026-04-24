@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
 import { getCredentials } from '../../../../lib/dbFunctions';
 import dbConnect from '../../../../lib/mongoose';
-import { logApiUsage, estimateClaudeCost } from '../../../../lib/usageLogger';
+import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
 
 const DAILY_LIMIT = 10;
 
@@ -55,6 +55,14 @@ export async function POST(request) {
             { status: 500 }
         );
     }
+    const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
+    if (monthlyCost >= budgetCap) {
+        return NextResponse.json(
+            { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true },
+            { status: 429 },
+        );
+    }
+
     const client = new Anthropic({ apiKey });
 
     const { meta, summary, campaigns, stopBidding, wastedSpend, opportunities, overlap } = body;
