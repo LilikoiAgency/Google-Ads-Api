@@ -4,6 +4,7 @@
 // API version and token layout.
 
 import { getCredentials } from './dbFunctions';
+import { logMetaCall } from './apiCallLogger';
 
 export const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
 
@@ -30,8 +31,10 @@ export async function graphGet(path, params, token) {
     if (v == null) return;
     url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
   });
+  const t0 = Date.now();
   const res = await fetch(url.toString(), { cache: 'no-store' });
   const json = await res.json();
+  logMetaCall(path || '/', res.status, Date.now() - t0).catch(() => {});
   if (json.error) {
     const err = new Error(json.error.message || `Meta API error on /${path}`);
     err.status = res.status;
