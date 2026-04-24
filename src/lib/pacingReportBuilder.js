@@ -106,6 +106,7 @@ function renderPlatformRow(line) {
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};text-align:center;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};text-align:center;"><span style="color:${PALETTE.textMuted};">Inactive</span></td>
       </tr>`;
@@ -116,6 +117,7 @@ function renderPlatformRow(line) {
       <tr>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};font-weight:500;">${escapeHtml(label)} <span style="color:${PALETTE.criticalText};font-size:11px;">(no budget)</span></td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">—</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrencyNoDec(line.campaignBudget)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrency(line.spendMtd)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrency(line.eomPacing)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};text-align:center;">—</td>
@@ -140,6 +142,7 @@ function renderPlatformRow(line) {
     <tr>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};font-weight:500;">${escapeHtml(label)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrencyNoDec(line.budget)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textSecondary};text-align:right;">${fmtCurrencyNoDec(line.campaignBudget)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrency(line.spendMtd)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${eomColor};font-weight:${eomWeight};text-align:right;">${fmtCurrency(line.eomPacing)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};text-align:center;color:${pctColor};font-weight:${pctWeight};">${fmtPct(cls.pacingPct)}</td>
@@ -160,6 +163,7 @@ function renderTotalRow(totals, cls) {
     <tr>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};">TOTAL</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${totals.budget ? fmtCurrencyNoDec(totals.budget) : '—'}</td>
+      <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textSecondary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${totals.campaignBudget != null ? fmtCurrencyNoDec(totals.campaignBudget) : '—'}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${fmtCurrency(totals.spendMtd)}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${fmtCurrency(totals.eomPacing)}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};font-weight:bold;text-align:center;border-top:2px solid ${PALETTE.borderMed};color:${pctColor};">${fmtPct(cls.pacingPct)}</td>
@@ -231,10 +235,13 @@ function computeClientTotals(lines) {
   return lines.reduce(
     (acc, l) => ({
       budget: (acc.budget || 0) + (l.budget || 0),
+      campaignBudget: l.campaignBudget != null
+        ? (acc.campaignBudget || 0) + l.campaignBudget
+        : acc.campaignBudget,
       spendMtd: (acc.spendMtd || 0) + (l.spendMtd || 0),
       eomPacing: (acc.eomPacing || 0) + (l.eomPacing || 0),
     }),
-    { budget: 0, spendMtd: 0, eomPacing: 0 },
+    { budget: 0, campaignBudget: null, spendMtd: 0, eomPacing: 0 },
   );
 }
 
@@ -248,7 +255,7 @@ function renderClientSection(client) {
 
   const tableBody = lines.length
     ? lines.map(renderPlatformRow).join('') + renderTotalRow(totals, cls)
-    : `<tr><td colspan="6" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No platform data</td></tr>`;
+    : `<tr><td colspan="7" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No platform data</td></tr>`;
 
   return `
   <div style="padding:24px 32px 8px 32px;">
@@ -262,6 +269,7 @@ function renderClientSection(client) {
         <tr>
           <th style="text-align:left;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Platform / Vertical</th>
           <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Budget</th>
+          <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Campaign Budget</th>
           <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Spend MTD</th>
           <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">EOM Pacing</th>
           <th style="text-align:center;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Pacing %</th>

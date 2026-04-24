@@ -308,9 +308,28 @@ export async function fetchValidationTab(sheetId, label = '') {
   return { platforms: out };
 }
 
+// Sum a single column from a hidden API tab. Returns null if the tab is missing or has no data.
+async function sumApiTabColumn(sheetId, tabName, colIdx, label) {
+  try {
+    const rows = await readTab(sheetId, tabName);
+    let total = 0;
+    let found = false;
+    // Row 0 is the header; start at 1
+    for (let r = 1; r < rows.length; r++) {
+      const val = toNum((rows[r] || [])[colIdx]);
+      if (val != null && val > 0) { total += val; found = true; }
+    }
+    console.log(`[pacing:${label}] ${tabName} col=${colIdx} sum=${found ? total : 'none'}`);
+    return found ? total : null;
+  } catch (err) {
+    console.warn(`[pacing:${label}] ${tabName} budget fetch skipped: ${err?.message}`);
+    return null;
+  }
+}
+
 export async function fetchClientSheet(sheetId, label = '') {
   console.log(`[pacing:${label || sheetId.slice(0, 6)}] fetch start sheetId=${sheetId.slice(0, 10)}…`);
-  const [pacing, validation] = await Promise.all([
+  const [pacing, validation, googleBudget, metaBudget, bingBudget] = await Promise.all([
     fetchPacingTab(sheetId, label).catch((err) => {
       console.error(`[pacing:${label}] PACING fetch failed: ${err?.message}`);
       return { error: err?.message || 'PACING fetch failed' };
@@ -319,7 +338,30 @@ export async function fetchClientSheet(sheetId, label = '') {
       console.error(`[pacing:${label}] Validation fetch failed: ${err?.message}`);
       return { platforms: [], error: err?.message };
     }),
+    sumApiTabColumn(sheetId, 'Google API', 8, label),
+    sumApiTabColumn(sheetId, 'Meta API',   8, label),
+    sumApiTabColumn(sheetId, 'Bing Budget', 3, label),
   ]);
+
+  // Attach campaign budget to each platform line based on platform.
+  // LSA and YOUTUBE rows are excluded (non-standard budget types).
+  if (Array.isArray(pacing.lines)) {
+    for (const line of pacing.lines) {
+      const isLsa = line.vertical && line.vertical.toUpperCase().includes('LSA');
+      if (isLsa || line.platform === 'YOUTUBE') {
+        line.campaignBudget = null;
+      } else if (line.platform === 'GOOGLE') {
+        line.campaignBudget = googleBudget;
+      } else if (line.platform === 'FACEBOOK') {
+        line.campaignBudget = metaBudget;
+      } else if (line.platform === 'BING') {
+        line.campaignBudget = bingBudget;
+      } else {
+        line.campaignBudget = null;
+      }
+    }
+  }
+
   console.log(`[pacing:${label || sheetId.slice(0, 6)}] fetch done`);
   return { pacing, validation };
 }
