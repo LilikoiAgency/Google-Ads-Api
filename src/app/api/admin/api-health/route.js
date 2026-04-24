@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
+import { isAdmin } from '../../../../lib/admins';
 import dbConnect from '../../../../lib/mongoose';
 
 const DB = 'tokensApi';
@@ -14,6 +15,9 @@ export async function GET() {
   const email = session?.user?.email?.toLowerCase() || '';
   if (!email.endsWith(`@${allowedEmailDomain}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!isAdmin(email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const client = await dbConnect();

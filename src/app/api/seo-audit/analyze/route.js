@@ -114,6 +114,14 @@ export async function POST(request) {
       { status: 429 }
     );
   }
+  const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
+  if (monthlyCost >= budgetCap) {
+    return NextResponse.json(
+      { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true, requestId },
+      { status: 429 },
+    );
+  }
+
   await incrementDailyUsage(db, email);
 
   const credentials = await getCredentials();
@@ -126,14 +134,6 @@ export async function POST(request) {
         requestId,
       },
       { status: 500 }
-    );
-  }
-
-  const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
-  if (monthlyCost >= budgetCap) {
-    return NextResponse.json(
-      { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true, requestId },
-      { status: 429 },
     );
   }
 

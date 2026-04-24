@@ -38,6 +38,15 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    // ── Budget cap check (before incrementing daily usage) ──
+    const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
+    if (monthlyCost >= budgetCap) {
+        return NextResponse.json(
+            { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true },
+            { status: 429 },
+        );
+    }
+
     // ── Rate limit check ──
     const usedToday = await checkAndIncrementUsage(email);
     if (usedToday >= DAILY_LIMIT) {
@@ -53,13 +62,6 @@ export async function POST(request) {
         return NextResponse.json(
             { error: 'Anthropic API key not configured — add ANTHROPIC_API_KEY to your MongoDB Tokens document.' },
             { status: 500 }
-        );
-    }
-    const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
-    if (monthlyCost >= budgetCap) {
-        return NextResponse.json(
-            { error: `Monthly AI budget cap of $${budgetCap} reached. Contact an admin.`, limitReached: true },
-            { status: 429 },
         );
     }
 
