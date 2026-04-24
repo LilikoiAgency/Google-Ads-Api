@@ -352,7 +352,6 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
   const mountedRef = useRef(true);
 
   useEffect(() => {
-    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       fetchingRef.current = false;
@@ -364,15 +363,16 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
   const campaigns = selectedCustomer?.campaigns || [];
   const totalSpend = campaigns.reduce((sum, c) => sum + (c.cost || 0), 0) / 1_000_000;
 
-  async function fetchBrief(force = false) {
+  async function fetchBrief(force = false, rangeOverride = null) {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
+    const activeRange = rangeOverride ?? briefRange;
     setState((s) => ({ ...s, status: 'loading', error: null }));
     try {
       const res = await fetch('/api/claude/account-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: briefRange, forceRefresh: force }),
+        body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: activeRange, forceRefresh: force }),
       });
       const json = await res.json();
       if (!mountedRef.current) return;
@@ -421,7 +421,11 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <select
             value={briefRange}
-            onChange={(e) => setBriefRange(e.target.value)}
+            onChange={(e) => {
+              const newRange = e.target.value;
+              setBriefRange(newRange);
+              fetchBrief(true, newRange);
+            }}
             disabled={status === 'loading'}
             style={{ fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 6px', background: '#fff', color: '#374151' }}
           >
