@@ -25,3 +25,28 @@ export async function logApiUsage(event) {
     console.error('[usageLogger]', err.message);
   }
 }
+
+export async function getMonthlyClaudeCost() {
+  try {
+    const client = await dbConnect();
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await client.db(DB).collection(COLLECTION).aggregate([
+      { $match: { type: 'claude_tokens', timestamp: { $gte: monthStart } } },
+      { $group: { _id: null, totalCost: { $sum: '$estimatedCostUsd' } } },
+    ]).toArray();
+    return result[0]?.totalCost ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function getClaudeBudgetCap() {
+  try {
+    const client = await dbConnect();
+    const doc = await client.db(DB).collection('Settings').findOne({ key: 'claude_monthly_budget_usd' });
+    return doc?.value ?? 50;
+  } catch {
+    return 50;
+  }
+}
