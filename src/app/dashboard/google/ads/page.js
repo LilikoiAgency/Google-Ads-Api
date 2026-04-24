@@ -349,6 +349,15 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
   const [state, setState] = useState({ status: 'idle', briefing: null, generatedAt: null, error: null });
   const [collapsed, setCollapsed] = useState(false);
   const fetchingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      fetchingRef.current = false;
+    };
+  }, []);
 
   const customerId = String(selectedCustomer?.customer?.customer_client?.id || '');
   const customerName = selectedCustomer?.customer?.customer_client?.descriptive_name || '';
@@ -366,6 +375,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
         body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: briefRange, forceRefresh: force }),
       });
       const json = await res.json();
+      if (!mountedRef.current) return;
       if (json.skipped) {
         setState({ status: 'no_spend', briefing: null, generatedAt: null, error: null });
       } else if (!res.ok || json.error) {
@@ -375,6 +385,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
         setCollapsed(false);
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       setState({ status: 'error', briefing: null, generatedAt: null, error: err.message });
     } finally {
       fetchingRef.current = false;
@@ -386,9 +397,16 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
       setState({ status: 'no_spend', briefing: null, generatedAt: null, error: null });
       return;
     }
+    fetchingRef.current = false; // reset guard when account changes
     fetchBrief(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
+
+  useEffect(() => {
+    if (DATE_BRIEF_OPTIONS.some((o) => o.value === currentDateRange)) {
+      setBriefRange(currentDateRange);
+    }
+  }, [currentDateRange]);
 
   if (totalSpend === 0 || state.status === 'no_spend') return null;
 
@@ -404,6 +422,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
           <select
             value={briefRange}
             onChange={(e) => setBriefRange(e.target.value)}
+            disabled={status === 'loading'}
             style={{ fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 6px', background: '#fff', color: '#374151' }}
           >
             {DATE_BRIEF_OPTIONS.map((o) => (
@@ -411,6 +430,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
             ))}
           </select>
           <button
+            type="button"
             onClick={() => fetchBrief(true)}
             disabled={status === 'loading'}
             style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: status === 'loading' ? '#93c5fd' : '#4f46e5', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: status === 'loading' ? 'not-allowed' : 'pointer' }}
@@ -418,6 +438,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
             {status === 'loading' ? 'Running…' : 'Re-run'}
           </button>
           <button
+            type="button"
             onClick={() => setCollapsed((c) => !c)}
             style={{ fontSize: 11, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}
           >
@@ -430,8 +451,8 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
         <div style={{ padding: '14px 16px' }}>
           {status === 'loading' && (
             <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-              {[60, 80, 45].map((w, i) => (
-                <div key={i} style={{ height: 12, width: `${w}%`, background: '#f3f4f6', borderRadius: 6, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
+              {[60, 80, 45].map((w) => (
+                <div key={w} style={{ height: 12, width: `${w}%`, background: '#f3f4f6', borderRadius: 6, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
               ))}
             </div>
           )}
@@ -670,10 +691,13 @@ export default function GoogleAdsDashboard() {
   };
 
   const handleCampaignSelect = (campaignId) => {
-    const selectedCustomer = allCampaignData.find((item) => String(item.customer.customer_client.id) === String(selectedCustomerId));
-    const campaign = selectedCustomer?.campaigns?.find((item) => item.campaignId === campaignId) || null;
+    const accountData = allCampaignData.find((item) => String(item.customer.customer_client.id) === String(selectedCustomerId));
+    const campaign = accountData?.campaigns?.find((item) => item.campaignId === campaignId) || null;
     setSelectedCampaign(campaign);
   };
+
+  const selectedCustomer =
+    allCampaignData.find((item) => String(item.customer.customer_client.id) === String(selectedCustomerId)) ?? null;
 
   const refreshData = () => {
     localStorage.removeItem(getCampaignCacheKey(dateRange, campaignStatusFilter, customDateRange));
@@ -1086,17 +1110,9 @@ export default function GoogleAdsDashboard() {
               {lastUpdated && <span> · Last updated {lastUpdated}</span>}
             </p>
           )}
-          {(() => {
-            const selectedCustomer = allCampaignData.find(
-              (item) => String(item.customer.customer_client.id) === String(selectedCustomerId)
-            ) ?? null;
-            return selectedCustomerId && allCampaignData.length > 0 && selectedCustomer ? (
-              <AccountBriefCard
-                selectedCustomer={selectedCustomer}
-                currentDateRange={dateRange}
-              />
-            ) : null;
-          })()}
+          {selectedCustomerId && allCampaignData.length > 0 && selectedCustomer && (
+            <AccountBriefCard selectedCustomer={selectedCustomer} currentDateRange={dateRange} />
+          )}
           <ContentArea
             customerId={selectedCustomerId}
             selectedCampaign={selectedCampaign}
