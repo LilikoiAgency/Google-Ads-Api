@@ -280,9 +280,10 @@ function MetaAuditPageInner() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId, payload }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const j = await res.json();
-      if (j?.data) {
+      if (!res.ok) {
+        setAiError(j?.error || `HTTP ${res.status}`);
+      } else if (j?.data) {
         setAiInsight(j.data);
         if (j.usage) setHistoryUsage(j.usage);
         await saveAudit(j.data);
