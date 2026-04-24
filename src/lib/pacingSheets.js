@@ -338,9 +338,9 @@ export async function fetchClientSheet(sheetId, label = '') {
       console.error(`[pacing:${label}] Validation fetch failed: ${err?.message}`);
       return { platforms: [], error: err?.message };
     }),
-    sumApiTabColumn(sheetId, 'Google API', 8, label),
-    sumApiTabColumn(sheetId, 'Meta API',   8, label),
-    sumApiTabColumn(sheetId, 'Bing Budget', 3, label),
+    sumApiTabColumn(sheetId, 'Google Budget', 3, label),
+    sumApiTabColumn(sheetId, 'Meta Budget',   3, label),
+    sumApiTabColumn(sheetId, 'Bing Budget',   3, label),
   ]);
 
   // Attach campaign budget to each platform line based on platform.
