@@ -346,7 +346,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
   const [briefRange, setBriefRange] = useState(
     DATE_BRIEF_OPTIONS.some((o) => o.value === currentDateRange) ? currentDateRange : 'LAST_30_DAYS'
   );
-  const [state, setState] = useState({ status: 'idle', briefing: null, generatedAt: null, error: null });
+  const [state, setState] = useState({ status: 'idle', briefing: null, generatedAt: null, error: null, code: null });
   const [collapsed, setCollapsed] = useState(false);
   const fetchingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -379,7 +379,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
       if (json.skipped) {
         setState({ status: 'no_spend', briefing: null, generatedAt: null, error: null });
       } else if (!res.ok || json.error) {
-        setState({ status: 'error', briefing: null, generatedAt: null, error: json.error || `Error ${res.status}` });
+        setState({ status: 'error', briefing: null, generatedAt: null, error: json.error || `Error ${res.status}`, code: json.code || null });
       } else {
         setState({ status: 'done', briefing: json.briefing, generatedAt: json.generatedAt, error: null });
         setCollapsed(false);
@@ -461,7 +461,11 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
             </div>
           )}
           {status === 'error' && (
-            <p style={{ fontSize: 12, color: '#ef4444', margin: 0 }}>{error}</p>
+            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+              {state.code === 'NO_CREDITS'
+                ? 'AI briefing is temporarily unavailable. Check back soon or contact your admin.'
+                : error}
+            </p>
           )}
           {status === 'done' && briefing && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

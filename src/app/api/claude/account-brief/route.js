@@ -159,6 +159,10 @@ Rules: reference specific campaign names and dollar amounts. topPerformers and b
     return NextResponse.json(result);
   } catch (err) {
     console.error('[account-brief] Claude error:', err.message);
+    const isCredits = err.message?.toLowerCase().includes('credit balance') || err.message?.toLowerCase().includes('too low');
+    if (isCredits) {
+      return NextResponse.json({ error: 'AI briefing unavailable', code: 'NO_CREDITS' }, { status: 503 });
+    }
     return NextResponse.json({ error: err.message || 'Briefing failed' }, { status: 500 });
   }
 }
