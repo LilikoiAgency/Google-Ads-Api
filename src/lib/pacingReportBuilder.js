@@ -104,7 +104,7 @@ function renderPlatformRow(line) {
       <tr>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};">${escapeHtml(label)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
-        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">${fmtCurrencyNoDec(line.campaignBudget)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};text-align:center;">—</td>
