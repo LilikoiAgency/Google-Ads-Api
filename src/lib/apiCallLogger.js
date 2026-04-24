@@ -12,12 +12,12 @@ async function ensureTtlIndex(col) {
   indexEnsured = true;
 }
 
-export async function logMetaCall(endpoint, status, durationMs) {
+export async function logMetaCall(endpoint, status, durationMs, accountId = 'unknown') {
   try {
     const client = await dbConnect();
     const col = client.db(DB).collection(COLLECTION);
     await ensureTtlIndex(col);
-    await col.insertOne({ api: 'meta', endpoint, status, durationMs, timestamp: new Date() });
+    await col.insertOne({ api: 'meta', endpoint, status, durationMs, accountId, timestamp: new Date() });
   } catch (err) {
     console.error('[apiCallLogger]', err.message);
   }
