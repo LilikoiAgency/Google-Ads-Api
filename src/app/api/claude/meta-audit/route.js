@@ -99,6 +99,10 @@ export async function POST(request) {
         continue;
       }
       console.error('[claude/meta-audit] Claude error:', err?.message);
+      const isCredits = err?.message?.toLowerCase().includes('credit balance') || err?.message?.toLowerCase().includes('too low');
+      if (isCredits) {
+        return NextResponse.json({ error: 'AI insight unavailable — check back soon or contact your admin.', code: 'NO_CREDITS', requestId }, { status: 503 });
+      }
       return NextResponse.json({ error: 'Claude API error', requestId }, { status: 502 });
     }
   }
