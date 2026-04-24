@@ -410,6 +410,9 @@ function TopCreativeCard({ ad, rank }) {
 
   useEffect(() => {
     if (previews[activeFormat] || fetchingFormats.current.has(activeFormat)) return;
+    const cacheKey = `preview:${ad.id}:${activeFormat}`;
+    const cached = clientCache.get(cacheKey);
+    if (cached) { setPreviews((p) => ({ ...p, [activeFormat]: cached })); return; }
     fetchingFormats.current.add(activeFormat);
     let cancelled = false;
     setPreviews((p) => ({ ...p, [activeFormat]: { loading: true } }));
@@ -417,15 +420,14 @@ function TopCreativeCard({ ad, rank }) {
       .then((r) => r.json())
       .then((j) => {
         if (cancelled) return;
-        setPreviews((p) => ({
-          ...p,
-          [activeFormat]: {
-            html: j.html || null,
-            unsupported: !!j.unsupported,
-            error: j.error || null,
-            loading: false,
-          },
-        }));
+        const result = {
+          html: j.html || null,
+          unsupported: !!j.unsupported,
+          error: j.error || null,
+          loading: false,
+        };
+        clientCache.set(cacheKey, result, 15 * 60 * 1000);
+        setPreviews((p) => ({ ...p, [activeFormat]: result }));
       })
       .catch((err) => {
         if (cancelled) return;
