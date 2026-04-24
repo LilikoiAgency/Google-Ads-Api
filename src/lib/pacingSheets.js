@@ -308,28 +308,56 @@ export async function fetchValidationTab(sheetId, label = '') {
   return { platforms: out };
 }
 
-// Sum a single column from a hidden API tab. Returns null if the tab is missing or has no data.
-async function sumApiTabColumn(sheetId, tabName, colIdx, label) {
+// Read a Budget tab and return an array of { name, budget } for every campaign row.
+// Finds "Campaign Budget" and "Campaign Name" columns by header keyword — handles
+// column positions that vary sheet to sheet.
+async function readBudgetTabCampaigns(sheetId, tabName, label) {
   try {
     const rows = await readTab(sheetId, tabName);
-    let total = 0;
-    let found = false;
-    // Row 0 is the header; start at 1
-    for (let r = 1; r < rows.length; r++) {
-      const val = toNum((rows[r] || [])[colIdx]);
-      if (val != null && val > 0) { total += val; found = true; }
+    if (rows.length < 2) return [];
+    const headers = rows[0];
+    const cBudget = colIndex(headers, ['campaignbudget', 'budget', 'dailybudget']);
+    const cName   = colIndex(headers, ['campaignname', 'campaign', 'name']);
+    if (cBudget < 0) {
+      console.warn(`[pacing:${label}] ${tabName}: no budget column found in headers:`, headers);
+      return [];
     }
-    console.log(`[pacing:${label}] ${tabName} col=${colIdx} sum=${found ? total : 'none'}`);
-    return found ? total : null;
+    const campaigns = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const val = toNum(row[cBudget]);
+      if (val == null || val <= 0) continue;
+      const name = cName >= 0 ? String(row[cName] || '').trim().toUpperCase() : '';
+      campaigns.push({ name, budget: val });
+    }
+    console.log(`[pacing:${label}] ${tabName}: ${campaigns.length} campaigns, total=${campaigns.reduce((s, c) => s + c.budget, 0)}`);
+    return campaigns;
   } catch (err) {
     console.warn(`[pacing:${label}] ${tabName} budget fetch skipped: ${err?.message}`);
-    return null;
+    return [];
   }
+}
+
+// Sum campaign budgets for a specific vertical.
+// If vertical is empty (single-vertical client), sums all campaigns.
+// Matches by checking whether the campaign name contains the vertical string.
+function sumCampaignBudgetForVertical(campaigns, vertical) {
+  if (!campaigns.length) return null;
+  const v = (vertical || '').trim().toUpperCase();
+  let total = 0;
+  let found = false;
+  for (const c of campaigns) {
+    if (!v || c.name.includes(v)) {
+      total += c.budget;
+      found = true;
+    }
+  }
+  return found ? total : null;
 }
 
 export async function fetchClientSheet(sheetId, label = '') {
   console.log(`[pacing:${label || sheetId.slice(0, 6)}] fetch start sheetId=${sheetId.slice(0, 10)}…`);
-  const [pacing, validation, googleBudget, metaBudget, bingBudget] = await Promise.all([
+  const [pacing, validation, googleCampaigns, metaCampaigns, bingCampaigns] = await Promise.all([
     fetchPacingTab(sheetId, label).catch((err) => {
       console.error(`[pacing:${label}] PACING fetch failed: ${err?.message}`);
       return { error: err?.message || 'PACING fetch failed' };
@@ -338,24 +366,25 @@ export async function fetchClientSheet(sheetId, label = '') {
       console.error(`[pacing:${label}] Validation fetch failed: ${err?.message}`);
       return { platforms: [], error: err?.message };
     }),
-    sumApiTabColumn(sheetId, 'Google Budget', 3, label),
-    sumApiTabColumn(sheetId, 'Meta Budget',   3, label),
-    sumApiTabColumn(sheetId, 'Bing Budget',   3, label),
+    readBudgetTabCampaigns(sheetId, 'Google Budget', label),
+    readBudgetTabCampaigns(sheetId, 'Meta Budget',   label),
+    readBudgetTabCampaigns(sheetId, 'Bing Budget',   label),
   ]);
 
-  // Attach campaign budget to each platform line based on platform.
-  // LSA and YOUTUBE rows are excluded (non-standard budget types).
+  // Attach vertical-specific campaign budget to each platform line.
+  // LSA and YOUTUBE are excluded (non-standard / non-daily budget types).
   if (Array.isArray(pacing.lines)) {
     for (const line of pacing.lines) {
-      const isLsa = line.vertical && line.vertical.toUpperCase().includes('LSA');
+      const isLsa = (line.vertical || '').toUpperCase().includes('LSA')
+        || (line.rawLabel || '').toUpperCase().includes('LSA');
       if (isLsa || line.platform === 'YOUTUBE') {
         line.campaignBudget = null;
       } else if (line.platform === 'GOOGLE') {
-        line.campaignBudget = googleBudget;
+        line.campaignBudget = sumCampaignBudgetForVertical(googleCampaigns, line.vertical);
       } else if (line.platform === 'FACEBOOK') {
-        line.campaignBudget = metaBudget;
+        line.campaignBudget = sumCampaignBudgetForVertical(metaCampaigns, line.vertical);
       } else if (line.platform === 'BING') {
-        line.campaignBudget = bingBudget;
+        line.campaignBudget = sumCampaignBudgetForVertical(bingCampaigns, line.vertical);
       } else {
         line.campaignBudget = null;
       }
