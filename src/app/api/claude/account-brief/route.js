@@ -56,6 +56,7 @@ export async function POST(request) {
   const withSpend = campaigns
     .filter((c) => c.cost > 0)
     .map((c) => ({
+      id: c.campaignId,
       name: c.campaignName,
       spend: +(c.cost / 1_000_000).toFixed(2),
       conversions: +(c.conversions || 0).toFixed(1),
@@ -65,15 +66,19 @@ export async function POST(request) {
       optimizationScore: c.optimizationScore != null ? Math.round(c.optimizationScore * 100) : null,
     }));
 
+  if (withSpend.length === 0) {
+    return NextResponse.json({ skipped: true, reason: 'no_campaigns_with_spend' });
+  }
+
   const byConversions = [...withSpend].sort((a, b) => b.conversions - a.conversions);
   const topPerformers = byConversions.slice(0, 3);
   const bottomPerformers = [...withSpend]
     .sort((a, b) => {
-      const aScore = a.conversions === 0 ? a.spend * 1000 : -(a.cpa || 0);
-      const bScore = b.conversions === 0 ? b.spend * 1000 : -(b.cpa || 0);
-      return bScore - aScore;
+      const aCpa = a.conversions > 0 ? a.spend / a.conversions : a.spend * 100;
+      const bCpa = b.conversions > 0 ? b.spend / b.conversions : b.spend * 100;
+      return bCpa - aCpa;
     })
-    .filter((c) => !topPerformers.some((t) => t.name === c.name))
+    .filter((c) => !topPerformers.some((t) => t.id === c.id))
     .slice(0, 3);
 
   const userPrompt = `You are a senior Google Ads strategist. Analyze this account and return a JSON briefing.
@@ -81,7 +86,7 @@ export async function POST(request) {
 ACCOUNT: ${customerName || customerId}
 PERIOD: ${dateLabel || 'Last 30 days'}
 TOTAL SPEND: $${totalSpend.toFixed(2)}
-TOTAL CONVERSIONS: ${campaigns.reduce((s, c) => s + (c.conversions || 0), 0).toFixed(1)}
+TOTAL CONVERSIONS: ${withSpend.reduce((s, c) => s + c.conversions, 0).toFixed(1)}
 ACTIVE CAMPAIGNS: ${withSpend.filter((c) => c.status === 'ACTIVE').length} of ${campaigns.length}
 
 TOP PERFORMING CAMPAIGNS (by conversions):
@@ -116,7 +121,8 @@ Rules: reference specific campaign names and dollar amounts. topPerformers and b
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: MODEL,
-      max_tokens: 1000,
+      max_tokens: 2000,
+      system: 'You are a senior Google Ads strategist. You write sharp, specific analysis referencing exact campaign names and dollar amounts. You always respond with valid JSON only — no markdown, no explanation.',
       messages: [{ role: 'user', content: userPrompt }],
     });
 
@@ -136,8 +142,16 @@ Rules: reference specific campaign names and dollar amounts. topPerformers and b
     try {
       briefing = JSON.parse(raw);
     } catch {
-      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      briefing = JSON.parse(cleaned);
+      try {
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        briefing = JSON.parse(cleaned);
+      } catch {
+        console.warn('[account-brief] JSON parse failed. Raw output:', raw.substring(0, 500));
+        return NextResponse.json(
+          { error: 'briefing_parse_failed', message: 'Claude returned an unexpected response format' },
+          { status: 502 },
+        );
+      }
     }
 
     const result = { briefing, generatedAt: new Date().toISOString() };
