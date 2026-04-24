@@ -38,6 +38,8 @@ async function getHourlyLimit() {
 }
 
 async function checkAccountRateLimit(accountId) {
+  if (accountId === 'batch') return;
+
   const now = Date.now();
   const oneHourAgo = new Date(now - 60 * 60 * 1000);
 
@@ -47,21 +49,23 @@ async function checkAccountRateLimit(accountId) {
     count = cached.count;
   } else {
     const client = await dbConnect();
-    const col = client.db('tokensApi').collection('ApiCallLog');
-    count = await col.countDocuments({ accountId, timestamp: { $gte: oneHourAgo } });
+    count = await client.db('tokensApi').collection('ApiCallLog')
+      .countDocuments({ accountId, timestamp: { $gte: oneHourAgo } });
     countCache.set(accountId, { count, fetchedAt: now });
   }
 
   const limit = await getHourlyLimit();
   if (count >= limit) {
     const client = await dbConnect();
-    const col = client.db('tokensApi').collection('ApiCallLog');
-    const oldest = await col.findOne(
-      { accountId, timestamp: { $gte: oneHourAgo } },
-      { sort: { timestamp: 1 }, projection: { timestamp: 1 } },
-    );
-    const oldestTs = oldest?.timestamp?.getTime() ?? (now - 60 * 60 * 1000);
-    const waitMinutes = Math.max(1, Math.ceil((60 * 60 * 1000 - (now - oldestTs)) / 60_000));
+    const [pivot] = await client.db('tokensApi').collection('ApiCallLog')
+      .find({ accountId, timestamp: { $gte: oneHourAgo } })
+      .sort({ timestamp: 1 })
+      .skip(count - limit)
+      .limit(1)
+      .project({ timestamp: 1 })
+      .toArray();
+    const pivotTs = pivot?.timestamp?.getTime() ?? (now - 60 * 60 * 1000);
+    const waitMinutes = Math.max(1, Math.ceil((60 * 60 * 1000 - (now - pivotTs)) / 60_000));
 
     const err = new Error('Meta API rate limit reached for this account');
     err.code = 'META_RATE_LIMIT';
@@ -92,6 +96,8 @@ export async function graphGet(path, params, token) {
   const res = await fetch(url.toString(), { cache: 'no-store' });
   const json = await res.json();
   logMetaCall(path || '/', res.status, Date.now() - t0, accountId).catch(() => {});
+  const entry = countCache.get(accountId);
+  if (entry) entry.count += 1;
   if (json.error) {
     const err = new Error(json.error.message || `Meta API error on /${path}`);
     err.status = res.status;
