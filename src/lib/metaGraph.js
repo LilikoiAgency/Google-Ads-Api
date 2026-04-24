@@ -96,8 +96,6 @@ export async function graphGet(path, params, token) {
   const res = await fetch(url.toString(), { cache: 'no-store' });
   const json = await res.json();
   logMetaCall(path || '/', res.status, Date.now() - t0, accountId).catch(() => {});
-  const entry = countCache.get(accountId);
-  if (entry) entry.count += 1;
   if (json.error) {
     const err = new Error(json.error.message || `Meta API error on /${path}`);
     err.status = res.status;
@@ -105,6 +103,8 @@ export async function graphGet(path, params, token) {
     err.subcode = json.error.error_subcode;
     throw err;
   }
+  const entry = countCache.get(accountId);
+  if (entry) entry.count += 1;
   return json;
 }
 
