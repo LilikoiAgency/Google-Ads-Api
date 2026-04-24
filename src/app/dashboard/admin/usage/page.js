@@ -49,6 +49,75 @@ function SectionTitle({ children }) {
   return <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e", marginBottom: 14, marginTop: 28, paddingBottom: 8, borderBottom: "2px solid #eee" }}>{children}</h3>;
 }
 
+// ─── ApiHealthSection ─────────────────────────────────────────────────────────
+
+function ApiHealthSection({ health }) {
+  if (!health) return null;
+  const { meta, claude } = health;
+  const pct = Math.min(100, Math.round(claude.budgetUsedPct));
+  const barColor = pct >= 90 ? "#e74c3c" : pct >= 70 ? "#e67e22" : "#27ae60";
+
+  return (
+    <>
+      <SectionTitle>API Health</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
+
+        {/* Meta card */}
+        <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+          <p style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.8px", color: "#1877F2", marginBottom: 16 }}>Meta Graph API</p>
+          <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
+            <div>
+              <p style={{ fontSize: 11, color: "#999", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Last Hour</p>
+              <p style={{ fontSize: 28, fontWeight: 800, color: "#1a1a2e", lineHeight: 1 }}>{meta.callsLastHour}</p>
+              <p style={{ fontSize: 11, color: "#bbb", marginTop: 4 }}>of {meta.hourlyLimit} limit</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 11, color: "#999", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Today</p>
+              <p style={{ fontSize: 28, fontWeight: 800, color: "#1a1a2e", lineHeight: 1 }}>{meta.callsToday}</p>
+            </div>
+          </div>
+          {meta.dailyTrend?.length > 0 && (
+            <ResponsiveContainer width="100%" height={80}>
+              <BarChart data={meta.dailyTrend} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#ccc" }} tickFormatter={(d) => { const p = d.split("-"); return `${p[1]}/${p[2]}`; }} />
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} formatter={(v) => [v, "calls"]} />
+                <Bar dataKey="calls" fill="#1877F2" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Claude card */}
+        <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+          <p style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.8px", color: "#8e44ad", marginBottom: 16 }}>Claude API — This Month</p>
+          <p style={{ fontSize: 28, fontWeight: 800, color: "#1a1a2e", lineHeight: 1, marginBottom: 6 }}>
+            ${claude.monthlySpend.toFixed(2)}
+            <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}> / ${claude.budgetCap.toFixed(2)}</span>
+          </p>
+          <div style={{ background: "#f0f0f0", borderRadius: 999, height: 8, marginBottom: 6, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, background: barColor, height: "100%", borderRadius: 999, transition: "width 0.4s" }} />
+          </div>
+          <p style={{ fontSize: 11, color: "#999", marginBottom: 16 }}>{pct}% of monthly budget used · {claude.monthlyCalls} calls</p>
+          {claude.byFeature?.length > 0 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <tbody>
+                {claude.byFeature.map((f) => (
+                  <tr key={f.feature} style={{ borderBottom: "1px solid #f5f5f5" }}>
+                    <td style={{ padding: "5px 0", color: "#555" }}>{f.feature || "—"}</td>
+                    <td style={{ padding: "5px 0", textAlign: "right", color: "#8e44ad", fontWeight: 700 }}>{f.calls} calls</td>
+                    <td style={{ padding: "5px 0", textAlign: "right", color: "#e67e22", fontWeight: 700, paddingLeft: 12 }}>${f.cost.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+      </div>
+    </>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function UsageAnalyticsPage() {
@@ -56,6 +125,7 @@ export default function UsageAnalyticsPage() {
   const { data: session, status: authStatus } = useSession();
 
   const [data, setData] = useState(null);
+  const [apiHealth, setApiHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -67,12 +137,11 @@ export default function UsageAnalyticsPage() {
 
   useEffect(() => {
     if (authStatus !== "authenticated") return;
-    fetch("/api/admin/usage")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load usage data");
-        return res.json();
-      })
-      .then(setData)
+    Promise.all([
+      fetch("/api/admin/usage").then((r) => { if (!r.ok) throw new Error("Failed to load usage data"); return r.json(); }),
+      fetch("/api/admin/api-health").then((r) => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([usageData, healthData]) => { setData(usageData); setApiHealth(healthData); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [authStatus]);
@@ -97,6 +166,7 @@ export default function UsageAnalyticsPage() {
             {error}
           </div>
         )}
+        <ApiHealthSection health={apiHealth} />
 
         {/* KPI Cards */}
         {kpis && (
