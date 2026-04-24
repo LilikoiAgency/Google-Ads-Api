@@ -333,6 +333,158 @@ function CampaignDropdown({ campaigns, selectedCampaign, onChange, onClear }) {
   );
 }
 
+// ─── Account Brief Card ───────────────────────────────────────────────────────
+
+const DATE_BRIEF_OPTIONS = [
+  { value: 'LAST_7_DAYS',  label: 'Last 7 days'  },
+  { value: 'LAST_30_DAYS', label: 'Last 30 days' },
+  { value: 'LAST_90_DAYS', label: 'Last 90 days' },
+  { value: 'THIS_MONTH',   label: 'This month'   },
+];
+
+function AccountBriefCard({ selectedCustomer, currentDateRange }) {
+  const [briefRange, setBriefRange] = useState(
+    DATE_BRIEF_OPTIONS.some((o) => o.value === currentDateRange) ? currentDateRange : 'LAST_30_DAYS'
+  );
+  const [state, setState] = useState({ status: 'idle', briefing: null, generatedAt: null, error: null });
+  const [collapsed, setCollapsed] = useState(false);
+  const fetchingRef = useRef(false);
+
+  const customerId = String(selectedCustomer?.customer?.customer_client?.id || '');
+  const customerName = selectedCustomer?.customer?.customer_client?.descriptive_name || '';
+  const campaigns = selectedCustomer?.campaigns || [];
+  const totalSpend = campaigns.reduce((sum, c) => sum + (c.cost || 0), 0) / 1_000_000;
+
+  async function fetchBrief(force = false) {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setState((s) => ({ ...s, status: 'loading', error: null }));
+    try {
+      const res = await fetch('/api/claude/account-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: briefRange, forceRefresh: force }),
+      });
+      const json = await res.json();
+      if (json.skipped) {
+        setState({ status: 'no_spend', briefing: null, generatedAt: null, error: null });
+      } else if (!res.ok || json.error) {
+        setState({ status: 'error', briefing: null, generatedAt: null, error: json.error || `Error ${res.status}` });
+      } else {
+        setState({ status: 'done', briefing: json.briefing, generatedAt: json.generatedAt, error: null });
+        setCollapsed(false);
+      }
+    } catch (err) {
+      setState({ status: 'error', briefing: null, generatedAt: null, error: err.message });
+    } finally {
+      fetchingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!customerId || totalSpend === 0) {
+      setState({ status: 'no_spend', briefing: null, generatedAt: null, error: null });
+      return;
+    }
+    fetchBrief(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
+
+  if (totalSpend === 0 || state.status === 'no_spend') return null;
+
+  const { status, briefing, generatedAt, error } = state;
+  const genTime = generatedAt ? new Date(generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+
+  return (
+    <div style={{ margin: '0 0 20px 0', borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: collapsed ? 'none' : '1px solid #f3f4f6', background: '#fafafa' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>AI Briefing</span>
+        {genTime && <span style={{ fontSize: 11, color: '#9ca3af' }}>Generated {genTime}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <select
+            value={briefRange}
+            onChange={(e) => setBriefRange(e.target.value)}
+            style={{ fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 6px', background: '#fff', color: '#374151' }}
+          >
+            {DATE_BRIEF_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => fetchBrief(true)}
+            disabled={status === 'loading'}
+            style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: status === 'loading' ? '#93c5fd' : '#4f46e5', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: status === 'loading' ? 'not-allowed' : 'pointer' }}
+          >
+            {status === 'loading' ? 'Running…' : 'Re-run'}
+          </button>
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            style={{ fontSize: 11, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}
+          >
+            {collapsed ? '▼ Show' : '▲ Hide'}
+          </button>
+        </div>
+      </div>
+
+      {!collapsed && (
+        <div style={{ padding: '14px 16px' }}>
+          {status === 'loading' && (
+            <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+              {[60, 80, 45].map((w, i) => (
+                <div key={i} style={{ height: 12, width: `${w}%`, background: '#f3f4f6', borderRadius: 6, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
+              ))}
+            </div>
+          )}
+          {status === 'error' && (
+            <p style={{ fontSize: 12, color: '#ef4444', margin: 0 }}>{error}</p>
+          )}
+          {status === 'done' && briefing && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: 0 }}>{briefing.headline}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#16a34a', margin: '0 0 8px 0' }}>Top Performers</p>
+                  {(briefing.topPerformers || []).map((p, i) => (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: '#111', margin: '0 0 2px 0' }}>{p.name}</p>
+                      <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 2px 0' }}>{p.metric}</p>
+                      <p style={{ fontSize: 11, color: '#374151', margin: 0 }}>{p.insight}</p>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#dc2626', margin: '0 0 8px 0' }}>Needs Attention</p>
+                  {(briefing.bottomPerformers || []).map((p, i) => (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: '#111', margin: '0 0 2px 0' }}>{p.name}</p>
+                      <p style={{ fontSize: 11, color: '#ef4444', margin: '0 0 2px 0' }}>{p.issue}</p>
+                      <p style={{ fontSize: 11, color: '#374151', margin: 0 }}>→ {p.recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {(briefing.actions || []).length > 0 && (
+                <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#4f46e5', margin: '0 0 8px 0' }}>Priority Actions</p>
+                  {briefing.actions.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: '#4f46e5', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{a.priority}</span>
+                      <div>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.action}</span>
+                        {a.impact && <span style={{ fontSize: 11, color: '#6b7280' }}> — {a.impact}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GoogleAdsDashboard() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -618,6 +770,7 @@ export default function GoogleAdsDashboard() {
 
   return (
     <div className="flex flex-col flex-1" style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
+      <style>{`@keyframes briefPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
 
       {/* ── Account picker overlay ── */}
       {showPicker === true && (
@@ -933,6 +1086,17 @@ export default function GoogleAdsDashboard() {
               {lastUpdated && <span> · Last updated {lastUpdated}</span>}
             </p>
           )}
+          {(() => {
+            const selectedCustomer = allCampaignData.find(
+              (item) => String(item.customer.customer_client.id) === String(selectedCustomerId)
+            ) ?? null;
+            return selectedCustomerId && allCampaignData.length > 0 && selectedCustomer ? (
+              <AccountBriefCard
+                selectedCustomer={selectedCustomer}
+                currentDateRange={dateRange}
+              />
+            ) : null;
+          })()}
           <ContentArea
             customerId={selectedCustomerId}
             selectedCampaign={selectedCampaign}
