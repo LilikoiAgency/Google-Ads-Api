@@ -58,7 +58,7 @@ export default function DashboardSidebar() {
     fetch("/api/admin/usage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, path: pathname }),
+      body: JSON.stringify({ path: pathname }),
     }).catch(() => {});
   }, [pathname, email]);
 

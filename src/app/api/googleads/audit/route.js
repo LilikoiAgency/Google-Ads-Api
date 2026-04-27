@@ -7,6 +7,9 @@ import { getCredentials } from '../../../../lib/dbFunctions';
 import { buildDateFilter } from '../../../../lib/googleAdsHelpers';
 import { logApiUsage } from '../../../../lib/usageLogger';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const QS_COMPONENT_MAP = {
   UNKNOWN: null,
   UNSPECIFIED: null,

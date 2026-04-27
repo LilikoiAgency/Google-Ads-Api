@@ -1,21 +1,22 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../lib/auth";
 import {
   getClients, createClient, updateClient,
   deleteClient, regenerateToken,
 } from "../../../../lib/clientPortal";
 import dbConnect from "../../../../lib/mongoose";
+import { getAdminSession } from "../../../../lib/routeAuth";
 
 async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  return session;
+  const auth = await getAdminSession();
+  return auth.error
+    ? NextResponse.json({ error: auth.error }, { status: auth.status })
+    : null;
 }
 
 // GET /api/admin/clients — list all clients with streaming report counts
 export async function GET() {
-  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authError = await requireAdmin();
+  if (authError) return authError;
   const clients = await getClients();
 
   // Attach streaming report counts
@@ -34,7 +35,8 @@ export async function GET() {
 
 // POST /api/admin/clients — create client
 export async function POST(request) {
-  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authError = await requireAdmin();
+  if (authError) return authError;
   try {
     const data   = await request.json();
     const client = await createClient(data);
@@ -46,7 +48,8 @@ export async function POST(request) {
 
 // PUT /api/admin/clients?slug=xxx — update or regenerate token
 export async function PUT(request) {
-  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authError = await requireAdmin();
+  if (authError) return authError;
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get("slug");
   if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
@@ -64,7 +67,8 @@ export async function PUT(request) {
 
 // DELETE /api/admin/clients?slug=xxx
 export async function DELETE(request) {
-  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authError = await requireAdmin();
+  if (authError) return authError;
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get("slug");
   if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });

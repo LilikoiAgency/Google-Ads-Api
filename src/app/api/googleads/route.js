@@ -12,6 +12,9 @@ import {
 } from '../../../lib/googleAdsHelpers';
 import { fetchCustomerData } from '../../../lib/googleAdsCustomer';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // ── Zod schema for query params ────────────────────────────────────────────
 export const googleAdsQuerySchema = z
   .object({

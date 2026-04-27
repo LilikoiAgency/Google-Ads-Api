@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
 import { UsageAnalyticsIcon } from "../../components/DashboardIcons";
+import { isAdmin } from "../../../../lib/admins";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -123,6 +124,8 @@ function ApiHealthSection({ health }) {
 export default function UsageAnalyticsPage() {
   const router = useRouter();
   const { data: session, status: authStatus } = useSession();
+  const email = session?.user?.email?.toLowerCase() || "";
+  const isAdminUser = isAdmin(email);
 
   const [data, setData] = useState(null);
   const [apiHealth, setApiHealth] = useState(null);
@@ -133,10 +136,13 @@ export default function UsageAnalyticsPage() {
     if (authStatus === "unauthenticated") {
       router.replace("/?callbackUrl=/dashboard/admin/usage");
     }
-  }, [authStatus, router]);
+    if (authStatus === "authenticated" && !isAdminUser) {
+      router.replace("/dashboard");
+    }
+  }, [authStatus, isAdminUser, router]);
 
   useEffect(() => {
-    if (authStatus !== "authenticated") return;
+    if (authStatus !== "authenticated" || !isAdminUser) return;
     Promise.all([
       fetch("/api/admin/usage").then((r) => { if (!r.ok) throw new Error("Failed to load usage data"); return r.json(); }),
       fetch("/api/admin/api-health").then((r) => r.ok ? r.json() : null).catch(() => null),
@@ -144,7 +150,7 @@ export default function UsageAnalyticsPage() {
       .then(([usageData, healthData]) => { setData(usageData); setApiHealth(healthData); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [authStatus]);
+  }, [authStatus, isAdminUser]);
 
   if (authStatus === "loading" || loading) {
     return <DashboardLoader label="Loading..." />;

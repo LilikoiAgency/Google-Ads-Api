@@ -8,6 +8,7 @@ import "../../../globals.css";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
 import { ClientPortalsIcon } from "../../components/DashboardIcons";
+import { isAdmin } from "../../../../lib/admins";
 
 
 const EMPTY_FORM = {
@@ -178,7 +179,8 @@ export default function AdminClientsPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  const isAdminUser = status === "authenticated";
+  const email = session?.user?.email?.toLowerCase() || "";
+  const isAdminUser = isAdmin(email);
 
   const [clients,  setClients]   = useState([]);
   const [loading,  setLoading]   = useState(true);
@@ -204,6 +206,7 @@ export default function AdminClientsPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/admin/clients");
+    if (status === "authenticated" && !isAdminUser) router.replace("/dashboard");
   }, [status, isAdminUser, router]);
 
   const load = async () => {

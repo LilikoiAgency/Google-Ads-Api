@@ -364,7 +364,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
   const campaigns = selectedCustomer?.campaigns || [];
   const totalSpend = campaigns.reduce((sum, c) => sum + (c.cost || 0), 0) / 1_000_000;
 
-  async function fetchBrief(force = false, rangeOverride = null) {
+  async function fetchBrief(rangeOverride = null) {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     const activeRange = rangeOverride ?? briefRange;
@@ -373,7 +373,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
       const res = await fetch('/api/claude/account-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: activeRange, forceRefresh: force }),
+        body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: activeRange }),
       });
       const json = await res.json();
       if (!mountedRef.current) return;
@@ -399,7 +399,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
       return;
     }
     fetchingRef.current = false; // reset guard when account changes
-    fetchBrief(false);
+    fetchBrief();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
@@ -413,22 +413,32 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
 
   const { status, briefing, generatedAt, error } = state;
   const genTime = generatedAt ? new Date(generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+  const hasTop = (briefing?.topPerformers || []).length > 0;
+  const hasBottom = (briefing?.bottomPerformers || []).length > 0;
 
   return (
-    <div style={{ margin: '0 0 20px 0', borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: collapsed ? 'none' : '1px solid #f3f4f6', background: '#fafafa' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>AI Briefing</span>
-        {genTime && <span style={{ fontSize: 11, color: '#9ca3af' }}>Generated {genTime}</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <section style={{ margin: '0 0 22px 0', borderRadius: 18, border: '1px solid #dbe4ff', background: '#fff', overflow: 'hidden', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.08)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderBottom: collapsed ? 'none' : '1px solid #e8eefc', background: 'linear-gradient(135deg, #eef4ff 0%, #ffffff 55%, #f8fbff 100%)', flexWrap: 'wrap' }}>
+        <div style={{ width: 38, height: 38, borderRadius: 12, background: '#1d4ed8', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>AI</div>
+        <div style={{ minWidth: 190 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: 15, lineHeight: 1.2, fontWeight: 800, color: '#111827', margin: 0 }}>Google Ads briefing</h2>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#dbeafe', border: '1px solid #bfdbfe', borderRadius: 999, padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Daily</span>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>
+            {genTime ? `Generated ${genTime}` : 'Runs once per user, account, range, and day.'}
+          </p>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <select
             value={briefRange}
             onChange={(e) => {
               const newRange = e.target.value;
               setBriefRange(newRange);
-              fetchBrief(true, newRange);
+              fetchBrief(newRange);
             }}
             disabled={status === 'loading'}
-            style={{ fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 6px', background: '#fff', color: '#374151' }}
+            style={{ fontSize: 12, border: '1px solid #cbd5e1', borderRadius: 10, padding: '7px 10px', background: '#fff', color: '#334155', minHeight: 34, outline: 'none' }}
           >
             {DATE_BRIEF_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -436,72 +446,88 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
           </select>
           <button
             type="button"
-            onClick={() => fetchBrief(true)}
+            onClick={() => fetchBrief()}
             disabled={status === 'loading'}
-            style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: status === 'loading' ? '#93c5fd' : '#4f46e5', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: status === 'loading' ? 'not-allowed' : 'pointer' }}
+            style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: status === 'loading' ? '#93c5fd' : '#2563eb', border: 'none', borderRadius: 10, padding: '8px 12px', cursor: status === 'loading' ? 'not-allowed' : 'pointer', minHeight: 34, boxShadow: status === 'loading' ? 'none' : '0 8px 18px rgba(37, 99, 235, 0.22)' }}
           >
-            {status === 'loading' ? 'Running…' : 'Re-run'}
+            {status === 'loading' ? 'Checking...' : 'Refresh'}
           </button>
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            style={{ fontSize: 11, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}
+            style={{ fontSize: 12, fontWeight: 700, color: '#475569', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 10, cursor: 'pointer', padding: '7px 11px', minHeight: 34 }}
           >
-            {collapsed ? '▼ Show' : '▲ Hide'}
+            {collapsed ? 'Show' : 'Hide'}
           </button>
         </div>
       </div>
 
       {!collapsed && (
-        <div style={{ padding: '14px 16px' }}>
+        <div style={{ padding: 18 }}>
           {status === 'loading' && (
-            <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-              {[60, 80, 45].map((w) => (
-                <div key={w} style={{ height: 12, width: `${w}%`, background: '#f3f4f6', borderRadius: 6, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
-              ))}
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ height: 18, width: '58%', background: '#e5edff', borderRadius: 8, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                {[0, 1].map((i) => (
+                  <div key={i} style={{ border: '1px solid #edf2f7', borderRadius: 14, padding: 14 }}>
+                    <div style={{ height: 11, width: '34%', background: '#f1f5f9', borderRadius: 6, marginBottom: 12, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height: 13, width: '72%', background: '#eef2f7', borderRadius: 6, marginBottom: 8, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height: 11, width: '92%', background: '#f1f5f9', borderRadius: 6, animation: 'briefPulse 1.5s ease-in-out infinite' }} />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {status === 'error' && (
-            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+            <p style={{ fontSize: 13, color: '#64748b', margin: 0, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 12 }}>
               {state.code === 'NO_CREDITS'
                 ? 'AI briefing is temporarily unavailable. Check back soon or contact your admin.'
                 : error}
             </p>
           )}
           {status === 'done' && briefing && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: 0 }}>{briefing.headline}</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#16a34a', margin: '0 0 8px 0' }}>Top Performers</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ borderRadius: 14, background: '#0f172a', color: '#fff', padding: '15px 16px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+                <p style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Executive readout</p>
+                <p style={{ fontSize: 15, lineHeight: 1.55, fontWeight: 700, color: '#f8fafc', margin: 0 }}>{briefing.headline}</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+                <div style={{ border: '1px solid #bbf7d0', background: '#f0fdf4', borderRadius: 14, padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                    <p style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#15803d', margin: 0 }}>Top performers</p>
+                    <span style={{ fontSize: 11, color: '#166534', background: '#dcfce7', borderRadius: 999, padding: '3px 8px', fontWeight: 700 }}>{hasTop ? briefing.topPerformers.length : 0}</span>
+                  </div>
                   {(briefing.topPerformers || []).map((p, i) => (
-                    <div key={i} style={{ marginBottom: 8 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: '#111', margin: '0 0 2px 0' }}>{p.name}</p>
-                      <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 2px 0' }}>{p.metric}</p>
-                      <p style={{ fontSize: 11, color: '#374151', margin: 0 }}>{p.insight}</p>
+                    <div key={i} style={{ background: '#fff', border: '1px solid #dcfce7', borderRadius: 12, padding: 12, marginBottom: i === briefing.topPerformers.length - 1 ? 0 : 10 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '0 0 4px 0', lineHeight: 1.3 }}>{p.name}</p>
+                      <p style={{ fontSize: 12, color: '#15803d', margin: '0 0 5px 0', fontWeight: 700, lineHeight: 1.4 }}>{p.metric}</p>
+                      <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.5 }}>{p.insight}</p>
                     </div>
                   ))}
                 </div>
-                <div>
-                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#dc2626', margin: '0 0 8px 0' }}>Needs Attention</p>
+                <div style={{ border: '1px solid #fecaca', background: '#fff7ed', borderRadius: 14, padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                    <p style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b91c1c', margin: 0 }}>Needs attention</p>
+                    <span style={{ fontSize: 11, color: '#991b1b', background: '#fee2e2', borderRadius: 999, padding: '3px 8px', fontWeight: 700 }}>{hasBottom ? briefing.bottomPerformers.length : 0}</span>
+                  </div>
                   {(briefing.bottomPerformers || []).map((p, i) => (
-                    <div key={i} style={{ marginBottom: 8 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: '#111', margin: '0 0 2px 0' }}>{p.name}</p>
-                      <p style={{ fontSize: 11, color: '#ef4444', margin: '0 0 2px 0' }}>{p.issue}</p>
-                      <p style={{ fontSize: 11, color: '#374151', margin: 0 }}>→ {p.recommendation}</p>
+                    <div key={i} style={{ background: '#fff', border: '1px solid #fed7aa', borderRadius: 12, padding: 12, marginBottom: i === briefing.bottomPerformers.length - 1 ? 0 : 10 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '0 0 4px 0', lineHeight: 1.3 }}>{p.name}</p>
+                      <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 5px 0', fontWeight: 700, lineHeight: 1.4 }}>{p.issue}</p>
+                      <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.5 }}><span style={{ fontWeight: 800, color: '#9a3412' }}>Recommended:</span> {p.recommendation}</p>
                     </div>
                   ))}
                 </div>
               </div>
               {(briefing.actions || []).length > 0 && (
-                <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#4f46e5', margin: '0 0 8px 0' }}>Priority Actions</p>
+                <div style={{ border: '1px solid #e0e7ff', background: '#f8faff', borderRadius: 14, padding: 14 }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#3730a3', margin: '0 0 10px 0' }}>Priority actions</p>
                   {briefing.actions.map((a, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: '#4f46e5', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{a.priority}</span>
-                      <div>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.action}</span>
-                        {a.impact && <span style={{ fontSize: 11, color: '#6b7280' }}> — {a.impact}</span>}
+                    <div key={i} style={{ display: 'flex', gap: 10, marginBottom: i === briefing.actions.length - 1 ? 0 : 10, alignItems: 'flex-start', background: '#fff', border: '1px solid #e0e7ff', borderRadius: 12, padding: 12 }}>
+                      <span style={{ fontSize: 11, fontWeight: 900, color: '#fff', background: '#4f46e5', borderRadius: 9, minWidth: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{a.priority || i + 1}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 13, lineHeight: 1.45, fontWeight: 800, color: '#111827', margin: '0 0 3px' }}>{a.action}</p>
+                        {a.impact && <p style={{ fontSize: 12, lineHeight: 1.45, color: '#64748b', margin: 0 }}>{a.impact}</p>}
                       </div>
                     </div>
                   ))}
@@ -511,7 +537,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

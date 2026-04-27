@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions, allowedEmailDomain } from "../../../../lib/auth";
 import dbConnect from "../../../../lib/mongoose";
+import { getAdminSession, getAllowedSession } from "../../../../lib/routeAuth";
 
 const DB = "tokensApi";
 const COLLECTION = "PageViews";
@@ -38,6 +37,11 @@ function pathToTool(path) {
 // ── POST — Log a page view (called from middleware) ──────────────────────────
 
 export async function POST(request) {
+  const auth = await getAllowedSession();
+  if (auth.error) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   let body;
   try {
     body = await request.json();
@@ -45,15 +49,15 @@ export async function POST(request) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const { email, path } = body;
-  if (!email || !path) {
-    return NextResponse.json({ error: "email and path required" }, { status: 400 });
+  const { path } = body;
+  if (!path) {
+    return NextResponse.json({ error: "path required" }, { status: 400 });
   }
 
   try {
     const client = await dbConnect();
     await client.db(DB).collection(COLLECTION).insertOne({
-      email: email.toLowerCase(),
+      email: auth.email,
       path,
       tool: pathToTool(path),
       timestamp: new Date(),
@@ -68,11 +72,9 @@ export async function POST(request) {
 // ── GET — Aggregated usage stats (admin only) ────────────────────────────────
 
 export async function GET(request) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email?.toLowerCase() || "";
-
-  if (!email.endsWith(`@${allowedEmailDomain}`)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await getAdminSession();
+  if (auth.error) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   const client = await dbConnect();
