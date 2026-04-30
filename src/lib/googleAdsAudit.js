@@ -26,7 +26,7 @@ export function getCampaignVerdict(campaign) {
   const lostRank   = campaign.searchRankLostImpressionShare;
 
   if (conv === 0 && cost > 300_000_000) {
-    return { key: 'PAUSE', label: 'PAUSE', color: '#9ca3af', bg: 'rgba(156,163,175,0.12)', icon: '⚫' };
+    return { key: 'INVESTIGATE', label: 'INVESTIGATE', color: '#9ca3af', bg: 'rgba(156,163,175,0.12)', icon: '⚫' };
   }
   if (lostBudget != null && lostBudget > 0.25 && conv > 0) {
     return { key: 'SCALE', label: 'SCALE', color: '#4ecca3', bg: 'rgba(78,204,163,0.12)', icon: '🟢' };
@@ -60,8 +60,8 @@ export function analyzeSearchTerms(searchTerms, keywords = []) {
   );
 
   return {
-    wasted:  wasted.slice(0, 12),
-    winners: winners.slice(0, 10),
+    wasted,
+    winners,
     totalWastedCost,
     wasteRatio,
     uncoveredWinners,
@@ -396,12 +396,12 @@ export function buildActionPlan(
       });
     }
 
-    if (key === 'PAUSE') {
+    if (key === 'INVESTIGATE') {
       actions.push({
         category: 'Campaign',
         issue: `"${c.campaignName}" spent ${fmtCurrency(c.cost)} with 0 conversions`,
-        fix: 'Pause and review search terms for intent mismatch. Check conversion tracking. Reallocate budget to performing campaigns.',
-        path: 'Campaigns → Status → Pause',
+        fix: 'Verify conversion tracking first, then review search terms, landing page relevance, and bid strategy. If tracking is healthy and intent is poor, contain spend with budget, negatives, or status changes.',
+        path: 'Campaigns -> Search terms / Landing pages / Conversion diagnostics',
         impact: 7, confidence: 8, ease: 8,
       });
     }
@@ -439,7 +439,7 @@ export function buildActionPlan(
       actions.push({
         category: 'Keywords',
         issue: `${lowQsWithSpend.length} keyword${lowQsWithSpend.length > 1 ? 's' : ''} with QS ≤3 spent ${fmtCurrency(totalSpend)} — poor Quality Score increases every click`,
-        fix: 'For each: tighten the ad group theme, rewrite ad copy to match keyword intent exactly, improve landing page relevance. Pause if QS cannot be improved.',
+        fix: 'For each: tighten the ad group theme, rewrite ad copy to match keyword intent exactly, and improve landing page relevance. Contain spend only after checking search term quality and conversion tracking.',
         examples: lowQsWithSpend.slice(0, 15).map((k) => `"${k.text}" (${k.matchType}, QS ${k.qualityScore}, ${fmtCurrency(k.cost)})`),
         path: 'Keywords → Quality Score column → sort ascending',
         impact: 8, confidence: 8, ease: 6,
@@ -535,7 +535,7 @@ export function buildActionPlan(
     actions.push({
       category: 'Efficiency',
       issue: `L/R ratio is ${lrData.lrRatio.toFixed(2)} — blended CPA (${fmtCurrency(lrData.blendedCPA)}) is more than 2.5× converting keyword CPA (${fmtCurrency(lrData.convertingKeywordCPA)})`,
-      fix: 'Too much spend is on non-converting keywords, campaigns, or match types. Pause zero-conversion keywords, add negatives for wasted search terms, and shift budget to proven converters.',
+      fix: 'Too much spend is on non-converting keywords, campaigns, or match types. Verify tracking, add negatives for wasted search terms, contain high-cost non-converters, and shift budget to proven converters.',
       examples: zeroConvExamples,
       path: 'Keywords → Columns → Conversions → sort by cost, filter conv = 0',
       impact: 8, confidence: 7, ease: 5,
@@ -679,5 +679,12 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     pmaxData,
     actionPlan,
     recommendations: accountData.recommendations || [],
+    conversionActions: auditData?.conversionActions || [],
+    landingPages: auditData?.landingPages || [],
+    campaignSearchTerms: auditData?.campaignSearchTerms || [],
+    changeStatus: auditData?.changeStatus || [],
+    geoPerformance: auditData?.geoPerformance || [],
+    daypartPerformance: auditData?.daypartPerformance || [],
+    conversionLag: auditData?.conversionLag || [],
   };
 }

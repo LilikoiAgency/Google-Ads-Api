@@ -28,6 +28,29 @@ describe('googleAdsQuerySchema', () => {
     const result = googleAdsQuerySchema.safeParse({ dateRange: 'LAST_30_DAYS' });
     expect(result.success).toBe(true);
     expect(result.data.statusFilter).toBe('ACTIVE');
+    expect(result.data.includeAds).toBe(false);
+  });
+
+  it('parses includeAds only when explicitly true', () => {
+    expect(googleAdsQuerySchema.safeParse({ includeAds: 'true' }).data.includeAds).toBe(true);
+    expect(googleAdsQuerySchema.safeParse({ includeAds: 'false' }).data.includeAds).toBe(false);
+  });
+
+  it('accepts numeric customerId when provided', () => {
+    const result = googleAdsQuerySchema.safeParse({
+      dateRange: 'LAST_7_DAYS',
+      customerId: '1234567890',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data.customerId).toBe('1234567890');
+  });
+
+  it('rejects non-numeric customerId', () => {
+    const result = googleAdsQuerySchema.safeParse({
+      dateRange: 'LAST_7_DAYS',
+      customerId: 'abc123',
+    });
+    expect(result.success).toBe(false);
   });
 
   it('requires both startDate and endDate for CUSTOM range', () => {

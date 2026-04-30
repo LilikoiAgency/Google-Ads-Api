@@ -85,6 +85,10 @@ export default function DashboardHome() {
     return <DashboardLoader label="Loading..." />;
   }
 
+  if (status === "unauthenticated") {
+    return <DashboardLoader label="Redirecting..." />;
+  }
+
   const firstName = session?.user?.name?.split(" ")[0] || "there";
 
   return (

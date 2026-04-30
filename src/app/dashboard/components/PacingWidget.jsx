@@ -12,6 +12,34 @@ const STATUS_META = {
   INACTIVE:  { label: "Inactive",  bg: "rgba(156,163,175,0.12)", text: "#9ca3af", border: "rgba(156,163,175,0.3)" },
 };
 
+const CACHE_MS = 60_000;
+let cachedReport = null;
+let cachedAt = 0;
+let latestRequest = null;
+
+function getLatestReport() {
+  const now = Date.now();
+  if (cachedReport && now - cachedAt < CACHE_MS) {
+    return Promise.resolve(cachedReport);
+  }
+
+  if (!latestRequest) {
+    latestRequest = fetch("/api/pacing/latest")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        cachedReport = j?.data || null;
+        cachedAt = Date.now();
+        return cachedReport;
+      })
+      .catch(() => null)
+      .finally(() => {
+        latestRequest = null;
+      });
+  }
+
+  return latestRequest;
+}
+
 function fmt(n) {
   if (n == null || !Number.isFinite(n)) return "—";
   return "$" + Math.round(n).toLocaleString("en-US");
@@ -36,11 +64,17 @@ export default function PacingWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/pacing/latest")
-      .then((r) => r.ok ? r.json() : null)
-      .then((j) => { if (j?.data) setReport(j.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let active = true;
+
+    getLatestReport().then((data) => {
+      if (!active) return;
+      if (data) setReport(data);
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (loading || !report) return null;

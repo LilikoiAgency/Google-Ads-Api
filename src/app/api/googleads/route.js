@@ -20,6 +20,8 @@ export const googleAdsQuerySchema = z
   .object({
     dateRange: z.enum(['LAST_7_DAYS', 'LAST_30_DAYS', 'LAST_90_DAYS', 'THIS_MONTH', 'CUSTOM']).default('LAST_7_DAYS'),
     statusFilter: z.enum(['ACTIVE', 'INACTIVE', 'ALL']).default('ACTIVE'),
+    customerId: z.string().regex(/^\d+$/).optional(),
+    includeAds: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })
@@ -44,6 +46,8 @@ export async function GET(request) {
     const parsed = googleAdsQuerySchema.safeParse({
       dateRange: searchParams.get('dateRange') ?? undefined,
       statusFilter: searchParams.get('statusFilter') ?? undefined,
+      customerId: searchParams.get('customerId')?.replaceAll('-', '') ?? undefined,
+      includeAds: searchParams.get('includeAds') ?? undefined,
       startDate: searchParams.get('startDate') ?? undefined,
       endDate: searchParams.get('endDate') ?? undefined,
     });
@@ -55,7 +59,7 @@ export async function GET(request) {
       );
     }
 
-    const { dateRange, statusFilter, startDate, endDate } = parsed.data;
+    const { dateRange, statusFilter, customerId, includeAds, startDate, endDate } = parsed.data;
     const { dateFilter, dateWindow } = buildDateFilter(dateRange, startDate, endDate);
     const campaignStatusCondition = getCampaignStatusCondition(statusFilter);
     const campaignStatusConditionWithoutServing = getCampaignStatusCondition(statusFilter, {
@@ -87,8 +91,18 @@ export async function GET(request) {
     }
 
     // ── Fetch all customer data in parallel ────────────────────────────────
+    const requestedCustomerClients = customerId
+      ? customerClients.filter(
+          (customerClient) => String(customerClient.customer_client.id) === String(customerId)
+        )
+      : customerClients;
+
+    if (customerId && requestedCustomerClients.length === 0) {
+      return NextResponse.json({ error: 'Customer not found or inaccessible', requestId }, { status: 404 });
+    }
+
     const allCampaignData = await Promise.all(
-      customerClients.map((customerClient) =>
+      requestedCustomerClients.map((customerClient) =>
         fetchCustomerData({
           client,
           customerClient,
@@ -97,6 +111,7 @@ export async function GET(request) {
           dateWindow,
           campaignStatusCondition,
           campaignStatusConditionWithoutServing,
+          includeAds,
         })
       )
     );

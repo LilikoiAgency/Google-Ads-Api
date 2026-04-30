@@ -3,7 +3,83 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useMemo, useEffect, Suspense } from "react";
 import { runAudit, fmtCurrency, fmtPct, fmtCvr } from "../../../../../lib/googleAdsAudit";
 
-const TABS = ["Overview", "Campaigns", "Keywords", "Search Terms", "Bidding", "Assets", "Action Plan", "AI Insight"];
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "campaigns", label: "Campaigns" },
+  { key: "keywords", label: "Keywords" },
+  { key: "search_terms", label: "Search Terms" },
+  { key: "tracking", label: "Tracking" },
+  { key: "landing_pages", label: "Landing Pages" },
+  { key: "changes", label: "Changes" },
+  { key: "geo", label: "Geo" },
+  { key: "daypart", label: "Daypart" },
+  { key: "conversion_lag", label: "Lag" },
+  { key: "bidding", label: "Bidding" },
+  { key: "assets", label: "Assets" },
+  { key: "action_plan", label: "Action Plan" },
+  { key: "ai", label: "AI Insight" },
+];
+
+const AUDIT_TYPES = [
+  {
+    key: "full_account",
+    label: "Full Account Audit",
+    shortLabel: "Full",
+    description: "Complete account health, structure, search terms, bidding, assets, and action plan.",
+    defaultTab: "overview",
+    tabs: ["overview", "campaigns", "keywords", "search_terms", "bidding", "assets", "action_plan", "ai"],
+  },
+  {
+    key: "search_term_waste",
+    label: "Search Term Waste Audit",
+    shortLabel: "Search Terms",
+    description: "Find wasted spend, irrelevant intent, converting queries, and exact-match buildout opportunities.",
+    defaultTab: "search_terms",
+    tabs: ["search_terms", "keywords", "landing_pages", "campaigns", "action_plan", "ai"],
+  },
+  {
+    key: "tracking_integrity",
+    label: "Conversion Tracking Audit",
+    shortLabel: "Tracking",
+    description: "Use zero-conversion spend, conversion volume, and Google tracking recommendations to flag accounts needing tag or GA4 validation.",
+    defaultTab: "tracking",
+    tabs: ["tracking", "campaigns", "conversion_lag", "changes", "action_plan", "ai"],
+  },
+  {
+    key: "landing_page_alignment",
+    label: "Landing Page Alignment Audit",
+    shortLabel: "Landing Pages",
+    description: "Review query intent, keyword quality, ad relevance signals, and landing page experience recommendations.",
+    defaultTab: "landing_pages",
+    tabs: ["landing_pages", "keywords", "search_terms", "campaigns", "action_plan", "ai"],
+  },
+  {
+    key: "budget_impression_share",
+    label: "Budget & Impression Share Audit",
+    shortLabel: "Budget / IS",
+    description: "Separate budget constraints from rank constraints and identify where more budget would or would not help.",
+    defaultTab: "campaigns",
+    tabs: ["campaigns", "overview", "bidding", "changes", "geo", "daypart", "action_plan", "ai"],
+  },
+  {
+    key: "bidding_strategy",
+    label: "Bidding Strategy Audit",
+    shortLabel: "Bidding",
+    description: "Check bid strategy fit, target CPA pressure, budgets, and conversion-volume readiness.",
+    defaultTab: "bidding",
+    tabs: ["bidding", "campaigns", "conversion_lag", "changes", "action_plan", "ai"],
+  },
+  {
+    key: "asset_creative",
+    label: "Asset & Creative Coverage Audit",
+    shortLabel: "Assets",
+    description: "Review RSA strength, pinned assets, extension coverage, and PMax asset group gaps.",
+    defaultTab: "assets",
+    tabs: ["assets", "overview", "campaigns", "action_plan", "ai"],
+  },
+];
+
+const AUDIT_TYPE_BY_KEY = Object.fromEntries(AUDIT_TYPES.map((type) => [type.key, type]));
 
 const REC_TYPE_LABELS = {
   2: "Increase campaign budget",
@@ -128,6 +204,124 @@ function LoadingSpinner({ message }) {
   );
 }
 
+function getAuditTypeSummary(audit, typeKey) {
+  if (!audit) return null;
+  const waste = audit.searchTerms?.totalWastedCost || 0;
+  const wasteRatio = audit.searchTerms?.wasteRatio || 0;
+  const trackingRecs = (audit.recommendations || []).filter((r) => [27, 53, 54].includes(r.type)).length;
+  const budgetLimited = audit.campaigns.filter((c) => (c.searchBudgetLostImpressionShare || 0) > 0.1).length;
+  const rankLimited = audit.campaigns.filter((c) => (c.searchRankLostImpressionShare || 0) > 0.1).length;
+  const biddingIssues = (audit.bidding || []).filter((b) => b.status !== "ok").length;
+  const assetIssues = (audit.assets || []).filter((a) => a.coverageScore < 0.8).length + (audit.adStrength?.underHeadlined?.length || 0) + (audit.adStrength?.pinnedCount || 0);
+  const lowQs = audit.keywords?.qs1to3?.length || 0;
+  const primaryConversions = (audit.conversionActions || []).filter((a) => a.primaryForGoal).length;
+  const staleConversions = (audit.conversionActions || []).filter((a) => a.primaryForGoal && !a.lastReceivedRequestDateTime && !a.lastConversionDate).length;
+  const aiSearchTermSpend = (audit.campaignSearchTerms || [])
+    .filter((t) => ["PERFORMANCE_MAX", "AI_MAX_BROAD_MATCH", "AI_MAX_KEYWORDLESS", "DYNAMIC_SEARCH_ADS"].includes(t.matchSource))
+    .reduce((sum, t) => sum + (t.cost || 0), 0);
+  const lowCvrLandingPages = (audit.landingPages || []).filter((p) => (p.cost || 0) > 100_000_000 && (p.conversions || 0) === 0).length;
+  const recentChanges = audit.changeStatus?.length || 0;
+
+  const summaries = {
+    full_account: [
+      `${audit.summary.campaignCount} campaigns reviewed`,
+      `${audit.summary.criticalCount} critical actions`,
+      `${audit.summary.warningCount} warnings`,
+    ],
+    search_term_waste: [
+      `${fmtCurrency(waste)} zero-conv query spend`,
+      `${fmtPct(wasteRatio)} waste ratio`,
+      `${fmtCurrency(aiSearchTermSpend)} PMax/AI/DSA query spend`,
+    ],
+    tracking_integrity: [
+      `${audit.campaigns.filter((c) => (c.cost || 0) > 0 && (c.conversions || 0) === 0).length} spenders with zero conversions`,
+      `${primaryConversions} primary conversion actions`,
+      `${staleConversions || trackingRecs} tracking items to inspect`,
+    ],
+    landing_page_alignment: [
+      `${lowQs} low-QS keywords`,
+      `${audit.keywords?.componentBreakdown?.lpExperience?.BELOW_AVERAGE || 0} LP exp issues`,
+      `${lowCvrLandingPages} high-spend 0-conv URLs`,
+    ],
+    budget_impression_share: [
+      `${budgetLimited} budget-limited campaigns`,
+      `${rankLimited} rank-limited campaigns`,
+      `${recentChanges} recent account changes`,
+    ],
+    bidding_strategy: [
+      `${biddingIssues} bidding items to review`,
+      `${audit.bidding?.length || 0} bid configs checked`,
+      audit.summary.blendedCPA ? `${fmtCurrency(audit.summary.blendedCPA)} blended CPA` : "No blended CPA yet",
+    ],
+    asset_creative: [
+      `${assetIssues} asset/creative gaps`,
+      `${audit.adStrength?.underHeadlined?.length || 0} underbuilt RSAs`,
+      `${audit.pmaxData?.length || 0} PMax campaigns`,
+    ],
+  };
+
+  return summaries[typeKey] || summaries.full_account;
+}
+
+function getFocusedActionPlan(actions, typeKey) {
+  if (!Array.isArray(actions) || typeKey === "full_account") return actions || [];
+
+  const categoryMap = {
+    search_term_waste: ["Search Terms", "Match Types", "Efficiency", "Keywords"],
+    tracking_integrity: ["Campaign", "Efficiency"],
+    landing_page_alignment: ["Keywords", "Search Terms", "Structure", "Bidding / QS", "Ad Strength", "Ad Copy"],
+    budget_impression_share: ["Budget", "Bidding / QS", "Efficiency", "Campaign"],
+    bidding_strategy: ["Bidding", "Budget", "Efficiency", "Bidding / QS"],
+    asset_creative: ["Ad Strength", "Ad Copy", "Assets", "PMax"],
+  };
+
+  const allowed = categoryMap[typeKey];
+  if (!allowed) return actions;
+
+  const focused = actions.filter((a) => allowed.includes(a.category));
+  return focused.length ? focused : actions;
+}
+
+function AuditTypeStrip({ selectedType, onSelect, audit }) {
+  return (
+    <div style={{ padding: "16px 24px", borderBottom: `1px solid ${C.border}`, background: "rgba(255,255,255,0.015)" }}>
+      <div style={{ display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 2 }}>
+        {AUDIT_TYPES.map((type) => {
+          const active = selectedType === type.key;
+          const summary = active ? getAuditTypeSummary(audit, type.key) : null;
+          return (
+            <button
+              key={type.key}
+              onClick={() => onSelect(type.key)}
+              style={{
+                flex: "0 0 210px",
+                minHeight: 116,
+                textAlign: "left",
+                background: active ? "rgba(233,69,96,0.11)" : "rgba(255,255,255,0.035)",
+                border: `1px solid ${active ? "rgba(233,69,96,0.45)" : C.border}`,
+                borderRadius: 10,
+                padding: "13px 14px",
+                cursor: "pointer",
+                boxShadow: active ? "0 10px 28px rgba(233,69,96,0.08)" : "none",
+              }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 800, color: active ? "#fff" : "rgba(255,255,255,0.82)", margin: "0 0 7px", lineHeight: 1.25 }}>{type.shortLabel}</p>
+              <p style={{ fontSize: 11, color: C.textSec, margin: 0, lineHeight: 1.45 }}>{type.description}</p>
+              {summary && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
+                  {summary.map((item) => (
+                    <span key={item} style={{ fontSize: 10, fontWeight: 700, color: C.textPri, background: "rgba(255,255,255,0.07)", border: `1px solid ${C.border}`, borderRadius: 4, padding: "3px 6px" }}>{item}</span>
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AuditLoadingBanner() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(233,69,96,0.08)", border: "1px solid rgba(233,69,96,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
@@ -202,7 +396,7 @@ function OverviewTab({ audit, auditLoading }) {
       <Section title="Campaign Breakdown">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {Object.entries(byCat).map(([key, count]) => {
-            const colors = { SCALE: C.teal, OPTIMIZE: C.amber, FIX_QS: C.accent, PAUSE: "#9ca3af", REVIEW: C.amber };
+            const colors = { SCALE: C.teal, OPTIMIZE: C.amber, FIX_QS: C.accent, INVESTIGATE: "#9ca3af", REVIEW: C.amber };
             return (
               <div key={key} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 24px", textAlign: "center" }}>
                 <p style={{ fontSize: 30, fontWeight: 800, color: colors[key] || C.textPri, margin: 0 }}>{count}</p>
@@ -495,6 +689,142 @@ function BiddingTab({ biddingAudits, auditLoading }) {
   );
 }
 
+function TrackingTab({ conversionActions = [], campaigns = [] }) {
+  const primary = conversionActions.filter((a) => a.primaryForGoal);
+  const stalePrimary = primary.filter((a) => !a.lastReceivedRequestDateTime && !a.lastConversionDate);
+  const zeroConvSpend = campaigns.filter((c) => (c.cost || 0) > 0 && (c.conversions || 0) === 0).sort((a, b) => (b.cost || 0) - (a.cost || 0));
+  return (
+    <>
+      <Section title="Tracking Health">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+          <KPI label="Conversion Actions" value={conversionActions.length} />
+          <KPI label="Primary Actions" value={primary.length} color={primary.length ? C.teal : C.accent} />
+          <KPI label="Included in Conv." value={conversionActions.filter((a) => a.includeInConversionsMetric).length} />
+          <KPI label="Primary No Signal" value={stalePrimary.length} color={stalePrimary.length ? C.accent : C.teal} />
+        </div>
+      </Section>
+      <Section title="Conversion Actions">
+        {conversionActions.length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No conversion action data available.</p> : conversionActions.map((a, i) => (
+          <div key={`${a.id}-${i}`} style={{ display: "grid", gridTemplateColumns: "1fr 110px 90px 90px 150px", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+            <span style={{ color: C.textPri, fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+            <span style={{ color: C.textSec, fontSize: 13 }}>{a.category || "-"}</span>
+            <span style={{ color: a.primaryForGoal ? C.teal : C.textSec, fontSize: 13, fontWeight: 800 }}>{a.primaryForGoal ? "Primary" : "Secondary"}</span>
+            <span style={{ color: C.textSec, fontSize: 13 }}>{Number(a.allConversions || 0).toFixed(1)} conv</span>
+            <span style={{ color: a.lastReceivedRequestDateTime || a.lastConversionDate ? C.textSec : C.accent, fontSize: 13 }}>{a.lastReceivedRequestDateTime || a.lastConversionDate || "No signal"}</span>
+          </div>
+        ))}
+      </Section>
+      {zeroConvSpend.length > 0 && (
+        <Section title="Spend With Zero Conversions">
+          {zeroConvSpend.slice(0, 10).map((c, i) => (
+            <div key={c.campaignId || i} style={{ display: "flex", justifyContent: "space-between", gap: 14, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ color: C.textPri, fontSize: 15 }}>{c.campaignName}</span>
+              <span style={{ color: C.accent, fontSize: 15, fontWeight: 800 }}>{fmtCurrency(c.cost)}</span>
+            </div>
+          ))}
+        </Section>
+      )}
+    </>
+  );
+}
+
+function LandingPagesTab({ landingPages = [] }) {
+  const sorted = [...landingPages].sort((a, b) => (b.cost || 0) - (a.cost || 0));
+  const zeroConv = sorted.filter((p) => (p.cost || 0) > 0 && (p.conversions || 0) === 0);
+  return (
+    <>
+      <Section title="Landing Page Diagnostics">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+          <KPI label="URLs Reviewed" value={sorted.length} />
+          <KPI label="Spend Reviewed" value={fmtCurrency(sorted.reduce((s, p) => s + (p.cost || 0), 0))} />
+          <KPI label="Conversions" value={sorted.reduce((s, p) => s + (p.conversions || 0), 0).toFixed(1)} />
+          <KPI label="Zero-Conv URLs" value={zeroConv.length} color={zeroConv.length ? C.accent : C.teal} />
+        </div>
+      </Section>
+      <Section title="Top Landing Pages by Spend">
+        {sorted.length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No landing page data available.</p> : sorted.slice(0, 40).map((p, i) => (
+          <div key={`${p.url}-${i}`} style={{ display: "grid", gridTemplateColumns: "1fr 110px 90px 90px 90px", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+            <span style={{ color: C.textPri, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.url}>{p.url}</span>
+            <span style={{ color: C.textSec, fontSize: 13 }}>{p.device || "-"}</span>
+            <span style={{ color: C.textSec, fontSize: 13 }}>{fmtCurrency(p.cost)}</span>
+            <span style={{ color: p.conversions > 0 ? C.teal : C.accent, fontSize: 13, fontWeight: 800 }}>{Number(p.conversions || 0).toFixed(1)}</span>
+            <span style={{ color: C.textSec, fontSize: 13 }}>{p.cvr == null ? "-" : `${(p.cvr * 100).toFixed(1)}%`}</span>
+          </div>
+        ))}
+      </Section>
+    </>
+  );
+}
+
+function ChangesTab({ changes = [] }) {
+  return (
+    <Section title="Recent Account Changes">
+      {changes.length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No recent change data available.</p> : changes.slice(0, 80).map((c, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "170px 160px 1fr", gap: 14, padding: "10px 0", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: C.textSec }}>{c.lastChangeDateTime || "Unknown time"}</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: C.textPri }}>{(c.resourceType || "Unknown").replace(/_/g, " ")}</span>
+          <span style={{ fontSize: 13, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.campaign || c.adGroup || c.assetGroup || c.asset || c.campaignBudget || "Resource changed"}</span>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+function GeoTab({ geoPerformance = [] }) {
+  const sorted = [...geoPerformance].sort((a, b) => (b.cost || 0) - (a.cost || 0));
+  return (
+    <Section title="Geo Performance by Spend">
+      {sorted.length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No geo performance data available.</p> : sorted.slice(0, 60).map((g, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 170px 90px 90px 90px", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+          <span style={{ color: C.textPri, fontSize: 14 }}>{g.city || g.region || g.countryCriterionId || "Unknown location"}</span>
+          <span style={{ color: C.textSec, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.campaignName}</span>
+          <span style={{ color: C.textSec, fontSize: 13 }}>{fmtCurrency(g.cost)}</span>
+          <span style={{ color: g.conversions > 0 ? C.teal : C.accent, fontSize: 13, fontWeight: 800 }}>{Number(g.conversions || 0).toFixed(1)}</span>
+          <span style={{ color: C.textSec, fontSize: 13 }}>{g.cvr == null ? "-" : `${(g.cvr * 100).toFixed(1)}%`}</span>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+function DaypartTab({ daypartPerformance = [] }) {
+  const sorted = [...daypartPerformance].sort((a, b) => (b.cost || 0) - (a.cost || 0));
+  return (
+    <Section title="Daypart Performance by Spend">
+      {sorted.length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No daypart data available.</p> : sorted.slice(0, 80).map((d, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "140px 70px 1fr 90px 90px", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+          <span style={{ color: C.textPri, fontSize: 14 }}>{d.dayOfWeek || "Unknown"}</span>
+          <span style={{ color: C.textSec, fontSize: 13 }}>{d.hour == null ? "-" : `${d.hour}:00`}</span>
+          <span style={{ color: C.textSec, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.campaignName}</span>
+          <span style={{ color: C.textSec, fontSize: 13 }}>{fmtCurrency(d.cost)}</span>
+          <span style={{ color: d.conversions > 0 ? C.teal : C.accent, fontSize: 13, fontWeight: 800 }}>{Number(d.conversions || 0).toFixed(1)}</span>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+function ConversionLagTab({ conversionLag = [] }) {
+  const byBucket = conversionLag.reduce((acc, row) => {
+    const key = row.lagBucket || "Unknown";
+    if (!acc[key]) acc[key] = { cost: 0, conversions: 0 };
+    acc[key].cost += row.cost || 0;
+    acc[key].conversions += row.conversions || 0;
+    return acc;
+  }, {});
+  return (
+    <Section title="Conversion Lag">
+      {Object.keys(byBucket).length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No conversion lag data available.</p> : Object.entries(byBucket).map(([bucket, row]) => (
+        <div key={bucket} style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px", gap: 12, padding: "12px 0", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+          <span style={{ color: C.textPri, fontSize: 15, fontWeight: 700 }}>{bucket.replace(/_/g, " ")}</span>
+          <span style={{ color: C.textSec, fontSize: 14 }}>{fmtCurrency(row.cost)}</span>
+          <span style={{ color: C.teal, fontSize: 14, fontWeight: 800 }}>{Number(row.conversions || 0).toFixed(1)} conv</span>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
 // ── Tab: Assets ───────────────────────────────────────────────────────────────
 
 const ASSET_TYPES  = ["SITELINK","CALLOUT","STRUCTURED_SNIPPET","CALL","MARKETING_IMAGE"];
@@ -607,13 +937,34 @@ function ActionPlanTab({ actions, auditLoading }) {
 
 // ── AI Insight helpers ────────────────────────────────────────────────────────
 
-function buildAuditPayload(audit, accountName, customerId, dateRange) {
-  const { summary, campaigns, keywords, searchTerms, bidding, assets, pmaxData, structure, adStrength } = audit;
+function buildAuditPayload(audit, accountName, customerId, dateRange, auditType = "full_account") {
+  const {
+    summary,
+    campaigns,
+    keywords,
+    searchTerms,
+    bidding,
+    assets,
+    pmaxData,
+    structure,
+    adStrength,
+    conversionActions,
+    landingPages,
+    campaignSearchTerms,
+    changeStatus,
+    geoPerformance,
+    daypartPerformance,
+    conversionLag,
+  } = audit;
   const toDollars = (micros) => (micros == null ? null : Math.round((micros || 0) / 1_000_000));
+  const auditTypeMeta = AUDIT_TYPE_BY_KEY[auditType] || AUDIT_TYPE_BY_KEY.full_account;
   return {
     accountName,
     customerId,
     dateRange,
+    auditType: auditTypeMeta.key,
+    auditTypeLabel: auditTypeMeta.label,
+    auditTypeFocus: auditTypeMeta.description,
     currency: 'USD',
     unitsNote: 'All cost, CPA, and budget values are in whole US dollars.',
     summary: {
@@ -676,6 +1027,77 @@ function buildAuditPayload(audit, accountName, customerId, dateRange) {
       cost: toDollars(p.cost),
       conversions: p.conversions,
       flags: p.flags,
+    })),
+    conversionActions: conversionActions?.slice(0, 50).map((a) => ({
+      name: a.name,
+      category: a.category,
+      type: a.type,
+      status: a.status,
+      origin: a.origin,
+      includeInConversionsMetric: a.includeInConversionsMetric,
+      primaryForGoal: a.primaryForGoal,
+      countingType: a.countingType,
+      attributionModel: a.attributionModel,
+      dataDrivenModelStatus: a.dataDrivenModelStatus,
+      clickThroughLookbackWindowDays: a.clickThroughLookbackWindowDays,
+      lastReceivedRequestDateTime: a.lastReceivedRequestDateTime,
+      lastConversionDate: a.lastConversionDate,
+      allConversions: a.allConversions,
+      allConversionsValue: a.allConversionsValue,
+    })),
+    landingPages: landingPages?.slice(0, 40).map((p) => ({
+      url: p.url,
+      campaignName: p.campaignName,
+      device: p.device,
+      cost: toDollars(p.cost),
+      clicks: p.clicks,
+      conversions: p.conversions,
+      cvr: p.cvr,
+      speedScore: p.speedScore,
+      mobileFriendlyClicksPercentage: p.mobileFriendlyClicksPercentage,
+    })),
+    campaignSearchTerms: campaignSearchTerms?.slice(0, 60).map((t) => ({
+      term: t.term,
+      campaignName: t.campaignName,
+      matchSource: t.matchSource,
+      matchType: t.matchType,
+      targetingStatus: t.targetingStatus,
+      cost: toDollars(t.cost),
+      clicks: t.clicks,
+      conversions: t.conversions,
+      conversionValue: t.conversionValue,
+    })),
+    recentChanges: changeStatus?.slice(0, 40).map((c) => ({
+      resourceType: c.resourceType,
+      resourceStatus: c.resourceStatus,
+      lastChangeDateTime: c.lastChangeDateTime,
+      campaign: c.campaign,
+      adGroup: c.adGroup,
+      assetGroup: c.assetGroup,
+    })),
+    geoPerformance: geoPerformance?.slice(0, 40).map((g) => ({
+      campaignName: g.campaignName,
+      locationType: g.locationType,
+      region: g.region,
+      city: g.city,
+      cost: toDollars(g.cost),
+      clicks: g.clicks,
+      conversions: g.conversions,
+      cvr: g.cvr,
+    })),
+    daypartPerformance: daypartPerformance?.slice(0, 60).map((d) => ({
+      campaignName: d.campaignName,
+      dayOfWeek: d.dayOfWeek,
+      hour: d.hour,
+      cost: toDollars(d.cost),
+      clicks: d.clicks,
+      conversions: d.conversions,
+    })),
+    conversionLag: conversionLag?.slice(0, 40).map((l) => ({
+      campaignName: l.campaignName,
+      lagBucket: l.lagBucket,
+      cost: toDollars(l.cost),
+      conversions: l.conversions,
     })),
   };
 }
@@ -796,7 +1218,7 @@ function AIInsightTab({ aiInsight, aiLoading, aiError, onRunAnalysis, auditReady
         <Section title={`Campaign Insights (${campaign_insights.length})`}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: 12 }}>
             {campaign_insights.map((c, i) => {
-              const vColors = { SCALE: C.teal, PAUSE: "#9ca3af", OPTIMIZE: C.amber, FIX_QS: C.accent, REVIEW: C.amber };
+              const vColors = { SCALE: C.teal, INVESTIGATE: "#9ca3af", PAUSE: "#9ca3af", OPTIMIZE: C.amber, FIX_QS: C.accent, REVIEW: C.amber };
               const vc = vColors[c.verdict] || C.textPri;
               return (
                 <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "18px 20px" }}>
@@ -875,7 +1297,7 @@ const DATE_OPTIONS = [
   { value: "CUSTOM",       label: "Custom range" },
 ];
 
-function RunAuditModal({ accountName, initialRange = "LAST_30_DAYS", usage, onConfirm, onCancel }) {
+function RunAuditModal({ accountName, initialRange = "LAST_30_DAYS", initialAuditType = "full_account", usage, onConfirm, onCancel }) {
   const [range,      setRange]      = useState(initialRange);
   const [start,      setStart]      = useState("");
   const [end,        setEnd]        = useState("");
@@ -942,7 +1364,7 @@ function RunAuditModal({ accountName, initialRange = "LAST_30_DAYS", usage, onCo
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button onClick={onCancel} style={{ padding: "9px 20px", background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, color: C.textSec, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => onConfirm(range, range === "CUSTOM" ? start : null, range === "CUSTOM" ? end : null, includeAi && !aiLimitReached)} disabled={!canConfirm}
+          <button onClick={() => onConfirm(initialAuditType, range, range === "CUSTOM" ? start : null, range === "CUSTOM" ? end : null, includeAi && !aiLimitReached)} disabled={!canConfirm}
             style={{ padding: "9px 24px", background: canConfirm ? C.accent : "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, color: canConfirm ? "#fff" : C.textSec, cursor: canConfirm ? "pointer" : "not-allowed" }}>
             {includeAi && !aiLimitReached ? "Run Audit + AI" : "Run Audit"}
           </button>
@@ -1029,6 +1451,7 @@ function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onR
             ? `Today ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
             : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           const rangeLabel = entry.dateLabel || (entry.dateRange || "").replace(/_/g, " ").toLowerCase();
+          const auditTypeLabel = AUDIT_TYPE_BY_KEY[entry.auditType]?.shortLabel || "Full";
 
           return (
             <div key={id} onClick={() => onSelect(entry)}
@@ -1038,7 +1461,7 @@ function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onR
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#fff" : "rgba(255,255,255,0.85)", margin: 0 }}>{dateStr}</p>
                   <p style={{ fontSize: 11, color: C.textSec, margin: "3px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={rangeLabel}>{rangeLabel}</p>
-                  <p style={{ fontSize: 11, color: C.textSec, margin: "2px 0 0" }}>{fmtCurrency(entry.summary?.totalCost || 0)}</p>
+                  <p style={{ fontSize: 11, color: C.textSec, margin: "2px 0 0" }}>{auditTypeLabel} - {fmtCurrency(entry.summary?.totalCost || 0)}</p>
                   {entry.email && (
                     <p style={{ fontSize: 10, color: C.textSec, opacity: 0.7, margin: "2px 0 0" }}>by {entry.email.split("@")[0]}</p>
                   )}
@@ -1085,14 +1508,17 @@ function AuditPageInner() {
   const urlDateRange  = searchParams.get("dateRange")  || "LAST_30_DAYS";
   const urlStartDate  = searchParams.get("startDate")  || null;
   const urlEndDate    = searchParams.get("endDate")    || null;
+  const urlAuditType  = searchParams.get("auditType")  || "full_account";
+  const initialAuditType = AUDIT_TYPE_BY_KEY[urlAuditType] ? urlAuditType : "full_account";
 
   const [accountData,     setAccountData]     = useState(null);
   const [auditData,       setAuditData]       = useState(null);
   const [auditLoading,    setAuditLoading]    = useState(false);
+  const [auditType,       setAuditType]       = useState(initialAuditType);
   const [dateRange,       setDateRange]       = useState(urlDateRange);
   const [customDates,     setCustomDates]     = useState({ startDate: urlStartDate || "", endDate: urlEndDate || "" });
   const [dateWindow,      setDateWindow]      = useState(urlDateRange === "CUSTOM" && urlStartDate && urlEndDate ? { startDate: urlStartDate, endDate: urlEndDate } : null);
-  const [tab,             setTab]             = useState(0);
+  const [activeTab,       setActiveTab]       = useState(AUDIT_TYPE_BY_KEY[initialAuditType]?.defaultTab || "overview");
   const [aiInsight,       setAiInsight]       = useState(null);
   const [aiLoading,       setAiLoading]       = useState(false);
   const [aiError,         setAiError]         = useState(null);
@@ -1170,7 +1596,7 @@ function AuditPageInner() {
       const shouldRunAi = pendingAi;
       if (shouldRunAi) {
         setPendingAi(false);
-        setTab(7);
+        setActiveTab("ai");
         runAiAnalysis();
       } else {
         saveAudit(null);
@@ -1194,7 +1620,16 @@ function AuditPageInner() {
     return labels[dr] || dr;
   }
 
-  function handleRunAudit(newRange, newStart, newEnd, includeAi) {
+  function handleAuditTypeSelect(nextType) {
+    const next = AUDIT_TYPE_BY_KEY[nextType] ? nextType : "full_account";
+    setAuditType(next);
+    setActiveTab(AUDIT_TYPE_BY_KEY[next].defaultTab);
+  }
+
+  function handleRunAudit(newAuditType, newRange, newStart, newEnd, includeAi) {
+    const nextType = AUDIT_TYPE_BY_KEY[newAuditType] ? newAuditType : "full_account";
+    setAuditType(nextType);
+    setActiveTab(includeAi ? "ai" : AUDIT_TYPE_BY_KEY[nextType].defaultTab);
     setDateRange(newRange);
     setCustomDates({ startDate: newStart || "", endDate: newEnd || "" });
     setDateWindow(newRange === "CUSTOM" && newStart && newEnd ? { startDate: newStart, endDate: newEnd } : null);
@@ -1209,7 +1644,7 @@ function AuditPageInner() {
     setAiLoading(true);
     setAiError(null);
     try {
-      const payload = buildAuditPayload(audit, accountName, customerId, dateRange);
+      const payload = buildAuditPayload(audit, accountName, customerId, dateRange, auditType);
       const res = await fetch("/api/claude/google-ads-audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1247,6 +1682,7 @@ function AuditPageInner() {
         body: JSON.stringify({
           customerId,
           accountName,
+          auditType,
           dateRange,
           dateWindow: dateWindow || null,
           dateLabel: buildDateLabel(dateRange, dateWindow),
@@ -1276,13 +1712,14 @@ function AuditPageInner() {
   async function loadHistoryEntry(entry) {
     const id = String(entry._id);
     setActiveHistoryId(id);
+    if (entry.auditType && AUDIT_TYPE_BY_KEY[entry.auditType]) handleAuditTypeSelect(entry.auditType);
     if (!entry.summary?.accountGrade) return;
     try {
       const res = await fetch(`/api/googleads/audit/history?id=${id}`);
       const json = await res.json();
       if (json?.data?.aiInsight) {
         setAiInsight(json.data.aiInsight);
-        setTab(7);
+        setActiveTab("ai");
       }
     } catch (err) {
       console.error("[loadHistoryEntry]", err);
@@ -1331,6 +1768,9 @@ function AuditPageInner() {
   }
 
   const dateLabel = buildDateLabel(dateRange, dateWindow);
+  const selectedAuditType = AUDIT_TYPE_BY_KEY[auditType] || AUDIT_TYPE_BY_KEY.full_account;
+  const visibleTabs = TABS.filter((t) => selectedAuditType.tabs.includes(t.key));
+  const focusedActionPlan = audit ? getFocusedActionPlan(audit.actionPlan, auditType) : [];
 
   return (
     <div className="audit-root" style={{ background: C.bg, color: C.textPri }}>
@@ -1343,7 +1783,7 @@ function AuditPageInner() {
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.5px", color: C.accent, margin: "0 0 3px" }}>
-            {selectedCampaign ? "CAMPAIGN AUDIT" : "ACCOUNT AUDIT"}
+            {selectedCampaign ? "CAMPAIGN AUDIT" : selectedAuditType.label.toUpperCase()}
           </p>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: C.textPri, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {selectedCampaign ? selectedCampaign.campaignName : accountName}
@@ -1388,11 +1828,11 @@ function AuditPageInner() {
         <div className="audit-content">
           {/* Tab bar */}
           <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 24px", display: "flex", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", flexShrink: 0 }}>
-            {TABS.map((t, i) => (
-              <button key={t} onClick={() => setTab(i)} style={{ flexShrink: 0, padding: "13px 16px", fontSize: 14, fontWeight: 600, background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap", color: tab === i ? C.textPri : C.textSec, borderBottom: `2px solid ${tab === i ? C.accent : "transparent"}`, transition: "all 0.15s" }}>
-                {t}
-                {auditLoading && (i === 2 || i === 4 || i === 5) && <span style={{ marginLeft: 5, fontSize: 9, color: C.amber }}>●</span>}
-                {aiLoading && i === 7 && <span style={{ marginLeft: 5, fontSize: 9, color: C.accent }}>●</span>}
+            {visibleTabs.map((t) => (
+              <button key={t.key} onClick={() => setActiveTab(t.key)} style={{ flexShrink: 0, padding: "13px 16px", fontSize: 14, fontWeight: 600, background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap", color: activeTab === t.key ? C.textPri : C.textSec, borderBottom: `2px solid ${activeTab === t.key ? C.accent : "transparent"}`, transition: "all 0.15s" }}>
+                {t.label}
+                {auditLoading && ["keywords", "bidding", "assets"].includes(t.key) && <span style={{ marginLeft: 5, fontSize: 9, color: C.amber }}>*</span>}
+                {aiLoading && t.key === "ai" && <span style={{ marginLeft: 5, fontSize: 9, color: C.accent }}>*</span>}
               </button>
             ))}
           </div>
@@ -1400,14 +1840,20 @@ function AuditPageInner() {
           <div style={{ flex: 1, overflowY: "auto" }}>
             {audit ? (
               <div className="audit-tab-content">
-                {tab === 0 && <OverviewTab audit={audit} auditLoading={auditLoading} />}
-                {tab === 1 && <CampaignsTab campaigns={audit.campaigns} />}
-                {tab === 2 && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} />}
-                {tab === 3 && <SearchTermsTab searchTerms={audit.searchTerms} />}
-                {tab === 4 && <BiddingTab biddingAudits={audit.bidding} auditLoading={auditLoading} />}
-                {tab === 5 && <AssetsTab assetAnalysis={audit.assets} auditLoading={auditLoading} pmaxData={audit.pmaxData} />}
-                {tab === 6 && <ActionPlanTab actions={audit.actionPlan} auditLoading={auditLoading} />}
-                {tab === 7 && <AIInsightTab aiInsight={aiInsight} aiLoading={aiLoading} aiError={aiError} onRunAnalysis={runAiAnalysis} auditReady={!!audit && !auditLoading} />}
+                {activeTab === "overview" && <OverviewTab audit={audit} auditLoading={auditLoading} />}
+                {activeTab === "campaigns" && <CampaignsTab campaigns={audit.campaigns} />}
+                {activeTab === "keywords" && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} />}
+                {activeTab === "search_terms" && <SearchTermsTab searchTerms={audit.searchTerms} />}
+                {activeTab === "tracking" && <TrackingTab conversionActions={audit.conversionActions} campaigns={audit.campaigns} />}
+                {activeTab === "landing_pages" && <LandingPagesTab landingPages={audit.landingPages} />}
+                {activeTab === "changes" && <ChangesTab changes={audit.changeStatus} />}
+                {activeTab === "geo" && <GeoTab geoPerformance={audit.geoPerformance} />}
+                {activeTab === "daypart" && <DaypartTab daypartPerformance={audit.daypartPerformance} />}
+                {activeTab === "conversion_lag" && <ConversionLagTab conversionLag={audit.conversionLag} />}
+                {activeTab === "bidding" && <BiddingTab biddingAudits={audit.bidding} auditLoading={auditLoading} />}
+                {activeTab === "assets" && <AssetsTab assetAnalysis={audit.assets} auditLoading={auditLoading} pmaxData={audit.pmaxData} />}
+                {activeTab === "action_plan" && <ActionPlanTab actions={focusedActionPlan} auditLoading={auditLoading} />}
+                {activeTab === "ai" && <AIInsightTab aiInsight={aiInsight} aiLoading={aiLoading} aiError={aiError} onRunAnalysis={runAiAnalysis} auditReady={!!audit && !auditLoading} />}
               </div>
             ) : auditLoading ? (
               <LoadingSpinner message="Running audit…" />
@@ -1428,6 +1874,7 @@ function AuditPageInner() {
         <RunAuditModal
           accountName={selectedCampaign ? selectedCampaign.campaignName : accountName}
           initialRange={dateRange}
+          initialAuditType={auditType}
           usage={historyUsage}
           onConfirm={handleRunAudit}
           onCancel={() => setShowRunModal(false)}

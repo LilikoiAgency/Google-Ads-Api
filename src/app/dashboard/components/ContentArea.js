@@ -317,6 +317,7 @@ export default function ContentArea({
   allCampaignData,
   handleCampaignSelect,
   dateRangeLabel,
+  campaignAdsStatus = "idle",
 }) {
   const [showAccountRecommendations, setShowAccountRecommendations] = useState(false);
   const [showCampaignRecommendations, setShowCampaignRecommendations] = useState(false);
@@ -942,12 +943,22 @@ export default function ContentArea({
             )}
           </div>
           <ul className="mt-4 space-y-4">
-            {(selectedCampaign.ads || []).length === 0 && (
+            {campaignAdsStatus === "loading" && (
+              <li className="rounded-xl bg-white p-5 text-sm text-gray-600 shadow-md">
+                Loading ad creatives for this campaign...
+              </li>
+            )}
+            {campaignAdsStatus === "error" && (
+              <li className="rounded-xl bg-white p-5 text-sm text-red-600 shadow-md">
+                Could not load ad creatives for this campaign.
+              </li>
+            )}
+            {campaignAdsStatus !== "loading" && campaignAdsStatus !== "error" && (selectedCampaign.ads || []).length === 0 && (
               <li className="rounded-xl bg-white p-5 text-sm text-gray-600 shadow-md">
                 No ad creatives were returned for this campaign.
               </li>
             )}
-            {(selectedCampaign.ads || []).map((ad, index) => (
+            {campaignAdsStatus !== "loading" && (selectedCampaign.ads || []).map((ad, index) => (
               <li
                 key={ad.resource_name || `${selectedCampaign.campaignId}-${index}`}
                 className="mb-8 rounded-xl bg-white p-5 shadow-md"

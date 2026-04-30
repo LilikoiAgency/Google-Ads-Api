@@ -112,4 +112,75 @@ Return ONLY valid JSON matching this exact structure. No markdown, no code fence
 - client_summary: zero jargon. A business owner should read this and immediately understand if their ads are working and what needs to change.
 - If a data section is null or empty, acknowledge it but do not fabricate data for that section.
 - Score honestly. An account with 60% broad match spend does NOT get a 7 on match types regardless of other signals.
+- Use the richer diagnostic sections when available: conversionActions for tracking trust, landingPages for URL/CVR/speed issues, campaignSearchTerms for PMax/AI Max/query leakage, recentChanges for explaining performance shifts, geoPerformance and daypartPerformance for location/time waste, and conversionLag before judging very recent performance.
 `;
+
+const FOCUSED_AUDIT_INSTRUCTIONS = {
+  search_term_waste: `
+## SELECTED AUDIT TYPE: SEARCH TERM WASTE AUDIT
+The user selected a focused Search Term Waste Audit. Keep the same JSON structure, but make the analysis primarily about query quality, wasted spend, match-type leakage, negative keyword opportunities, and converting search terms that should become exact/phrase keywords.
+- executive_summary: lead with wasted search term spend, waste ratio, and the most important intent problem.
+- pillar_scores: still return all 9 pillars, but make search_terms and match_types the primary diagnostic pillars.
+- top_3_priorities: at least 2 priorities must be search-term or match-type actions.
+- campaign_insights: emphasize campaigns creating wasted query spend; avoid broad "pause" advice unless tracking is verified and query intent is clearly poor.
+- recommendations: focus on negative keywords, exact/phrase buildouts from converting terms, match-type containment, and query-to-landing-page intent gaps.
+`,
+
+  tracking_integrity: `
+## SELECTED AUDIT TYPE: CONVERSION TRACKING AUDIT
+The user selected a focused Conversion Tracking Audit. Keep the same JSON structure, but make the analysis primarily about whether conversion data can be trusted.
+- executive_summary: answer whether zero-conversion spend looks like true performance failure, possible tracking failure, or insufficient evidence.
+- top_3_priorities: prioritize Google tag/conversion action checks, GA4/GTM validation, thank-you page or lead event testing, and device/browser checks when relevant.
+- campaign_insights: do not recommend pausing a campaign solely because conversions are zero. Say "verify tracking before budget changes" when clicks/spend exist without conversions.
+- recommendations: include concrete validation steps an account manager can execute: test conversion action, inspect recent conversion diagnostics, compare platform leads/CRM, check primary vs secondary conversion actions.
+- Use "Tracking" as a recommendation category where possible.
+`,
+
+  landing_page_alignment: `
+## SELECTED AUDIT TYPE: LANDING PAGE ALIGNMENT AUDIT
+The user selected a focused Landing Page / Query Alignment Audit. Keep the same JSON structure, but make the analysis primarily about whether search intent, keywords, ads, and landing pages line up.
+- executive_summary: lead with low Quality Score, ad relevance, expected CTR, landing page experience, and mismatched query themes.
+- top_3_priorities: prioritize ad group theme tightening, landing page relevance fixes, keyword-to-copy alignment, and search terms that reveal intent mismatch.
+- campaign_insights: explain whether the campaign has a traffic problem, message problem, or landing page relevance problem.
+- recommendations: include specific keyword/query examples and the landing page or message changes implied by them.
+`,
+
+  budget_impression_share: `
+## SELECTED AUDIT TYPE: BUDGET & IMPRESSION SHARE AUDIT
+The user selected a focused Budget & Impression Share Audit. Keep the same JSON structure, but make the analysis primarily about where budget is constrained, where rank is constrained, and where more budget would be wasteful.
+- executive_summary: separate "increase budget" opportunities from "fix rank/quality before budget" situations.
+- top_3_priorities: prioritize budget-limited profitable campaigns, rank-limited campaigns, and inefficient spend that should not receive more budget.
+- campaign_insights: explicitly label whether each major campaign is budget-limited, rank-limited, inefficient, or data-limited.
+- recommendations: avoid generic budget increases. Only recommend budget increases when conversion data and impression share loss support it.
+`,
+
+  bidding_strategy: `
+## SELECTED AUDIT TYPE: BIDDING STRATEGY AUDIT
+The user selected a focused Bidding Strategy Audit. Keep the same JSON structure, but make the analysis primarily about bid strategy fit, conversion-volume readiness, target CPA/ROAS pressure, and budget constraints.
+- executive_summary: lead with whether current bidding is appropriate for the amount and quality of conversion data.
+- top_3_priorities: prioritize bid strategy changes, target adjustments, learning/data volume constraints, and campaigns where manual/smart bidding is mismatched.
+- campaign_insights: explain whether each campaign has enough conversion volume for its strategy.
+- recommendations: do not recommend Smart Bidding when conversion volume is too low unless the action includes a data-gathering phase.
+`,
+
+  asset_creative: `
+## SELECTED AUDIT TYPE: ASSET & CREATIVE COVERAGE AUDIT
+The user selected a focused Asset & Creative Coverage Audit. Keep the same JSON structure, but make the analysis primarily about RSA strength, headline/description coverage, pinned assets, extensions, and PMax asset group quality.
+- executive_summary: lead with the biggest RSA, extension, or PMax asset coverage gap.
+- top_3_priorities: prioritize underbuilt RSAs, pinned assets, missing extensions, and PMax asset groups with weak coverage.
+- campaign_insights: explain how asset coverage may affect CTR, ad rank, and conversion volume.
+- recommendations: include specific asset additions: headline themes, sitelinks, callouts, structured snippets, images, logos, or PMax assets.
+`,
+};
+
+export function getGoogleAdsAuditSystemPrompt(auditType = 'full_account') {
+  const focused = FOCUSED_AUDIT_INSTRUCTIONS[auditType];
+  if (!focused) return GOOGLE_ADS_AUDIT_SYSTEM_PROMPT;
+
+  return `${GOOGLE_ADS_AUDIT_SYSTEM_PROMPT}
+
+${focused}
+
+## FOCUSED AUDIT OUTPUT RULE
+This is not a different JSON schema. Return the exact same JSON shape as the full audit so the dashboard can render it. The difference is prioritization: the selected audit type must determine what gets emphasized in executive_summary, top_3_priorities, campaign_insights, and recommendations.`;
+}

@@ -20,7 +20,7 @@ export async function POST(request) {
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'Invalid request body', requestId }, { status: 400 }); }
 
-  const { customerId, accountName, dateRange, dateWindow, dateLabel, summary, aiInsight, auditId } = body;
+  const { customerId, accountName, auditType, dateRange, dateWindow, dateLabel, summary, aiInsight, auditId } = body;
   if (!customerId) {
     return NextResponse.json({ error: 'customerId is required', requestId }, { status: 400 });
   }
@@ -32,6 +32,7 @@ export async function POST(request) {
     email,
     customerId: String(customerId),
     accountName: accountName || 'Account',
+    auditType: auditType || 'full_account',
     dateRange: dateRange || 'LAST_30_DAYS',
     dateWindow: dateWindow || null,
     dateLabel: dateLabel || dateRange || 'LAST_30_DAYS',

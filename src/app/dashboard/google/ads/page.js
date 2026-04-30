@@ -25,7 +25,7 @@ const CAMPAIGN_STATUS_OPTIONS = [
   { value: "ALL", label: "All" },
 ];
 
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const LAST_UPDATED_KEY = "lastUpdated";
 const SELECTED_CUSTOMER_KEY = "selectedCustomerId";
 const SELECTED_CAMPAIGN_KEY = "selectedCampaignSelection";
@@ -33,6 +33,53 @@ const SELECTED_DATE_RANGE_KEY = "selectedDateRange";
 const SELECTED_STATUS_FILTER_KEY = "selectedCampaignStatusFilter";
 const CUSTOM_DATE_RANGE_KEY = "customDateRange";
 const CACHE_TTL_MS = 60 * 60 * 1000;
+
+function safeSetStorageItem(storage, key, value) {
+  try {
+    storage.setItem(key, value);
+    return true;
+  } catch (err) {
+    console.warn(`[google-ads-dashboard] Unable to save ${key}:`, err);
+    return false;
+  }
+}
+
+function safeGetStorageItem(storage, key) {
+  try {
+    return storage.getItem(key);
+  } catch (err) {
+    console.warn(`[google-ads-dashboard] Unable to read ${key}:`, err);
+    return null;
+  }
+}
+
+function safeRemoveStorageItem(storage, key) {
+  try {
+    storage.removeItem(key);
+  } catch (err) {
+    console.warn(`[google-ads-dashboard] Unable to remove ${key}:`, err);
+  }
+}
+
+function safeSetLocalStorageItem(key, value) {
+  return safeSetStorageItem(localStorage, key, value);
+}
+
+function safeGetLocalStorageItem(key) {
+  return safeGetStorageItem(localStorage, key);
+}
+
+function safeRemoveLocalStorageItem(key) {
+  safeRemoveStorageItem(localStorage, key);
+}
+
+function safeSetSessionStorageItem(key, value) {
+  return safeSetStorageItem(sessionStorage, key, value);
+}
+
+function safeGetSessionStorageItem(key) {
+  return safeGetStorageItem(sessionStorage, key);
+}
 
 function formatDateInputValue(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -64,16 +111,20 @@ function getDateSelectionKey(dateRange, customDateRange) {
   return dateRange;
 }
 
-function getCampaignCacheKey(dateRange, statusFilter, customDateRange) {
-  return `campaignData:${CACHE_VERSION}:${getDateSelectionKey(dateRange, customDateRange)}:${statusFilter}`;
+function getCustomerSelectionKey(customerId) {
+  return customerId ? String(customerId).replaceAll("-", "") : "all";
 }
 
-function getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange) {
-  return `campaignDataFetchedAt:${CACHE_VERSION}:${getDateSelectionKey(dateRange, customDateRange)}:${statusFilter}`;
+function getCampaignCacheKey(dateRange, statusFilter, customDateRange, customerId) {
+  return `campaignData:${CACHE_VERSION}:${getCustomerSelectionKey(customerId)}:${getDateSelectionKey(dateRange, customDateRange)}:${statusFilter}`;
 }
 
-function getLastUpdatedKey(dateRange, statusFilter, customDateRange) {
-  return `${LAST_UPDATED_KEY}:${getDateSelectionKey(dateRange, customDateRange)}:${statusFilter}`;
+function getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange, customerId) {
+  return `campaignDataFetchedAt:${CACHE_VERSION}:${getCustomerSelectionKey(customerId)}:${getDateSelectionKey(dateRange, customDateRange)}:${statusFilter}`;
+}
+
+function getLastUpdatedKey(dateRange, statusFilter, customDateRange, customerId) {
+  return `${LAST_UPDATED_KEY}:${CACHE_VERSION}:${getCustomerSelectionKey(customerId)}:${getDateSelectionKey(dateRange, customDateRange)}:${statusFilter}`;
 }
 
 function formatDateWindow(dateWindow) {
@@ -85,23 +136,49 @@ function formatDateWindow(dateWindow) {
   return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 }
 
-function getStoredCampaignData(dateRange, statusFilter, customDateRange) {
-  const storedData = localStorage.getItem(getCampaignCacheKey(dateRange, statusFilter, customDateRange));
-  const storedFetchedAt = localStorage.getItem(getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange));
+function getStoredCampaignData(dateRange, statusFilter, customDateRange, customerId) {
+  const storedData = safeGetLocalStorageItem(getCampaignCacheKey(dateRange, statusFilter, customDateRange, customerId));
+  const storedFetchedAt = safeGetLocalStorageItem(getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange, customerId));
   if (!storedData || !storedFetchedAt) return null;
   if (Date.now() - Number(storedFetchedAt) > CACHE_TTL_MS) {
-    localStorage.removeItem(getCampaignCacheKey(dateRange, statusFilter, customDateRange));
-    localStorage.removeItem(getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange));
+    safeRemoveLocalStorageItem(getCampaignCacheKey(dateRange, statusFilter, customDateRange, customerId));
+    safeRemoveLocalStorageItem(getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange, customerId));
     return null;
   }
   try {
     const parsedData = JSON.parse(storedData);
     return Array.isArray(parsedData?.validCampaignsData) ? parsedData : null;
   } catch {
-    localStorage.removeItem(getCampaignCacheKey(dateRange, statusFilter, customDateRange));
-    localStorage.removeItem(getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange));
+    safeRemoveLocalStorageItem(getCampaignCacheKey(dateRange, statusFilter, customDateRange, customerId));
+    safeRemoveLocalStorageItem(getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange, customerId));
     return null;
   }
+}
+
+function storeCampaignCache(dateRange, statusFilter, customDateRange, customerId, payload) {
+  const cacheKey = getCampaignCacheKey(dateRange, statusFilter, customDateRange, customerId);
+  const cacheTimeKey = getCampaignCacheTimeKey(dateRange, statusFilter, customDateRange, customerId);
+  let serializedPayload;
+  try {
+    serializedPayload = JSON.stringify(payload);
+  } catch (err) {
+    console.warn("[google-ads-dashboard] Unable to serialize campaign cache:", err);
+    return false;
+  }
+
+  if (!safeSetLocalStorageItem(cacheKey, serializedPayload)) return false;
+  if (!safeSetLocalStorageItem(cacheTimeKey, String(Date.now()))) {
+    safeRemoveLocalStorageItem(cacheKey);
+    return false;
+  }
+  return true;
+}
+
+function storeAuditAccountData(accountData, customerId) {
+  if (!accountData || !customerId) return;
+  const serializedAccountData = JSON.stringify(accountData);
+  safeSetSessionStorageItem("auditAccountData", serializedAccountData);
+  safeSetSessionStorageItem(`auditAccountData:${customerId}`, serializedAccountData);
 }
 
 function resolveSelectedCampaign(campaignData, customerId, campaignSelection) {
@@ -168,10 +245,15 @@ function AccountDropdown({ accounts, selectedId, onChange, pinnedAccountIds, isA
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition min-w-[180px]"
+        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition min-w-[180px]"
+        style={{
+          color: "var(--gads-control-text)",
+          background: "var(--gads-control-bg)",
+          border: "1px solid var(--gads-control-border)",
+        }}
       >
         <span className="flex-1 text-left truncate font-medium">{current?.name || "Select account"}</span>
-        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 flex-shrink-0" style={{ color: "var(--gads-control-muted)" }} fill="none" viewBox="0 0 24 24">
           <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
@@ -255,12 +337,17 @@ function CampaignDropdown({ campaigns, selectedCampaign, onChange, onClear }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition min-w-[200px] max-w-[260px]"
+        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition min-w-[200px] max-w-[260px]"
+        style={{
+          color: "var(--gads-control-text)",
+          background: "var(--gads-control-bg)",
+          border: "1px solid var(--gads-control-border)",
+        }}
       >
         <span className="flex-1 text-left truncate font-medium">
           {selectedCampaign ? selectedCampaign.campaignName : "All Campaigns"}
         </span>
-        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 flex-shrink-0" style={{ color: "var(--gads-control-muted)" }} fill="none" viewBox="0 0 24 24">
           <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
@@ -342,6 +429,12 @@ const DATE_BRIEF_OPTIONS = [
   { value: 'THIS_MONTH',   label: 'This month'   },
 ];
 
+const accountBriefRequests = new Map();
+
+function getAccountBriefCacheKey(customerId, dateLabel) {
+  return `accountBrief:${customerId}:${dateLabel}:${new Date().toISOString().slice(0, 10)}`;
+}
+
 function AccountBriefCard({ selectedCustomer, currentDateRange }) {
   const [briefRange, setBriefRange] = useState(
     DATE_BRIEF_OPTIONS.some((o) => o.value === currentDateRange) ? currentDateRange : 'LAST_30_DAYS'
@@ -368,20 +461,36 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     const activeRange = rangeOverride ?? briefRange;
+    const cacheKey = getAccountBriefCacheKey(customerId, activeRange);
     setState((s) => ({ ...s, status: 'loading', error: null }));
     try {
-      const res = await fetch('/api/claude/account-brief', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: activeRange }),
-      });
-      const json = await res.json();
+      const cached = safeGetSessionStorageItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (!mountedRef.current) return;
+        setState({ status: 'done', briefing: parsed.briefing, generatedAt: parsed.generatedAt, error: null });
+        setCollapsed(false);
+        return;
+      }
+
+      let requestPromise = accountBriefRequests.get(cacheKey);
+      if (!requestPromise) {
+        requestPromise = fetch('/api/claude/account-brief', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerId, customerName, campaigns, dateLabel: activeRange }),
+        }).then(async (res) => ({ res, json: await res.json() }));
+        accountBriefRequests.set(cacheKey, requestPromise);
+      }
+
+      const { res, json } = await requestPromise;
       if (!mountedRef.current) return;
       if (json.skipped) {
         setState({ status: 'no_spend', briefing: null, generatedAt: null, error: null });
       } else if (!res.ok || json.error) {
         setState({ status: 'error', briefing: null, generatedAt: null, error: json.error || `Error ${res.status}`, code: json.code || null });
       } else {
+        safeSetSessionStorageItem(cacheKey, JSON.stringify({ briefing: json.briefing, generatedAt: json.generatedAt }));
         setState({ status: 'done', briefing: json.briefing, generatedAt: json.generatedAt, error: null });
         setCollapsed(false);
       }
@@ -390,6 +499,7 @@ function AccountBriefCard({ selectedCustomer, currentDateRange }) {
       setState({ status: 'error', briefing: null, generatedAt: null, error: err.message });
     } finally {
       fetchingRef.current = false;
+      accountBriefRequests.delete(cacheKey);
     }
   }
 
@@ -555,6 +665,7 @@ export default function GoogleAdsDashboard() {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [campaignAdsStatus, setCampaignAdsStatus] = useState("idle");
 
   // ── Account picker state (null = checking, true = show picker, false = skip) ─
   const [showPicker, setShowPicker]           = useState(null);
@@ -569,20 +680,21 @@ export default function GoogleAdsDashboard() {
     date = new Date(),
     currentDateRange = dateRange,
     currentStatusFilter = campaignStatusFilter,
-    currentCustomDateRange = customDateRange
+    currentCustomDateRange = customDateRange,
+    currentCustomerId = selectedCustomerId
   ) => {
     const formattedDate = date.toLocaleString();
     setLastUpdated(formattedDate);
-    localStorage.setItem(getLastUpdatedKey(currentDateRange, currentStatusFilter, currentCustomDateRange), formattedDate);
+    safeSetLocalStorageItem(getLastUpdatedKey(currentDateRange, currentStatusFilter, currentCustomDateRange, currentCustomerId), formattedDate);
   };
 
   const applyCampaignData = (campaignData) => {
-    const storedCustomerId = localStorage.getItem(SELECTED_CUSTOMER_KEY);
-    const storedCampaignSelection = localStorage.getItem(SELECTED_CAMPAIGN_KEY);
+    const storedCustomerId = safeGetLocalStorageItem(SELECTED_CUSTOMER_KEY);
+    const storedCampaignSelection = safeGetLocalStorageItem(SELECTED_CAMPAIGN_KEY);
     let parsedCampaignSelection = null;
     if (storedCampaignSelection) {
       try { parsedCampaignSelection = JSON.parse(storedCampaignSelection); }
-      catch { localStorage.removeItem(SELECTED_CAMPAIGN_KEY); }
+      catch { safeRemoveLocalStorageItem(SELECTED_CAMPAIGN_KEY); }
     }
     const nextSelectedCustomerId =
       storedCustomerId && campaignData.some((item) => String(item.customer.customer_client.id) === String(storedCustomerId))
@@ -599,22 +711,28 @@ export default function GoogleAdsDashboard() {
     requestedDateRange = dateRange,
     requestedStatusFilter = campaignStatusFilter,
     requestedCustomDateRange = customDateRange,
+    requestedCustomerId = selectedCustomerId || safeGetSessionStorageItem("gads_customer_id") || safeGetLocalStorageItem(SELECTED_CUSTOMER_KEY),
   } = {}) => {
     if (status !== "authenticated") return;
+    if (!requestedCustomerId) return;
     setIsFetching(true);
     setError(null);
     if (!forceRefresh) {
-      const cachedData = getStoredCampaignData(requestedDateRange, requestedStatusFilter, requestedCustomDateRange);
+      const cachedData = getStoredCampaignData(requestedDateRange, requestedStatusFilter, requestedCustomDateRange, requestedCustomerId);
       if (cachedData) {
         applyCampaignData(cachedData.validCampaignsData);
         setDateWindowLabel(formatDateWindow(cachedData.dateWindow));
-        setLastUpdated(localStorage.getItem(getLastUpdatedKey(requestedDateRange, requestedStatusFilter, requestedCustomDateRange)));
+        setLastUpdated(safeGetLocalStorageItem(getLastUpdatedKey(requestedDateRange, requestedStatusFilter, requestedCustomDateRange, requestedCustomerId)));
         setIsFetching(false);
         return;
       }
     }
     try {
-      const queryParams = new URLSearchParams({ dateRange: requestedDateRange, statusFilter: requestedStatusFilter });
+      const queryParams = new URLSearchParams({
+        dateRange: requestedDateRange,
+        statusFilter: requestedStatusFilter,
+        customerId: String(requestedCustomerId),
+      });
       if (requestedDateRange === "CUSTOM") {
         queryParams.set("startDate", requestedCustomDateRange.startDate);
         queryParams.set("endDate", requestedCustomDateRange.endDate);
@@ -629,9 +747,8 @@ export default function GoogleAdsDashboard() {
       const data = responseData ?? {};
       const validCampaignsData = data.validCampaignsData || [];
       const cachedPayload = { validCampaignsData, dateWindow: data.dateWindow || null };
-      localStorage.setItem(getCampaignCacheKey(requestedDateRange, requestedStatusFilter, requestedCustomDateRange), JSON.stringify(cachedPayload));
-      localStorage.setItem(getCampaignCacheTimeKey(requestedDateRange, requestedStatusFilter, requestedCustomDateRange), String(Date.now()));
-      updateLastUpdated(new Date(), requestedDateRange, requestedStatusFilter, requestedCustomDateRange);
+      storeCampaignCache(requestedDateRange, requestedStatusFilter, requestedCustomDateRange, requestedCustomerId, cachedPayload);
+      updateLastUpdated(new Date(), requestedDateRange, requestedStatusFilter, requestedCustomDateRange, requestedCustomerId);
       applyCampaignData(validCampaignsData);
       setDateWindowLabel(formatDateWindow(data.dateWindow));
     } catch (err) {
@@ -651,27 +768,33 @@ export default function GoogleAdsDashboard() {
       .then((d) => setPinnedAccountIds(d?.data?.pinnedAccountIds ?? []))
       .catch(() => {});
 
-    const savedId = sessionStorage.getItem("gads_customer_id");
+    const loadCustomerList = () => {
+      const cached = safeGetSessionStorageItem("gads_customers_list");
+      if (cached) {
+        try {
+          setPickerCustomers(JSON.parse(cached));
+          return Promise.resolve();
+        } catch {}
+      }
+
+      return fetch("/api/customers")
+        .then((r) => r.json())
+        .then((d) => {
+          const list = d.customers || [];
+          setPickerCustomers(list);
+          safeSetSessionStorageItem("gads_customers_list", JSON.stringify(list));
+        })
+        .catch(() => setPickerCustomers([]));
+    };
+
+    const savedId = safeGetSessionStorageItem("gads_customer_id");
     if (savedId) {
       setShowPicker(false);
+      loadCustomerList();
     } else {
       setShowPicker(true);
       setPickerLoading(true);
-      const cached = sessionStorage.getItem("gads_customers_list");
-      if (cached) {
-        try { setPickerCustomers(JSON.parse(cached)); } catch {}
-        setPickerLoading(false);
-      } else {
-        fetch("/api/customers")
-          .then((r) => r.json())
-          .then((d) => {
-            const list = d.customers || [];
-            setPickerCustomers(list);
-            sessionStorage.setItem("gads_customers_list", JSON.stringify(list));
-          })
-          .catch(() => setPickerCustomers([]))
-          .finally(() => setPickerLoading(false));
-      }
+      loadCustomerList().finally(() => setPickerLoading(false));
     }
   }, [status]);
 
@@ -682,47 +805,63 @@ export default function GoogleAdsDashboard() {
       return;
     }
     if (status !== "authenticated" || showPicker !== false) return;
-    const storedDateRange = localStorage.getItem(SELECTED_DATE_RANGE_KEY);
+    const storedDateRange = safeGetLocalStorageItem(SELECTED_DATE_RANGE_KEY);
     const nextDateRange = DATE_RANGE_OPTIONS.some((o) => o.value === storedDateRange) ? storedDateRange : "LAST_7_DAYS";
-    const storedStatusFilter = localStorage.getItem(SELECTED_STATUS_FILTER_KEY);
+    const storedStatusFilter = safeGetLocalStorageItem(SELECTED_STATUS_FILTER_KEY);
     const nextStatusFilter = CAMPAIGN_STATUS_OPTIONS.some((o) => o.value === storedStatusFilter) ? storedStatusFilter : "ACTIVE";
     let nextCustomDateRange = getDefaultCustomDateRange();
-    const storedCustomDateRange = localStorage.getItem(CUSTOM_DATE_RANGE_KEY);
+    const storedCustomDateRange = safeGetLocalStorageItem(CUSTOM_DATE_RANGE_KEY);
     if (storedCustomDateRange) {
       try {
         const parsed = JSON.parse(storedCustomDateRange);
         if (parsed?.startDate && parsed?.endDate) nextCustomDateRange = parsed;
-      } catch { localStorage.removeItem(CUSTOM_DATE_RANGE_KEY); }
+      } catch { safeRemoveLocalStorageItem(CUSTOM_DATE_RANGE_KEY); }
     }
-    const storedLastUpdated = localStorage.getItem(getLastUpdatedKey(nextDateRange, nextStatusFilter, nextCustomDateRange));
+    const requestedCustomerId = safeGetSessionStorageItem("gads_customer_id") || safeGetLocalStorageItem(SELECTED_CUSTOMER_KEY);
+    const storedLastUpdated = safeGetLocalStorageItem(getLastUpdatedKey(nextDateRange, nextStatusFilter, nextCustomDateRange, requestedCustomerId));
     setDateRange(nextDateRange);
     setCampaignStatusFilter(nextStatusFilter);
     setCustomDateRange(nextCustomDateRange);
     if (storedLastUpdated) setLastUpdated(storedLastUpdated);
-    fetchData({ requestedDateRange: nextDateRange, requestedStatusFilter: nextStatusFilter, requestedCustomDateRange: nextCustomDateRange });
+    fetchData({
+      requestedDateRange: nextDateRange,
+      requestedStatusFilter: nextStatusFilter,
+      requestedCustomDateRange: nextCustomDateRange,
+      requestedCustomerId,
+    });
   }, [router, status, showPicker]);
 
   useEffect(() => {
-    if (selectedCustomerId) localStorage.setItem(SELECTED_CUSTOMER_KEY, selectedCustomerId);
-    else localStorage.removeItem(SELECTED_CUSTOMER_KEY);
+    if (selectedCustomerId) safeSetLocalStorageItem(SELECTED_CUSTOMER_KEY, selectedCustomerId);
+    else safeRemoveLocalStorageItem(SELECTED_CUSTOMER_KEY);
   }, [selectedCustomerId]);
 
   useEffect(() => {
     if (selectedCampaign && selectedCustomerId) {
-      localStorage.setItem(SELECTED_CAMPAIGN_KEY, JSON.stringify({ customerId: selectedCustomerId, campaignId: selectedCampaign.campaignId }));
+      safeSetLocalStorageItem(SELECTED_CAMPAIGN_KEY, JSON.stringify({ customerId: selectedCustomerId, campaignId: selectedCampaign.campaignId }));
     } else {
-      localStorage.removeItem(SELECTED_CAMPAIGN_KEY);
+      safeRemoveLocalStorageItem(SELECTED_CAMPAIGN_KEY);
     }
   }, [selectedCampaign, selectedCustomerId]);
 
-  useEffect(() => { localStorage.setItem(SELECTED_DATE_RANGE_KEY, dateRange); }, [dateRange]);
-  useEffect(() => { localStorage.setItem(SELECTED_STATUS_FILTER_KEY, campaignStatusFilter); }, [campaignStatusFilter]);
-  useEffect(() => { localStorage.setItem(CUSTOM_DATE_RANGE_KEY, JSON.stringify(customDateRange)); }, [customDateRange]);
+  useEffect(() => { safeSetLocalStorageItem(SELECTED_DATE_RANGE_KEY, dateRange); }, [dateRange]);
+  useEffect(() => { safeSetLocalStorageItem(SELECTED_STATUS_FILTER_KEY, campaignStatusFilter); }, [campaignStatusFilter]);
+  useEffect(() => { safeSetLocalStorageItem(CUSTOM_DATE_RANGE_KEY, JSON.stringify(customDateRange)); }, [customDateRange]);
 
   const handleCustomerSelect = (customerId) => {
-    sessionStorage.setItem("gads_customer_id", customerId);
+    safeSetSessionStorageItem("gads_customer_id", customerId);
+    safeSetLocalStorageItem(SELECTED_CUSTOMER_KEY, customerId);
     setSelectedCustomerId(customerId);
     setSelectedCampaign(null);
+    setShowPicker(false);
+    if (showPicker === false) {
+      fetchData({
+        requestedDateRange: dateRange,
+        requestedStatusFilter: campaignStatusFilter,
+        requestedCustomDateRange: customDateRange,
+        requestedCustomerId: customerId,
+      });
+    }
   };
 
   const handleCampaignSelect = (campaignId) => {
@@ -731,13 +870,82 @@ export default function GoogleAdsDashboard() {
     setSelectedCampaign(campaign);
   };
 
+  useEffect(() => {
+    if (!selectedCustomerId || !selectedCampaign?.campaignId) {
+      setCampaignAdsStatus("idle");
+      return;
+    }
+
+    if (Array.isArray(selectedCampaign.ads)) {
+      setCampaignAdsStatus("done");
+      return;
+    }
+
+    const controller = new AbortController();
+    setCampaignAdsStatus("loading");
+
+    const params = new URLSearchParams({
+      customerId: String(selectedCustomerId),
+      campaignId: String(selectedCampaign.campaignId),
+    });
+
+    fetch(`/api/googleads/ads?${params.toString()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (response.status === 401) {
+          router.replace("/?callbackUrl=/dashboard/google/ads");
+          return null;
+        }
+        if (!response.ok) throw new Error("Failed to fetch campaign ads");
+        return response.json();
+      })
+      .then((json) => {
+        if (!json) return;
+        const ads = json.data?.ads || [];
+        setAllCampaignData((currentData) =>
+          currentData.map((account) => {
+            if (String(account.customer.customer_client.id) !== String(selectedCustomerId)) return account;
+            return {
+              ...account,
+              campaigns: (account.campaigns || []).map((campaign) =>
+                String(campaign.campaignId) === String(selectedCampaign.campaignId)
+                  ? { ...campaign, ads }
+                  : campaign
+              ),
+            };
+          })
+        );
+        setSelectedCampaign((currentCampaign) =>
+          currentCampaign && String(currentCampaign.campaignId) === String(selectedCampaign.campaignId)
+            ? { ...currentCampaign, ads }
+            : currentCampaign
+        );
+        setCampaignAdsStatus("done");
+      })
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        console.error("[google-ads-dashboard] Failed to fetch campaign ads:", err);
+        setCampaignAdsStatus("error");
+      });
+
+    return () => controller.abort();
+  }, [router, selectedCampaign?.campaignId, selectedCampaign?.ads, selectedCustomerId]);
+
   const selectedCustomer =
     allCampaignData.find((item) => String(item.customer.customer_client.id) === String(selectedCustomerId)) ?? null;
+  const accountOptions = pickerCustomers.length > 0
+    ? pickerCustomers
+    : allCampaignData.map((d) => ({
+        id: String(d.customer.customer_client.id),
+        name: d.customer.customer_client.descriptive_name,
+      }));
 
   const refreshData = () => {
-    localStorage.removeItem(getCampaignCacheKey(dateRange, campaignStatusFilter, customDateRange));
-    localStorage.removeItem(getCampaignCacheTimeKey(dateRange, campaignStatusFilter, customDateRange));
-    fetchData({ forceRefresh: true, requestedDateRange: dateRange, requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange });
+    safeRemoveLocalStorageItem(getCampaignCacheKey(dateRange, campaignStatusFilter, customDateRange, selectedCustomerId));
+    safeRemoveLocalStorageItem(getCampaignCacheTimeKey(dateRange, campaignStatusFilter, customDateRange, selectedCustomerId));
+    fetchData({ forceRefresh: true, requestedDateRange: dateRange, requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange, requestedCustomerId: selectedCustomerId });
   };
 
   const handleTogglePin = async (accountId) => {
@@ -766,10 +974,10 @@ export default function GoogleAdsDashboard() {
     setCustomDateError(null);
     setDateRange(nextDateRange);
     setSelectedCampaign(null);
-    setLastUpdated(localStorage.getItem(getLastUpdatedKey(nextDateRange, campaignStatusFilter, customDateRange)));
+    setLastUpdated(safeGetLocalStorageItem(getLastUpdatedKey(nextDateRange, campaignStatusFilter, customDateRange, selectedCustomerId)));
     setDateWindowLabel(null);
     if (nextDateRange !== "CUSTOM") {
-      fetchData({ requestedDateRange: nextDateRange, requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange });
+      fetchData({ requestedDateRange: nextDateRange, requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange, requestedCustomerId: selectedCustomerId });
     }
   };
 
@@ -777,9 +985,9 @@ export default function GoogleAdsDashboard() {
     setCustomDateError(null);
     setCampaignStatusFilter(nextStatusFilter);
     setSelectedCampaign(null);
-    setLastUpdated(localStorage.getItem(getLastUpdatedKey(dateRange, nextStatusFilter)));
+    setLastUpdated(safeGetLocalStorageItem(getLastUpdatedKey(dateRange, nextStatusFilter, customDateRange, selectedCustomerId)));
     setDateWindowLabel(null);
-    fetchData({ requestedDateRange: dateRange, requestedStatusFilter: nextStatusFilter, requestedCustomDateRange: customDateRange });
+    fetchData({ requestedDateRange: dateRange, requestedStatusFilter: nextStatusFilter, requestedCustomDateRange: customDateRange, requestedCustomerId: selectedCustomerId });
   };
 
   const handleCustomDateChange = (field, value) => {
@@ -799,14 +1007,22 @@ export default function GoogleAdsDashboard() {
     setCustomDateError(null);
     setDateRange("CUSTOM");
     setSelectedCampaign(null);
-    setLastUpdated(localStorage.getItem(getLastUpdatedKey("CUSTOM", campaignStatusFilter, customDateRange)));
+    setLastUpdated(safeGetLocalStorageItem(getLastUpdatedKey("CUSTOM", campaignStatusFilter, customDateRange, selectedCustomerId)));
     setDateWindowLabel(null);
-    fetchData({ requestedDateRange: "CUSTOM", requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange });
+    fetchData({ requestedDateRange: "CUSTOM", requestedStatusFilter: campaignStatusFilter, requestedCustomDateRange: customDateRange, requestedCustomerId: selectedCustomerId });
   };
 
   if (showPicker === null || status === "loading" || (showPicker === false && isFetching && allCampaignData.length === 0 && !error)) {
     return (
-      <DashboardLoader label="Pulling data from Google..." />
+      <DashboardLoader
+        label="Pulling data from Google Ads..."
+        steps={[
+          "Connecting to Google Ads",
+          "Loading selected account",
+          "Preparing campaign insights",
+          "Starting AI brief",
+        ]}
+      />
     );
   }
 
@@ -858,10 +1074,8 @@ export default function GoogleAdsDashboard() {
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <button
                     onClick={() => {
-                      sessionStorage.setItem("gads_customer_id", c.id);
-                      localStorage.setItem(SELECTED_CUSTOMER_KEY, c.id);
                       setPickerShowAll(false);
-                      setShowPicker(false);
+                      handleCustomerSelect(c.id);
                     }}
                     style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 14, borderRadius: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", padding: "14px 18px", cursor: "pointer", textAlign: "left" }}
                   >
@@ -944,8 +1158,7 @@ export default function GoogleAdsDashboard() {
               onClick={() => {
                 const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
                 if (ad) {
-                  sessionStorage.setItem("auditAccountData", JSON.stringify(ad));
-                  sessionStorage.setItem(`auditAccountData:${selectedCustomerId}`, JSON.stringify(ad));
+                  storeAuditAccountData(ad, selectedCustomerId);
                 }
                 const params = new URLSearchParams({ customerId: selectedCustomerId });
                 if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
@@ -963,17 +1176,30 @@ export default function GoogleAdsDashboard() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               {selectedCampaign ? "Audit Campaign" : "Audit Account"}
             </button>
+            <button
+              onClick={() => {
+                const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
+                if (ad) {
+                  storeAuditAccountData(ad, selectedCustomerId);
+                }
+                const params = new URLSearchParams({ customerId: selectedCustomerId });
+                if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
+                params.set("dateRange", dateRange);
+                if (dateRange === "CUSTOM" && customDateRange?.startDate && customDateRange?.endDate) {
+                  params.set("startDate", customDateRange.startDate);
+                  params.set("endDate", customDateRange.endDate);
+                }
+                router.push(`/dashboard/google/ads/audit-types?${params.toString()}`);
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--gads-control-bg)", border: "1px solid var(--gads-control-border)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "var(--gads-control-text)", cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              Specialized Audits
+            </button>
             <AccountDropdown
-              accounts={allCampaignData.map((d) => ({
-                id: String(d.customer.customer_client.id),
-                name: d.customer.customer_client.descriptive_name,
-              }))}
+              accounts={accountOptions}
               selectedId={String(selectedCustomerId)}
               onChange={(id) => {
-                localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
-                sessionStorage.setItem("gads_customer_id", id);
-                setSelectedCustomerId(id);
-                setSelectedCampaign(null);
+                handleCustomerSelect(id);
               }}
               pinnedAccountIds={pinnedAccountIds}
               isAdminUser={isAdminUser}
@@ -990,10 +1216,10 @@ export default function GoogleAdsDashboard() {
       </DashboardToolHeader>
 
       {/* Mobile filter row */}
-      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0, alignItems: "center" }}>
+      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "var(--gads-toolbar-bg)", borderBottom: "1px solid var(--gads-toolbar-border)", flexShrink: 0, alignItems: "center" }}>
         <button
           onClick={() => setFilterOpen(true)}
-          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
+          style={{ background: "var(--gads-control-bg)", border: "1px solid var(--gads-control-border)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "var(--gads-control-text)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
         >
           Filters <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
         </button>
@@ -1002,8 +1228,7 @@ export default function GoogleAdsDashboard() {
             onClick={() => {
               const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
               if (ad) {
-                sessionStorage.setItem("auditAccountData", JSON.stringify(ad));
-                sessionStorage.setItem(`auditAccountData:${selectedCustomerId}`, JSON.stringify(ad));
+                storeAuditAccountData(ad, selectedCustomerId);
               }
               const params = new URLSearchParams({ customerId: selectedCustomerId });
               if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
@@ -1020,8 +1245,29 @@ export default function GoogleAdsDashboard() {
             {selectedCampaign ? "Audit campaign" : "Audit"}
           </button>
         )}
+        {selectedCustomerId && allCampaignData.length > 0 && (
+          <button
+            onClick={() => {
+              const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
+              if (ad) {
+                storeAuditAccountData(ad, selectedCustomerId);
+              }
+              const params = new URLSearchParams({ customerId: selectedCustomerId });
+              if (selectedCampaign) params.set("campaignId", String(selectedCampaign.campaignId));
+              params.set("dateRange", dateRange);
+              if (dateRange === "CUSTOM" && customDateRange?.startDate && customDateRange?.endDate) {
+                params.set("startDate", customDateRange.startDate);
+                params.set("endDate", customDateRange.endDate);
+              }
+              router.push(`/dashboard/google/ads/audit-types?${params.toString()}`);
+            }}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--gads-control-bg)", border: "1px solid var(--gads-control-border)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 700, color: "var(--gads-control-text)", cursor: "pointer", flexShrink: 0 }}
+          >
+            More audits
+          </button>
+        )}
         {selectedCustomerId && (
-          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "var(--gads-control-muted)", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
             {allCampaignData.find(d => String(d.customer.customer_client.id) === String(selectedCustomerId))?.customer?.customer_client?.descriptive_name || ""}
           </span>
         )}
@@ -1038,16 +1284,10 @@ export default function GoogleAdsDashboard() {
             <div style={{ marginBottom: 18 }}>
               <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" }}>Account</p>
               <AccountDropdown
-                accounts={allCampaignData.map((d) => ({
-                  id: String(d.customer.customer_client.id),
-                  name: d.customer.customer_client.descriptive_name,
-                }))}
+                accounts={accountOptions}
                 selectedId={String(selectedCustomerId)}
                 onChange={(id) => {
-                  localStorage.setItem(SELECTED_CUSTOMER_KEY, id);
-                  sessionStorage.setItem("gads_customer_id", id);
-                  setSelectedCustomerId(id);
-                  setSelectedCampaign(null);
+                  handleCustomerSelect(id);
                 }}
                 pinnedAccountIds={pinnedAccountIds}
                 isAdminUser={isAdminUser}
@@ -1068,38 +1308,42 @@ export default function GoogleAdsDashboard() {
       </MobileFilterSheet>
 
       {/* ── Date range bar ── */}
-      <div className="border-b border-white/10 bg-customPurple-dark px-6 py-3">
+      <div className="px-6 py-3" style={{ background: "var(--gads-toolbar-bg)", borderBottom: "1px solid var(--gads-toolbar-border)" }}>
         <div className="mx-auto max-w-7xl flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-gray-400 mr-1">Date range:</span>
+          <span className="text-xs font-medium mr-1" style={{ color: "var(--gads-control-muted)" }}>Date range:</span>
           {DATE_RANGE_OPTIONS.filter((o) => o.value !== "CUSTOM").map((o) => (
             <button key={o.value} onClick={() => handleDateRangeChange({ target: { value: o.value } })}
-              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                dateRange === o.value ? "bg-blue-600 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
-              }`}>
+              className="rounded-full px-4 py-1.5 text-xs font-semibold transition"
+              style={dateRange === o.value
+                ? { background: "#2563eb", color: "#fff" }
+                : { background: "var(--gads-control-bg)", color: "var(--gads-control-text)", border: "1px solid var(--gads-control-border)" }}>
               {o.label}
             </button>
           ))}
           <button onClick={() => handleDateRangeChange({ target: { value: "CUSTOM" } })}
-            className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-              dateRange === "CUSTOM" ? "bg-blue-600 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}>
+            className="rounded-full px-4 py-1.5 text-xs font-semibold transition"
+            style={dateRange === "CUSTOM"
+              ? { background: "#2563eb", color: "#fff" }
+              : { background: "var(--gads-control-bg)", color: "var(--gads-control-text)", border: "1px solid var(--gads-control-border)" }}>
             Custom
           </button>
           {/* Status filter pills */}
           <div className="ml-4 flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-400">Status:</span>
+            <span className="text-xs font-medium" style={{ color: "var(--gads-control-muted)" }}>Status:</span>
             {CAMPAIGN_STATUS_OPTIONS.map((o) => (
               <button key={o.value} onClick={() => handleCampaignStatusFilterChange(o.value)}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                  campaignStatusFilter === o.value ? "bg-purple-600 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
-                }`}>
+                className="rounded-full px-4 py-1.5 text-xs font-semibold transition"
+                style={campaignStatusFilter === o.value
+                  ? { background: "#9333ea", color: "#fff" }
+                  : { background: "var(--gads-control-bg)", color: "var(--gads-control-text)", border: "1px solid var(--gads-control-border)" }}>
                 {o.label}
               </button>
             ))}
           </div>
           {/* Refresh */}
           <button onClick={refreshData} title="Refresh data"
-            className="ml-auto rounded-full bg-white/10 hover:bg-white/20 transition px-3 py-1.5 text-xs font-medium text-gray-300 flex items-center gap-1.5">
+            className="ml-auto rounded-full transition px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+            style={{ background: "var(--gads-control-bg)", color: "var(--gads-control-text)", border: "1px solid var(--gads-control-border)" }}>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -1115,14 +1359,16 @@ export default function GoogleAdsDashboard() {
               <input type="date" value={customDateRange.startDate}
                 max={customDateRange.endDate || undefined}
                 onChange={(e) => handleCustomDateChange("startDate", e.target.value)}
-                className="ml-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white" />
+                className="ml-2 rounded-lg px-3 py-1.5 text-sm"
+                style={{ color: "var(--gads-control-text)", background: "var(--gads-control-bg)", border: "1px solid var(--gads-control-border)" }} />
             </label>
             <label className="text-xs text-gray-400">
               To
               <input type="date" value={customDateRange.endDate}
                 min={customDateRange.startDate || undefined}
                 onChange={(e) => handleCustomDateChange("endDate", e.target.value)}
-                className="ml-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white" />
+                className="ml-2 rounded-lg px-3 py-1.5 text-sm"
+                style={{ color: "var(--gads-control-text)", background: "var(--gads-control-bg)", border: "1px solid var(--gads-control-border)" }} />
             </label>
             <button onClick={applyCustomDateRange}
               className="rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-1.5 text-xs font-semibold text-white transition">Apply</button>
@@ -1154,6 +1400,7 @@ export default function GoogleAdsDashboard() {
             allCampaignData={allCampaignData}
             handleCampaignSelect={handleCampaignSelect}
             dateRangeLabel={DATE_RANGE_OPTIONS.find((o) => o.value === dateRange)?.label}
+            campaignAdsStatus={campaignAdsStatus}
           />
         </div>
       </div>

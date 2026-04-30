@@ -117,14 +117,14 @@ describe('getCampaignVerdict', () => {
     expect(v.key).toBe('SCALE');
   });
 
-  it('returns PAUSE when high spend and zero conversions', () => {
+  it('returns INVESTIGATE when high spend and zero conversions', () => {
     const v = getCampaignVerdict(makeCampaign({ conversions: 0, cost: 400 * MICROS }));
-    expect(v.key).toBe('PAUSE');
+    expect(v.key).toBe('INVESTIGATE');
   });
 
-  it('does NOT pause if spend is under $300', () => {
+  it('does not investigate if spend is under $300', () => {
     const v = getCampaignVerdict(makeCampaign({ conversions: 0, cost: 100 * MICROS }));
-    expect(v.key).not.toBe('PAUSE');
+    expect(v.key).not.toBe('INVESTIGATE');
   });
 
   it('returns FIX_QS when losing impressions to rank', () => {
@@ -570,9 +570,9 @@ describe('buildActionPlan', () => {
     cpa: 50 * MICROS,
   };
 
-  const pauseCampaign = {
+  const investigateCampaign = {
     ...makeCampaign({ conversions: 0, cost: 500 * MICROS }),
-    verdict: { key: 'PAUSE', label: 'PAUSE', color: '#9ca3af', bg: '', icon: '' },
+    verdict: { key: 'INVESTIGATE', label: 'INVESTIGATE', color: '#9ca3af', bg: '', icon: '' },
     cpa: null,
   };
 
@@ -591,11 +591,11 @@ describe('buildActionPlan', () => {
     expect(action.fix).toMatch(/Increase daily budget/);
   });
 
-  it('generates PAUSE action for zero-conversion campaign', () => {
-    const plan = buildActionPlan([pauseCampaign], { wasteRatio: 0, wasted: [], winners: [], uncoveredWinners: [] });
+  it('generates investigate action for zero-conversion campaign', () => {
+    const plan = buildActionPlan([investigateCampaign], { wasteRatio: 0, wasted: [], winners: [], uncoveredWinners: [] });
     const action = plan.find(a => a.category === 'Campaign');
     expect(action).toBeDefined();
-    expect(action.fix).toMatch(/Pause/);
+    expect(action.fix).toMatch(/Verify conversion tracking/);
   });
 
   it('generates search term waste action when wasteRatio > 8%', () => {
@@ -610,7 +610,7 @@ describe('buildActionPlan', () => {
   });
 
   it('sorts actions by ICE score descending', () => {
-    const plan = buildActionPlan([scaleCampaign, pauseCampaign], searchTermAnalysis);
+    const plan = buildActionPlan([scaleCampaign, investigateCampaign], searchTermAnalysis);
     for (let i = 0; i < plan.length - 1; i++) {
       expect(plan[i].ice).toBeGreaterThanOrEqual(plan[i + 1].ice);
     }

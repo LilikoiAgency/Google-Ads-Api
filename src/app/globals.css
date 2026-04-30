@@ -27,6 +27,22 @@
   --banner-body: #6b7280;
   --section-label: #9ca3af;
   --link-label: #7c3aed;
+  --gads-control-bg: rgba(17,24,39,0.05);
+  --gads-control-bg-hover: rgba(17,24,39,0.09);
+  --gads-control-border: rgba(17,24,39,0.14);
+  --gads-control-text: #111827;
+  --gads-control-muted: #6b7280;
+  --gads-toolbar-bg: #ffffff;
+  --gads-toolbar-border: rgba(17,24,39,0.1);
+  --loader-text: #111827;
+  --loader-muted: #4b5563;
+  --loader-track: rgba(17,24,39,0.12);
+  --loader-panel-bg: rgba(255,255,255,0.85);
+  --loader-panel-border: rgba(17,24,39,0.12);
+  --loader-step-bg: rgba(255,255,255,0.86);
+  --loader-step-border: rgba(17,24,39,0.1);
+  --loader-step-text: #374151;
+  --loader-shimmer: rgba(17,24,39,0.42);
 
   /* Sidebar */
   --sb-bg: #ffffff;
@@ -67,6 +83,22 @@
   --banner-body: rgba(255,255,255,0.45);
   --section-label: rgba(255,255,255,0.3);
   --link-label: rgba(255,255,255,0.3);
+  --gads-control-bg: rgba(255,255,255,0.08);
+  --gads-control-bg-hover: rgba(255,255,255,0.16);
+  --gads-control-border: rgba(255,255,255,0.12);
+  --gads-control-text: rgba(255,255,255,0.86);
+  --gads-control-muted: rgba(255,255,255,0.45);
+  --gads-toolbar-bg: #0e081c;
+  --gads-toolbar-border: rgba(255,255,255,0.1);
+  --loader-text: rgba(255,255,255,0.78);
+  --loader-muted: rgba(255,255,255,0.62);
+  --loader-track: rgba(255,255,255,0.1);
+  --loader-panel-bg: rgba(255,255,255,0.08);
+  --loader-panel-border: rgba(255,255,255,0.12);
+  --loader-step-bg: rgba(255,255,255,0.05);
+  --loader-step-border: rgba(255,255,255,0.09);
+  --loader-step-text: rgba(255,255,255,0.62);
+  --loader-shimmer: rgba(255,255,255,0.75);
 
   /* Sidebar */
   --sb-bg: rgba(8,5,18,0.88);

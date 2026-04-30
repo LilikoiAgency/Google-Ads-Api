@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '../../../../lib/auth';
 import { getCredentials } from '../../../../lib/dbFunctions';
-import { GOOGLE_ADS_AUDIT_SYSTEM_PROMPT } from '../../../../lib/googleAdsAuditPrompt';
+import { getGoogleAdsAuditSystemPrompt } from '../../../../lib/googleAdsAuditPrompt';
 import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
 import { isAdmin } from '../../../../lib/admins';
 import dbConnect from '../../../../lib/mongoose';
@@ -80,7 +80,12 @@ export async function POST(request) {
   }
 
   const client = new Anthropic({ apiKey });
-  const userPrompt = `Analyze this Google Ads account data and return the structured JSON audit:\n\n${JSON.stringify(payload, null, 2)}`;
+  const auditType = payload.auditType || 'full_account';
+  const systemPrompt = getGoogleAdsAuditSystemPrompt(auditType);
+  const focusLine = payload.auditTypeLabel
+    ? `Selected audit type: ${payload.auditTypeLabel}. Focus: ${payload.auditTypeFocus || 'Use the selected audit type to prioritize findings.'}\n\n`
+    : '';
+  const userPrompt = `${focusLine}Analyze this Google Ads account data and return the structured JSON audit:\n\n${JSON.stringify(payload, null, 2)}`;
 
   const RETRY_DELAYS = [5_000, 15_000];
   let response;
@@ -89,7 +94,7 @@ export async function POST(request) {
       response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
-        system: GOOGLE_ADS_AUDIT_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       });
       break;
@@ -125,6 +130,7 @@ export async function POST(request) {
     email,
     customerId: String(customerId),
     model: 'claude-sonnet-4-6',
+    auditType,
     inputTokens,
     outputTokens,
     estimatedCostUsd: estimateClaudeCost('claude-sonnet-4-6', inputTokens, outputTokens),
