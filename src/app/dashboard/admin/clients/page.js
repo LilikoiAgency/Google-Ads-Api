@@ -12,7 +12,7 @@ import { isAdmin } from "../../../../lib/admins";
 
 
 const EMPTY_FORM = {
-  name: "", slug: "", logo: "",
+  name: "", slug: "", logo: "", domain: "", gscSiteUrl: "",
   adAccounts: { google: [], bing: [], meta: [] },
   audienceLabSegments: [],
   targetedStreamingEnabled: false,
@@ -26,6 +26,15 @@ function slugify(name) {
   return (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+function normalizeDomain(value) {
+  return String(value || "")
+    .replace(/^sc-domain:/i, "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/.*$/, "")
+    .toLowerCase();
+}
+
 function fmtDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -37,8 +46,9 @@ const PLATFORM_COLORS = {
   google: "bg-blue-100 text-blue-700",
   bing:   "bg-sky-100 text-sky-700",
   meta:   "bg-indigo-100 text-indigo-700",
+  gsc:    "bg-emerald-100 text-emerald-700",
 };
-const PLATFORM_LABELS = { google: "Google Ads", bing: "Bing Ads", meta: "Meta Ads" };
+const PLATFORM_LABELS = { google: "Google Ads", bing: "Bing Ads", meta: "Meta Ads", gsc: "Search Console" };
 
 function PlatformBadge({ platform, count }) {
   if (!count) return null;
@@ -199,6 +209,7 @@ export default function AdminClientsPage() {
   const [googleAccounts, setGoogleAccounts] = useState([]);
   const [bingAccounts,   setBingAccounts]   = useState([]);
   const [metaAccounts,   setMetaAccounts]   = useState([]);
+  const [gscSites,       setGscSites]        = useState([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
 
   // Audience Lab segments
@@ -228,10 +239,11 @@ export default function AdminClientsPage() {
   const loadAccounts = async () => {
     setAccountsLoading(true);
     try {
-      const [g, b, m] = await Promise.all([
+      const [g, b, m, s] = await Promise.all([
         fetch("/api/customers").then((r) => r.json()).catch(() => ({})),
         fetch("/api/bing-accounts").then((r) => r.json()).catch(() => ({})),
         fetch("/api/meta-accounts").then((r) => r.json()).catch(() => ({})),
+        fetch("/api/gsc-sites").then((r) => r.json()).catch(() => ({})),
       ]);
       setGoogleAccounts(
         (g.customers || g.accounts || []).map((a) => ({
@@ -242,6 +254,7 @@ export default function AdminClientsPage() {
       );
       setBingAccounts(b.accounts || []);
       setMetaAccounts(m.accounts || []);
+      setGscSites(s.connected ? (s.sites || []) : []);
     } catch {}
     setAccountsLoading(false);
   };
@@ -255,7 +268,7 @@ export default function AdminClientsPage() {
 
   const openEdit = (client) => {
     setForm({
-      name: client.name, slug: client.slug, logo: client.logo || "",
+      name: client.name, slug: client.slug, logo: client.logo || "", domain: client.domain || "", gscSiteUrl: client.gscSiteUrl || "",
       adAccounts: {
         google: client.adAccounts?.google || [],
         bing:   client.adAccounts?.bing   || [],
@@ -361,6 +374,7 @@ export default function AdminClientsPage() {
                 const googleCount  = client.adAccounts?.google?.length || 0;
                 const bingCount    = client.adAccounts?.bing?.length   || 0;
                 const metaCount    = client.adAccounts?.meta?.length   || 0;
+                const gscConnected = Boolean(client.gscSiteUrl || client.domain);
                 const segCount     = client.audienceLabSegments?.length || 0;
                 const streamCount  = client.streamingReportCount || 0;
 
@@ -387,6 +401,7 @@ export default function AdminClientsPage() {
                           <PlatformBadge platform="google" count={googleCount} />
                           <PlatformBadge platform="bing"   count={bingCount}   />
                           <PlatformBadge platform="meta"   count={metaCount}   />
+                          <PlatformBadge platform="gsc"    count={gscConnected ? 1 : 0} />
                           {segCount > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 text-xs font-semibold">
                               🎯 {segCount} segment{segCount !== 1 ? "s" : ""}
@@ -469,6 +484,33 @@ export default function AdminClientsPage() {
                     placeholder="cmk-construction"
                     disabled={modal.mode === "edit"} />
                   <p className="text-xs text-gray-400 mt-0.5">/portal/{form.slug || "…"}</p>
+                </label>
+              </div>
+
+              {/* Search Console */}
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Website Domain</span>
+                  <input type="text" value={form.domain}
+                    onChange={(e) => setForm((f) => ({ ...f, domain: normalizeDomain(e.target.value) }))}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-purple-400"
+                    placeholder="example.com" />
+                  <p className="text-xs text-gray-400 mt-0.5">Used to match Search Console and SEO audit data.</p>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Search Console Property</span>
+                  <select value={form.gscSiteUrl}
+                    onChange={(e) => {
+                      const siteUrl = e.target.value;
+                      setForm((f) => ({ ...f, gscSiteUrl: siteUrl, domain: f.domain || normalizeDomain(siteUrl) }));
+                    }}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-purple-400 bg-white">
+                    <option value="">No property selected</option>
+                    {gscSites.map((site) => (
+                      <option key={site.url} value={site.url}>{site.url}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-0.5">{gscSites.length ? "Pulled from connected Google Search Console." : "Connect GSC from Google Organic first."}</p>
                 </label>
               </div>
 

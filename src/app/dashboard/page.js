@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import DashboardToolHeader from "./components/DashboardToolHeader";
 import DashboardLoader from "./components/DashboardLoader";
+import CommandCenter from "./components/CommandCenter";
 import PacingWidget from "./components/PacingWidget";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
@@ -117,6 +118,8 @@ export default function DashboardHome() {
             Everything you need to manage paid media, organic search, and audience data — all in one place. Use the sidebar or pick a tool below to get started.
           </p>
         </div>
+
+        <CommandCenter />
 
         {/* What's New banner */}
         <div className="home-whats-new" style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 20 }}>

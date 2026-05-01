@@ -58,6 +58,8 @@ export async function createClient(data) {
     slug,
     name:        data.name,
     logo:        data.logo        || null,
+    domain:      data.domain      || null,
+    gscSiteUrl:  data.gscSiteUrl  || null,
     active:      data.active      !== false,
     accessToken: generateToken(),
     adAccounts: {
