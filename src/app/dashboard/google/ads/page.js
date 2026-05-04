@@ -6,10 +6,12 @@ import "../../../globals.css";
 import ContentArea from "../../components/ContentArea";
 import { isAdmin } from "../../../../lib/admins";
 import { sortWithPinned } from "../../../../lib/googleAdsHelpers";
+import { getCampaignVerdict } from "../../../../lib/googleAdsAudit";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
 import { GoogleAdsIcon } from "../../components/DashboardIcons";
 import MobileFilterSheet from "../../components/MobileFilterSheet";
+import AdCopyPanel from "./components/AdCopyPanel";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -675,6 +677,7 @@ export default function GoogleAdsDashboard() {
   const [pickerShowAll, setPickerShowAll]       = useState(false);
   const isAdminUser = isAdmin(session?.user?.email || '');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [adCopyPanelOpen, setAdCopyPanelOpen] = useState(false);
 
   const updateLastUpdated = (
     date = new Date(),
@@ -1392,7 +1395,36 @@ export default function GoogleAdsDashboard() {
             </p>
           )}
           {selectedCustomerId && allCampaignData.length > 0 && selectedCustomer && (
-            <AccountBriefCard selectedCustomer={selectedCustomer} currentDateRange={dateRange} />
+            <>
+              <AccountBriefCard selectedCustomer={selectedCustomer} currentDateRange={dateRange} />
+              {(selectedCustomer.campaigns || []).some((c) => {
+                const v = getCampaignVerdict(c);
+                return v.key === 'FIX_QS' || v.key === 'OPTIMIZE' || v.key === 'INVESTIGATE';
+              }) && (
+                <div style={{ marginBottom: 22, display: 'flex' }}>
+                  <button
+                    onClick={() => setAdCopyPanelOpen(true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                      border: 'none', borderRadius: 12, padding: '10px 18px',
+                      fontSize: 13, fontWeight: 800, color: '#fff',
+                      cursor: 'pointer', boxShadow: '0 4px 14px rgba(79,70,229,0.3)',
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    Generate Ad Copy Strategy
+                  </button>
+                </div>
+              )}
+              <AdCopyPanel
+                open={adCopyPanelOpen}
+                onClose={() => setAdCopyPanelOpen(false)}
+                selectedCustomer={selectedCustomer}
+              />
+            </>
           )}
           <ContentArea
             customerId={selectedCustomerId}
