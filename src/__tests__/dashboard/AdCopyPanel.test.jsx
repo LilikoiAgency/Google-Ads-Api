@@ -1,0 +1,89 @@
+// @vitest-environment jsdom
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import AdCopyPanel from '@/app/dashboard/google/ads/components/AdCopyPanel.jsx';
+
+// Stub createPortal so it renders inline
+vi.mock('react-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, createPortal: (children) => children };
+});
+
+global.fetch = vi.fn();
+
+const makeCampaign = (overrides = {}) => ({
+  campaignId: '1',
+  campaignName: 'Brand Search',
+  cost: 500_000_000,
+  clicks: 1000,
+  impressions: 20000,
+  conversions: 10,
+  searchBudgetLostImpressionShare: 0.05,
+  searchRankLostImpressionShare: 0.35,
+  ads: [{ headlines: ['Buy Now', 'Shop Today'], descriptions: ['Great deals'] }],
+  searchTerms: [{ term: 'brand search', conversions: 5, cost: 100_000_000, clicks: 50 }],
+  ...overrides,
+});
+
+const makeSelectedCustomer = (campaigns = [makeCampaign()]) => ({
+  customer: { customer_client: { id: '123', descriptive_name: 'Test Co' } },
+  campaigns,
+  searchTerms: [{ term: 'brand search', conversions: 5, cost: 100_000_000, clicks: 50 }],
+});
+
+beforeEach(() => {
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({ data: { keywords: [], campaignConfig: [], campaignAssets: [], adStrength: [] } }),
+  });
+});
+
+describe('AdCopyPanel', () => {
+  it('renders nothing when closed', () => {
+    const { container } = render(
+      <AdCopyPanel open={false} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('renders the form when open', async () => {
+    render(
+      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
+    );
+    await waitFor(() => expect(screen.getByLabelText(/business/i)).toBeTruthy());
+    expect(screen.getByLabelText(/target audience/i)).toBeTruthy();
+    expect(screen.getByLabelText(/unique selling points/i)).toBeTruthy();
+    expect(screen.getByLabelText(/tone/i)).toBeTruthy();
+    expect(screen.getByLabelText(/offer/i)).toBeTruthy();
+  });
+
+  it('pre-checks underperforming campaigns (FIX_QS verdict)', async () => {
+    render(
+      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
+    );
+    await waitFor(() => screen.getByLabelText(/business/i));
+    const checkbox = screen.getByRole('checkbox', { name: /Brand Search/i });
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it('disables Generate button when no campaigns are checked', async () => {
+    render(
+      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
+    );
+    await waitFor(() => screen.getByLabelText(/business/i));
+    const checkbox = screen.getByRole('checkbox', { name: /Brand Search/i });
+    fireEvent.click(checkbox); // uncheck the only campaign
+    const btn = screen.getByRole('button', { name: /generate/i });
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('calls onClose when close button is clicked', async () => {
+    const onClose = vi.fn();
+    render(
+      <AdCopyPanel open={true} onClose={onClose} selectedCustomer={makeSelectedCustomer()} />
+    );
+    await waitFor(() => screen.getByLabelText(/business/i));
+    fireEvent.click(screen.getByRole('button', { name: /✕/i }));
+    expect(onClose).toHaveBeenCalled();
+  });
+});
