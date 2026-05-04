@@ -8,7 +8,8 @@ export const AI_TOOLS = [
 ];
 
 export function getToolsForRoute(pathname) {
+  if (!pathname) return AI_TOOLS.filter((t) => t.routes.includes('*'));
   return AI_TOOLS.filter(
-    (t) => t.routes.includes('*') || t.routes.some((r) => pathname.startsWith(r))
+    (t) => t.routes.includes('*') || t.routes.some((r) => pathname === r || pathname.startsWith(r + '/'))
   );
 }
