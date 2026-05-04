@@ -1,10 +1,31 @@
 // src/app/dashboard/layout.js
 "use client";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import DashboardSidebar from "./components/DashboardSidebar";
 import MobileNavSheet from "./components/MobileNavSheet";
 import { MobileNavProvider } from "./components/MobileNavContext";
+import SeoMetaPanel from "./components/SeoMetaPanel";
 
 export default function DashboardLayout({ children }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const panelParam = searchParams.get("panel");
+  const [seoMetaOpen, setSeoMetaOpen] = useState(false);
+
+  useEffect(() => {
+    setSeoMetaOpen(panelParam === "seo-meta");
+  }, [panelParam]);
+
+  const closeSeoMeta = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("panel");
+    const newUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    router.replace(newUrl);
+  };
+
   return (
     <MobileNavProvider>
       <div
@@ -30,6 +51,9 @@ export default function DashboardLayout({ children }) {
 
         {/* Mobile full-screen nav overlay */}
         <MobileNavSheet />
+
+        {/* SEO Meta panel — available on all pages */}
+        <SeoMetaPanel open={seoMetaOpen} onClose={closeSeoMeta} />
       </div>
     </MobileNavProvider>
   );
