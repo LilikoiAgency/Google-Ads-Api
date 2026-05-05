@@ -67,17 +67,15 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
   const [usps, setUsps] = useState("");
   const [tone, setTone] = useState("Professional");
   const [offer, setOffer] = useState("");
-  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [selectedId, setSelectedId] = useState(null);
 
   const campaigns = useMemo(() => selectedCustomer?.campaigns || [], [selectedCustomer]);
   const customerId = String(selectedCustomer?.customer?.customer_client?.id || "");
 
   useEffect(() => {
     if (!open) return;
-    const underperforming = campaigns
-      .filter((c) => UNDERPERFORMING.has(getCampaignVerdict(c).key))
-      .map((c) => String(c.campaignId));
-    setCheckedIds(new Set(underperforming));
+    const first = campaigns.find((c) => UNDERPERFORMING.has(getCampaignVerdict(c).key));
+    setSelectedId(first ? String(first.campaignId) : null);
   }, [open, campaigns]);
 
   useEffect(() => {
@@ -112,23 +110,13 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
     }
   }, [open]);
 
-  const toggleCampaign = (campaignId) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(String(campaignId))) next.delete(String(campaignId));
-      else next.add(String(campaignId));
-      return next;
-    });
-  };
-
-  const canGenerate = checkedIds.size > 0 && business.trim() && audience.trim() && usps.trim() && !auditLoading;
+  const canGenerate = !!selectedId && business.trim() && audience.trim() && usps.trim() && !auditLoading;
 
   const handleGenerate = async () => {
     setView("loading");
     setErrorMsg(null);
-    const selectedCampaigns = campaigns
-      .filter((c) => checkedIds.has(String(c.campaignId)))
-      .map((c) => buildCampaignPayload(c, auditData));
+    const campaign = campaigns.find((c) => String(c.campaignId) === selectedId);
+    const selectedCampaigns = campaign ? [buildCampaignPayload(campaign, auditData)] : [];
 
     try {
       const res = await fetch("/api/claude/ad-copy-strategy", {
@@ -211,8 +199,8 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
           {view === "form" && (
             <FormView
               campaigns={campaigns}
-              checkedIds={checkedIds}
-              toggleCampaign={toggleCampaign}
+              selectedId={selectedId}
+              setSelectedId={setSelectedId}
               business={business} setBusiness={setBusiness}
               audience={audience} setAudience={setAudience}
               usps={usps} setUsps={setUsps}
@@ -238,7 +226,7 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
   return createPortal(content, document.body);
 }
 
-function FormView({ campaigns, checkedIds, toggleCampaign, business, setBusiness, audience, setAudience, usps, setUsps, tone, setTone, offer, setOffer, canGenerate, auditLoading, onGenerate }) {
+function FormView({ campaigns, selectedId, setSelectedId, business, setBusiness, audience, setAudience, usps, setUsps, tone, setTone, offer, setOffer, canGenerate, auditLoading, onGenerate }) {
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 };
   const inputStyle = { width: "100%", border: "1px solid #d1d5db", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#111827", outline: "none", boxSizing: "border-box", resize: "vertical" };
   const fieldWrap = { marginBottom: 16 };
@@ -275,20 +263,21 @@ function FormView({ campaigns, checkedIds, toggleCampaign, business, setBusiness
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <p style={{ ...labelStyle, marginBottom: 10 }}>Campaigns to analyze</p>
+        <p style={{ ...labelStyle, marginBottom: 10 }}>Campaign to analyze</p>
         {auditLoading && (
           <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 8 }}>Loading keyword data…</p>
         )}
         {campaigns.map((c) => {
           const verdict = getCampaignVerdict(c);
-          const isChecked = checkedIds.has(String(c.campaignId));
+          const isSelected = selectedId === String(c.campaignId);
           return (
             <label key={c.campaignId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f3f4f6", cursor: "pointer" }}>
               <input
-                type="checkbox"
+                type="radio"
+                name="campaign-select"
                 aria-label={c.campaignName}
-                checked={isChecked}
-                onChange={() => toggleCampaign(c.campaignId)}
+                checked={isSelected}
+                onChange={() => setSelectedId(String(c.campaignId))}
               />
               <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#111827" }}>{c.campaignName}</span>
               <span style={{ fontSize: 10, fontWeight: 800, color: verdict.color, background: verdict.bg, borderRadius: 4, padding: "2px 7px", border: `1px solid ${verdict.color}40` }}>{verdict.key}</span>

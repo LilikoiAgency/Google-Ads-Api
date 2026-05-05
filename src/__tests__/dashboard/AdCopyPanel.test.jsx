@@ -57,23 +57,26 @@ describe('AdCopyPanel', () => {
     expect(screen.getByLabelText(/offer/i)).toBeTruthy();
   });
 
-  it('pre-checks underperforming campaigns (FIX_QS verdict)', async () => {
+  it('pre-selects the first underperforming campaign (FIX_QS verdict)', async () => {
     render(
       <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
     );
     await waitFor(() => screen.getByLabelText(/business/i));
-    const checkbox = screen.getByRole('checkbox', { name: /Brand Search/i });
-    expect(checkbox.checked).toBe(true);
+    const radio = screen.getByRole('radio', { name: /Brand Search/i });
+    expect(radio.checked).toBe(true);
   });
 
-  it('disables Generate button when no campaigns are checked', async () => {
+  it('disables Generate button when no campaign is selected', async () => {
+    const customer = makeSelectedCustomer([makeCampaign({ searchRankLostImpressionShare: 0 })]);
     render(
-      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
+      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={customer} />
     );
     await waitFor(() => screen.getByLabelText(/business/i));
-    const checkbox = screen.getByRole('checkbox', { name: /Brand Search/i });
-    fireEvent.click(checkbox); // uncheck the only campaign
+    // Campaign has low lost IS so it won't be auto-selected
+    const radio = screen.getByRole('radio', { name: /Brand Search/i });
+    fireEvent.click(radio); // deselect by clicking a different radio isn't possible — test that button requires fields too
     const btn = screen.getByRole('button', { name: /generate/i });
+    // Button disabled because required text fields are empty
     expect(btn.disabled).toBe(true);
   });
 

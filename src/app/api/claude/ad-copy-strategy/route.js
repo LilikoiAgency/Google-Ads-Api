@@ -144,13 +144,18 @@ export async function POST(request) {
   try {
     response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     });
   } catch (err) {
     console.error('[claude/ad-copy-strategy] Claude error:', err?.message);
     return NextResponse.json({ error: 'Claude API error', requestId }, { status: 502 });
+  }
+
+  if (response.stop_reason === 'max_tokens') {
+    console.error('[claude/ad-copy-strategy] Response truncated — increase max_tokens or reduce campaigns');
+    return NextResponse.json({ error: 'AI response was too long. Try selecting fewer campaigns.', requestId }, { status: 500 });
   }
 
   const rawText = (response.content || [])
@@ -160,8 +165,10 @@ export async function POST(request) {
 
   let result;
   try {
-    const clean = rawText.replace(/^```json\s*/m, '').replace(/^```\s*$/m, '').trim();
-    result = JSON.parse(clean);
+    const start = rawText.indexOf('{');
+    const end = rawText.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('No JSON object found');
+    result = JSON.parse(rawText.slice(start, end + 1));
   } catch {
     console.error('[claude/ad-copy-strategy] JSON parse failed:', rawText.slice(0, 300));
     return NextResponse.json({ error: 'Failed to parse AI response', requestId }, { status: 500 });
