@@ -158,10 +158,17 @@ export async function POST(request) {
     .map((b) => b.text)
     .join('');
 
+  if (response.stop_reason === 'max_tokens') {
+    console.error('[claude/ad-copy-strategy] Response truncated at max_tokens');
+    return NextResponse.json({ error: 'AI response was truncated. Please try with fewer campaigns.', requestId }, { status: 500 });
+  }
+
   let result;
   try {
-    const clean = rawText.replace(/^```json\s*/m, '').replace(/^```\s*$/m, '').trim();
-    result = JSON.parse(clean);
+    const start = rawText.indexOf('{');
+    const end = rawText.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('No JSON object found');
+    result = JSON.parse(rawText.slice(start, end + 1));
   } catch {
     console.error('[claude/ad-copy-strategy] JSON parse failed:', rawText.slice(0, 300));
     return NextResponse.json({ error: 'Failed to parse AI response', requestId }, { status: 500 });

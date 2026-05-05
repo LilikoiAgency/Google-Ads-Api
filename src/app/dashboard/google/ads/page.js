@@ -13,6 +13,7 @@ import { GoogleAdsIcon } from "../../components/DashboardIcons";
 import MobileFilterSheet from "../../components/MobileFilterSheet";
 import AdCopyPanel from "./components/AdCopyPanel";
 import AccountBriefPanel from "./components/AccountBriefPanel";
+import AuditPanel from "./components/AuditPanel";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -1222,6 +1223,15 @@ export default function GoogleAdsDashboard() {
                 selectedCustomer={selectedCustomer}
                 currentDateRange={dateRange}
               />
+              {auditPanelOpen && (
+                <AuditPanel
+                  accountData={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId)) ?? null}
+                  accountName={allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId))?.customer?.customer_client?.descriptive_name || ""}
+                  customerId={String(selectedCustomerId || "")}
+                  selectedCampaign={selectedCampaign}
+                  onClose={closePanel}
+                />
+              )}
             </>
           )}
           <ContentArea
