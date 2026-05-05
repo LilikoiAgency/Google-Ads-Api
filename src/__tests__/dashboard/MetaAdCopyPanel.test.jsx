@@ -1,6 +1,6 @@
 ﻿// @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import MetaAdCopyPanel from '@/app/dashboard/meta/components/MetaAdCopyPanel.jsx';
 
 vi.mock('react-dom', async (importOriginal) => {
@@ -21,6 +21,8 @@ const makeCampaign = (overrides = {}) => ({
 beforeEach(() => {
   global.fetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
 });
+
+afterEach(() => vi.clearAllMocks());
 
 describe('MetaAdCopyPanel', () => {
   it('renders nothing when closed', () => {
@@ -58,5 +60,41 @@ describe('MetaAdCopyPanel', () => {
     await waitFor(() => screen.getByLabelText(/business/i));
     const radio = screen.getByRole('radio', { name: /Spring Promo/i });
     expect(radio.checked).toBe(true);
+  });
+
+  it('calls the API and renders results on successful generation', async () => {
+    const campaignData = makeCampaign();
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) }) // creatives fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: {
+            diagnosis: 'Low ROAS indicates creative fatigue.',
+            strategy: 'Test fresh angles.',
+            primaryTexts: [{ text: 'Primary 1', rationale: 'r1' }],
+            headlines: [{ text: 'Headline 1', rationale: 'r2' }],
+            descriptions: [{ text: 'Desc 1', rationale: 'r3' }],
+            ctaRecommendation: { cta: 'Shop Now', rationale: 'Strong intent signal.' },
+          },
+        }),
+      });
+
+    render(
+      <MetaAdCopyPanel open={true} onClose={() => {}} selectedAccount={makeAccount()} campaigns={[campaignData]} />
+    );
+
+    // Wait for form to be ready
+    await waitFor(() => expect(screen.getByLabelText(/business/i)).toBeTruthy());
+
+    // Fill required fields
+    fireEvent.change(screen.getByLabelText(/business/i), { target: { value: 'HVAC Co' } });
+    fireEvent.change(screen.getByLabelText(/target audience/i), { target: { value: 'Homeowners' } });
+    fireEvent.change(screen.getByLabelText(/unique selling points/i), { target: { value: 'Same-day service' } });
+
+    fireEvent.click(screen.getByText(/generate ad copy/i));
+
+    await waitFor(() => expect(screen.getByText(/low roas indicates/i)).toBeTruthy());
+    expect(screen.getByText('Primary 1')).toBeTruthy();
   });
 });

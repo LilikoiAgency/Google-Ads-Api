@@ -65,19 +65,25 @@ export default function MetaAdCopyPanel({ open, onClose, selectedAccount, campai
 
   useEffect(() => {
     if (!open || !campaignsWithSpend.length) return;
-    const under = campaignsWithSpend.find((c) => (c.roas || 0) < 1 || ((c.conversions || 0) === 0 && (c.spend || 0) > 0));
-    setSelectedId(under?.id || campaignsWithSpend[0]?.id || null);
+    setSelectedId((prev) => {
+      if (prev !== null) return prev;
+      const under = campaignsWithSpend.find(
+        (c) => (c.roas || 0) < 1 || ((c.conversions || 0) === 0 && (c.spend || 0) > 0)
+      );
+      return under?.id || campaignsWithSpend[0]?.id || null;
+    });
   }, [open, campaignsWithSpend]);
 
   useEffect(() => {
     if (!open || !selectedAccount?.accountId) return;
     const controller = new AbortController();
+    setCreatives([]);
     setCreativesLoading(true);
     fetch(`/api/meta-ads/top-creatives?accountId=${encodeURIComponent(selectedAccount.accountId)}&limit=10`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then((json) => setCreatives(json?.data || []))
       .catch((err) => { if (err.name !== "AbortError") setCreatives([]); })
-      .finally(() => setCreativesLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setCreativesLoading(false); });
     return () => controller.abort();
   }, [open, selectedAccount?.accountId]);
 
@@ -91,7 +97,7 @@ export default function MetaAdCopyPanel({ open, onClose, selectedAccount, campai
       const res = await fetch("/api/claude/meta-ad-copy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: { business, audience, usps, tone, offer }, campaign: buildCampaignPayload(campaign, creatives) }),
+        body: JSON.stringify({ context: { business: business.trim(), audience: audience.trim(), usps: usps.trim(), tone, offer: offer.trim() }, campaign: buildCampaignPayload(campaign, creatives) }),
       });
       const json = await res.json();
       if (!res.ok || json.error) { setErrorMsg(json.error || `Error ${res.status}`); setView("error"); return; }
@@ -103,7 +109,7 @@ export default function MetaAdCopyPanel({ open, onClose, selectedAccount, campai
     navigator.clipboard.writeText(text).then(() => {
       setCopied((prev) => ({ ...prev, [id]: true }));
       setTimeout(() => setCopied((prev) => ({ ...prev, [id]: false })), 1500);
-    });
+    }).catch(() => {});
   };
 
   if (!mounted || !open) return null;
