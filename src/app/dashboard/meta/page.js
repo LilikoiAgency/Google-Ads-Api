@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { clientCache } from "../../../lib/clientCache";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -16,6 +16,7 @@ import {
 import "../../globals.css";
 import MetaAdsPanel from "./components/MetaAdsPanel";
 import MetaAdPreview from "./components/MetaAdPreview";
+import MetaAdCopyPanel from "./components/MetaAdCopyPanel";
 
 // ─── priority sort ────────────────────────────────────────────────────────────
 
@@ -871,6 +872,20 @@ export default function MetaDashboard() {
   // Mobile filter sheet
   const [filterOpen, setFilterOpen] = useState(false);
 
+  const searchParams = useSearchParams();
+  const panelParam = searchParams.get("panel");
+  const [metaCopyPanelOpen, setMetaCopyPanelOpen] = useState(false);
+
+  useEffect(() => {
+    setMetaCopyPanelOpen(panelParam === "meta-copy");
+  }, [panelParam]);
+
+  const closeMetaCopyPanel = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("panel");
+    router.replace(`?${params.toString()}`);
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/meta");
   }, [status, router]);
@@ -1360,6 +1375,12 @@ export default function MetaDashboard() {
         range={preset}
         startDate={custom?.startDate || undefined}
         endDate={custom?.endDate || undefined}
+      />
+      <MetaAdCopyPanel
+        open={metaCopyPanelOpen}
+        onClose={closeMetaCopyPanel}
+        selectedAccount={selectedAccount}
+        campaigns={data?.campaigns || []}
       />
     </div>
   );
