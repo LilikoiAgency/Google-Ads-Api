@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { getToolsForRoute } from "../../../lib/aiToolsConfig";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "../../../lib/useTheme";
 import { isAdmin } from "../../../lib/admins";
@@ -48,6 +49,8 @@ export default function DashboardSidebar() {
   const adminUser = isAdmin(email);
   const sections = adminUser ? [...NAV, ADMIN_SECTION] : NAV;
   const isActive = (href) => pathname?.startsWith(href) ?? false;
+  const router = useRouter();
+  const aiTools = getToolsForRoute(pathname || "");
 
   // ── Client-side page view logging ──
   const lastLoggedPath = useRef(null);
@@ -164,6 +167,41 @@ export default function DashboardSidebar() {
             })}
           </div>
         ))}
+
+        {/* ── AI Tools ── */}
+        {aiTools.length > 0 && (
+          <div>
+            <div style={{ height: 1, background: "var(--sb-divider)", margin: "6px 10px 4px" }} />
+            <div className="sb-label" style={{ opacity: 0, transition: "opacity 0.15s 0.06s", whiteSpace: "nowrap", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--sb-section-label)", padding: "8px 14px 4px", minWidth: 216, display: "flex", alignItems: "center", gap: 6 }}>
+              AI Tools
+              <span style={{ background: "rgba(129,140,248,0.18)", color: "#818cf8", borderRadius: 999, fontSize: 9, fontWeight: 800, padding: "1px 6px" }}>{aiTools.length}</span>
+            </div>
+            {aiTools.map((tool) => (
+              <button
+                key={tool.key}
+                title={tool.label}
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.set("panel", tool.key);
+                  router.push(`${window.location.pathname}?${params.toString()}`);
+                }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "0 12px", height: 44, borderRadius: 12,
+                  margin: "1px 6px", cursor: "pointer",
+                  transition: "background 0.15s", flexShrink: 0, minWidth: 200,
+                  border: "none", background: "transparent",
+                  color: "var(--sb-text)", textAlign: "left", width: "calc(100% - 12px)",
+                }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>
+                  {tool.icon}
+                </div>
+                <span className="sb-label" style={{ opacity: 0, transition: "opacity 0.15s 0.06s", whiteSpace: "nowrap", fontSize: 13, fontWeight: 600 }}>{tool.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom */}
