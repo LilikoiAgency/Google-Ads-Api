@@ -8,7 +8,8 @@ Rules:
 - Never keyword-stuff — only include the keyword where it reads naturally
 - Each variant must take a different angle: e.g., question-based, benefit-led, urgency/curiosity, social proof
 - Never repeat the same phrase or opener across variants
-- Never invent facts not implied by the page title or page type
+- If page content is provided, base your copy on facts and themes from that content — do not invent claims not present in it
+- If only a page title is provided, do not invent facts beyond what the title implies
 
 Return ONLY valid JSON — no markdown fences, no explanation outside the JSON object.
 

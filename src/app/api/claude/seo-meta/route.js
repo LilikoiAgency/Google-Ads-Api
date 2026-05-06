@@ -8,8 +8,10 @@ import { getCredentials } from '../../../../lib/dbFunctions';
 import { getSeoMetaSystemPrompt } from '../../../../lib/seoMetaPrompt';
 import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
 
-function buildUserPrompt(pageTitle, keyword, pageType) {
-  const lines = [`Page title / URL: ${pageTitle}`];
+function buildUserPrompt(pageTitle, keyword, pageType, pageContent) {
+  const lines = [];
+  if (pageTitle) lines.push(`Page title / URL: ${pageTitle}`);
+  if (pageContent) lines.push(`\nPage content (use as primary source of facts):\n${pageContent}`);
   if (keyword) lines.push(`Target keyword: ${keyword}`);
   if (pageType) lines.push(`Page type: ${pageType}`);
   return lines.join('\n');
@@ -28,10 +30,10 @@ export async function POST(request) {
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'Invalid request body', requestId }, { status: 400 }); }
 
-  const { pageTitle, keyword, pageType } = body;
+  const { pageTitle, keyword, pageType, pageContent } = body;
 
-  if (!pageTitle?.trim()) {
-    return NextResponse.json({ error: 'pageTitle is required', requestId }, { status: 400 });
+  if (!pageTitle?.trim() && !pageContent?.trim()) {
+    return NextResponse.json({ error: 'pageTitle or pageContent is required', requestId }, { status: 400 });
   }
 
   const [monthlyCost, budgetCap] = await Promise.all([getMonthlyClaudeCost(), getClaudeBudgetCap()]);
@@ -50,7 +52,12 @@ export async function POST(request) {
 
   const client = new Anthropic({ apiKey });
   const systemPrompt = getSeoMetaSystemPrompt();
-  const userPrompt = buildUserPrompt(pageTitle.trim(), keyword?.trim() || '', pageType?.trim() || '');
+  const userPrompt = buildUserPrompt(
+    pageTitle?.trim() || '',
+    keyword?.trim() || '',
+    pageType?.trim() || '',
+    pageContent?.trim() || ''
+  );
 
   let response;
   try {
