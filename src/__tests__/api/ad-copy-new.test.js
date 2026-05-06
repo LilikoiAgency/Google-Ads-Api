@@ -19,12 +19,24 @@ vi.mock('@/lib/mongoose', () => ({
   }),
 }));
 vi.mock('@/lib/usageLogger', () => ({
-  logApiUsage: vi.fn(),
+  logApiUsage: vi.fn().mockResolvedValue(undefined),
   estimateClaudeCost: vi.fn().mockReturnValue(0.01),
   getMonthlyClaudeCost: vi.fn().mockResolvedValue(0),
   getClaudeBudgetCap: vi.fn().mockResolvedValue(100),
 }));
 vi.mock('@/lib/admins', () => ({ isAdmin: vi.fn().mockReturnValue(true) }));
+vi.mock('@anthropic-ai/sdk', () => {
+  const mockCreate = vi.fn().mockResolvedValue({
+    content: [{ text: '{"headlines":[{"text":"Fix Pipes Fast","rationale":"urgency angle"}],"descriptions":[{"text":"Licensed plumbers ready now","rationale":"trust angle"}]}' }],
+    usage: { input_tokens: 100, output_tokens: 50 },
+  });
+  class MockAnthropic {
+    constructor() {
+      this.messages = { create: mockCreate };
+    }
+  }
+  return { default: MockAnthropic };
+});
 
 const { POST } = await import('@/app/api/claude/ad-copy-new/route.js');
 
@@ -98,5 +110,12 @@ describe('POST /api/claude/ad-copy-new', () => {
     expect(res.status).toBe(429);
     const json = await res.json();
     expect(json.error).toMatch(/daily/i);
+  });
+
+  it('returns 200 with headlines and descriptions on happy path', async () => {
+    const res = await POST(makeRequest({ product: 'Plumbing Services', keywords: 'plumber near me', usps: 'Same-day service', cta: 'Call now' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data).toHaveProperty('headlines');
   });
 });

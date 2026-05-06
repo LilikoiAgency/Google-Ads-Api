@@ -81,7 +81,7 @@ export async function POST(request) {
     }
   }
 
-  const credentials = await getCredentials(email);
+  const credentials = await getCredentials();
   const client = new Anthropic({ apiKey: credentials.anthropic_api_key });
 
   let message;
