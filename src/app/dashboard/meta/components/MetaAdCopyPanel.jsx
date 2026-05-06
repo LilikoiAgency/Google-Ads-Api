@@ -11,7 +11,7 @@ function buildCampaignPayload(campaign, creatives) {
   if ((campaign.roas || 0) < 1 && (campaign.spend || 0) > 0) flags.push("ROAS < 1");
   if ((campaign.conversions || 0) === 0 && (campaign.spend || 0) > 0) flags.push("Zero conversions with spend");
   if ((campaign.cpm || 0) > 25) flags.push("High CPM (> $25)");
-  const topCreative = creatives?.[0]?.creative || null;
+  const topCreative = creatives?.find(cr => cr.campaignId === campaign.id)?.creative || null;
   return {
     campaignName: campaign.name,
     objective: campaign.objective || "",
