@@ -29,16 +29,8 @@ async function incrementDailyUsage(db, email) {
 }
 
 function buildUserPrompt(context, campaigns) {
-  const offerLine = context.offer ? `- Current offer: ${context.offer}` : '';
-  const header = `BUSINESS CONTEXT:
-- Business: ${context.business}
-- Target audience: ${context.audience}
-- USPs: ${context.usps}
-- Tone: ${context.tone || 'Professional'}
-${offerLine}
-
-CAMPAIGN DATA:
-`;
+  const focusLine = context?.focus ? `\nUSER FOCUS: ${context.focus}\n` : '';
+  const header = `CAMPAIGN DATA:${focusLine}\n`;
 
   const campaignBlocks = campaigns.map((c) => {
     const ctr = c.clicks > 0 ? ((c.clicks / (c.impressions || 1)) * 100).toFixed(2) : '0';
@@ -100,9 +92,6 @@ export async function POST(request) {
 
   if (!customerId) {
     return NextResponse.json({ error: 'customerId is required', requestId }, { status: 400 });
-  }
-  if (!context?.business || !context?.audience || !context?.usps) {
-    return NextResponse.json({ error: 'context.business, context.audience, and context.usps are required', requestId }, { status: 400 });
   }
   if (!Array.isArray(campaigns) || campaigns.length === 0) {
     return NextResponse.json({ error: 'campaigns must be a non-empty array', requestId }, { status: 400 });

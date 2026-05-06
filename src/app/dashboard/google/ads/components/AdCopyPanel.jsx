@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import { getCampaignVerdict, analyzeSearchTerms, analyzeKeywords } from "../../../../../lib/googleAdsAudit";
 
 const UNDERPERFORMING = new Set(["FIX_QS", "OPTIMIZE", "INVESTIGATE"]);
-const TONES = ["Professional", "Urgent", "Friendly", "Direct", "Trust-building"];
 const GOALS = ['Leads', 'Sales', 'Awareness', 'Traffic'];
 const NEW_TONES = ['Professional', 'Friendly', 'Urgent', 'Bold'];
 
@@ -64,11 +63,6 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
   const [results, setResults] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  const [business, setBusiness] = useState("");
-  const [audience, setAudience] = useState("");
-  const [usps, setUsps] = useState("");
-  const [tone, setTone] = useState("Professional");
-  const [offer, setOffer] = useState("");
   const [selectedId, setSelectedId] = useState(null);
 
   // New state for two-mode toggle
@@ -133,7 +127,7 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
     }
   }, [open]);
 
-  const canGenerateExisting = !!selectedId && business.trim() && audience.trim() && usps.trim() && !auditLoading;
+  const canGenerateExisting = !!selectedId && !auditLoading;
   const canGenerateNew = !!(newProduct.trim() && newKeywords.trim() && newUsps.trim() && newCta.trim() && newFetchStatus !== 'loading');
   const canGenerate = mode === 'existing' ? canGenerateExisting : canGenerateNew;
 
@@ -167,7 +161,7 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customerId,
-            context: { business, audience, usps, tone, offer, focus: existingFocus },
+            context: { focus: existingFocus },
             campaigns: selectedCampaigns,
           }),
         });
@@ -241,11 +235,6 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
               mode={mode} setMode={setMode}
               campaigns={campaigns}
               selectedId={selectedId} setSelectedId={setSelectedId}
-              business={business} setBusiness={setBusiness}
-              audience={audience} setAudience={setAudience}
-              usps={usps} setUsps={setUsps}
-              tone={tone} setTone={setTone}
-              offer={offer} setOffer={setOffer}
               existingFocus={existingFocus} setExistingFocus={setExistingFocus}
               newProduct={newProduct} setNewProduct={setNewProduct}
               newKeywords={newKeywords} setNewKeywords={setNewKeywords}
@@ -377,10 +366,8 @@ function NewCampaignForm({ newProduct, setNewProduct, newKeywords, setNewKeyword
   );
 }
 
-function FormView({ mode, setMode, campaigns, selectedId, setSelectedId, business, setBusiness, audience, setAudience, usps, setUsps, tone, setTone, offer, setOffer, existingFocus, setExistingFocus, newProduct, setNewProduct, newKeywords, setNewKeywords, newUsps, setNewUsps, newCta, setNewCta, newGoal, setNewGoal, newTone, setNewTone, newPageUrl, setNewPageUrl, newPageContent, setNewPageContent, newFetchStatus, setNewFetchStatus, newFetchError, setNewFetchError, newFetchAbortRef, canGenerate, auditLoading, onGenerate }) {
+function FormView({ mode, setMode, campaigns, selectedId, setSelectedId, existingFocus, setExistingFocus, newProduct, setNewProduct, newKeywords, setNewKeywords, newUsps, setNewUsps, newCta, setNewCta, newGoal, setNewGoal, newTone, setNewTone, newPageUrl, setNewPageUrl, newPageContent, setNewPageContent, newFetchStatus, setNewFetchStatus, newFetchError, setNewFetchError, newFetchAbortRef, canGenerate, auditLoading, onGenerate }) {
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 };
-  const inputStyle = { width: "100%", border: "1px solid #d1d5db", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#111827", outline: "none", boxSizing: "border-box", resize: "vertical" };
-  const fieldWrap = { marginBottom: 16 };
 
   return (
     <div>
@@ -410,35 +397,6 @@ function FormView({ mode, setMode, campaigns, selectedId, setSelectedId, busines
         />
       ) : (
         <>
-          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20, lineHeight: 1.5 }}>
-            Claude will analyze your underperforming campaigns using live data — search terms, keyword QS scores, current ad copy — and write a strategy + example headlines grounded in your actual account.
-          </p>
-
-          <div style={fieldWrap}>
-            <label htmlFor="cp-business" style={labelStyle}>Business / product description <span style={{ color: "#ef4444" }}>*</span></label>
-            <textarea id="cp-business" aria-label="Business / product description" rows={2} placeholder="e.g. We provide emergency HVAC repair in Phoenix" value={business} onChange={(e) => setBusiness(e.target.value)} style={inputStyle} />
-          </div>
-          <div style={fieldWrap}>
-            <label htmlFor="cp-audience" style={labelStyle}>Target audience <span style={{ color: "#ef4444" }}>*</span></label>
-            <input id="cp-audience" type="text" aria-label="Target audience" placeholder="e.g. Homeowners 35–60, comparison shopping" value={audience} onChange={(e) => setAudience(e.target.value)} style={{ ...inputStyle, resize: undefined }} />
-          </div>
-          <div style={fieldWrap}>
-            <label htmlFor="cp-usps" style={labelStyle}>Unique selling points <span style={{ color: "#ef4444" }}>*</span></label>
-            <textarea id="cp-usps" aria-label="Unique selling points" rows={2} placeholder="e.g. Same-day service, 10-year warranty, financing available" value={usps} onChange={(e) => setUsps(e.target.value)} style={inputStyle} />
-          </div>
-          <div style={{ ...fieldWrap, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label htmlFor="cp-tone" style={labelStyle}>Tone / voice</label>
-              <select id="cp-tone" aria-label="Tone" value={tone} onChange={(e) => setTone(e.target.value)} style={{ ...inputStyle, resize: undefined }}>
-                {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="cp-offer" style={labelStyle}>Current offer (optional)</label>
-              <input id="cp-offer" type="text" aria-label="Offer" placeholder="e.g. $49 tune-up this month" value={offer} onChange={(e) => setOffer(e.target.value)} style={{ ...inputStyle, resize: undefined }} />
-            </div>
-          </div>
-
           <div style={{ marginBottom: 20 }}>
             <p style={{ ...labelStyle, marginBottom: 10 }}>Campaign to analyze</p>
             {auditLoading && (

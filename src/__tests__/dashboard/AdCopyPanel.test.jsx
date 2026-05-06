@@ -46,38 +46,32 @@ describe('AdCopyPanel', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders the form when open', async () => {
+  it('renders the form when open with campaign selector and focus field', async () => {
     render(
       <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
     );
-    await waitFor(() => expect(screen.getByLabelText(/business/i)).toBeTruthy());
-    expect(screen.getByLabelText(/target audience/i)).toBeTruthy();
-    expect(screen.getByLabelText(/unique selling points/i)).toBeTruthy();
-    expect(screen.getByLabelText(/tone/i)).toBeTruthy();
-    expect(screen.getByLabelText(/offer/i)).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Brand Search/i })).toBeTruthy());
+    expect(screen.getByLabelText(/focus area/i)).toBeTruthy();
+    expect(screen.getByText('New campaign')).toBeTruthy();
+    expect(screen.getByText('Existing campaign')).toBeTruthy();
   });
 
   it('pre-selects the first underperforming campaign (FIX_QS verdict)', async () => {
     render(
       <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
     );
-    await waitFor(() => screen.getByLabelText(/business/i));
+    await waitFor(() => screen.getByRole('radio', { name: /Brand Search/i }));
     const radio = screen.getByRole('radio', { name: /Brand Search/i });
     expect(radio.checked).toBe(true);
   });
 
-  it('disables Generate button when no campaign is selected', async () => {
-    const customer = makeSelectedCustomer([makeCampaign({ searchRankLostImpressionShare: 0 })]);
+  it('enables Generate button when a campaign is selected', async () => {
     render(
-      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={customer} />
+      <AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />
     );
-    await waitFor(() => screen.getByLabelText(/business/i));
-    // Campaign has low lost IS so it won't be auto-selected
-    const radio = screen.getByRole('radio', { name: /Brand Search/i });
-    fireEvent.click(radio); // deselect by clicking a different radio isn't possible — test that button requires fields too
+    await waitFor(() => screen.getByRole('radio', { name: /Brand Search/i }));
     const btn = screen.getByRole('button', { name: /generate/i });
-    // Button disabled because required text fields are empty
-    expect(btn.disabled).toBe(true);
+    expect(btn.disabled).toBe(false);
   });
 
   it('calls onClose when close button is clicked', async () => {
@@ -85,7 +79,7 @@ describe('AdCopyPanel', () => {
     render(
       <AdCopyPanel open={true} onClose={onClose} selectedCustomer={makeSelectedCustomer()} />
     );
-    await waitFor(() => screen.getByLabelText(/business/i));
+    await waitFor(() => screen.getByText('New campaign'));
     fireEvent.click(screen.getByRole('button', { name: /✕/i }));
     expect(onClose).toHaveBeenCalled();
   });
@@ -94,17 +88,16 @@ describe('AdCopyPanel', () => {
 describe('Mode toggle', () => {
   it('shows mode toggle with New campaign and Existing campaign options', async () => {
     render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
-    await waitFor(() => screen.getByLabelText(/business/i));
+    await waitFor(() => screen.getByText('New campaign'));
     expect(screen.getByText('New campaign')).toBeTruthy();
     expect(screen.getByText('Existing campaign')).toBeTruthy();
   });
 
   it('defaults to existing campaign mode when underperforming campaigns exist', async () => {
     render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
-    await waitFor(() => screen.getByLabelText(/business/i));
-    // Existing mode shows campaign list and existing form fields
-    expect(screen.getByLabelText(/business/i)).toBeTruthy();
+    await waitFor(() => screen.getByRole('radio', { name: /Brand Search/i }));
     expect(screen.queryByLabelText(/what are you selling/i)).toBeNull();
+    expect(screen.getByLabelText(/focus area/i)).toBeTruthy();
   });
 
   it('switches to new campaign form when New campaign is clicked', async () => {
@@ -112,7 +105,7 @@ describe('Mode toggle', () => {
     await waitFor(() => screen.getByText('New campaign'));
     fireEvent.click(screen.getByText('New campaign'));
     await waitFor(() => expect(screen.getByLabelText(/what are you selling/i)).toBeTruthy());
-    expect(screen.queryByLabelText(/business/i)).toBeNull();
+    expect(screen.queryByLabelText(/focus area/i)).toBeNull();
   });
 
   it('defaults to new campaign mode when no underperforming campaigns exist', async () => {
@@ -148,7 +141,7 @@ describe('New campaign form', () => {
 describe('Existing campaign current copy preview', () => {
   it('shows current copy preview when a campaign with ads is selected', async () => {
     render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
-    await waitFor(() => screen.getByLabelText(/business/i));
+    await waitFor(() => screen.getByRole('radio', { name: /Brand Search/i }));
     // The default campaign (Brand Search) has ads with headlines ['Buy Now', 'Shop Today']
     await waitFor(() => expect(screen.getByText('Buy Now')).toBeTruthy());
   });

@@ -36,21 +36,10 @@ describe('POST /api/claude/ad-copy-strategy', () => {
     expect(data.error).toMatch(/customerId/);
   });
 
-  it('returns 400 when required context fields are missing', async () => {
-    const res = await POST(makeRequest({
-      customerId: '123',
-      context: { tone: 'Professional' }, // missing business, audience, usps
-      campaigns: [{ campaignName: 'Test' }],
-    }));
-    const data = await res.json();
-    expect(res.status).toBe(400);
-    expect(data.error).toMatch(/business|audience|usps/i);
-  });
-
   it('returns 400 when campaigns array is empty', async () => {
     const res = await POST(makeRequest({
       customerId: '123',
-      context: { business: 'HVAC', audience: 'Homeowners', usps: 'Same-day', tone: 'Professional' },
+      context: {},
       campaigns: [],
     }));
     const data = await res.json();
