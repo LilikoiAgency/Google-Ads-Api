@@ -13,6 +13,7 @@ import { GoogleAdsIcon } from "../../components/DashboardIcons";
 import MobileFilterSheet from "../../components/MobileFilterSheet";
 import AdCopyPanel from "./components/AdCopyPanel";
 import AccountBriefPanel from "./components/AccountBriefPanel";
+import AccountBriefCard from "./components/AccountBriefCard";
 import AuditPanel from "./components/AuditPanel";
 
 const DATE_RANGE_OPTIONS = [
@@ -1184,12 +1185,7 @@ export default function GoogleAdsDashboard() {
           )}
           {selectedCustomerId && allCampaignData.length > 0 && selectedCustomer && (
             <>
-              <button
-                onClick={() => { const p = new URLSearchParams(window.location.search); p.set("panel","brief"); router.push(`${window.location.pathname}?${p.toString()}`); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(29,78,216,0.08)", border: "1px solid rgba(29,78,216,0.25)", borderRadius: 12, padding: "10px 18px", fontSize: 13, fontWeight: 700, color: "#1d4ed8", cursor: "pointer", marginBottom: 22 }}
-              >
-                📋 View Account Brief
-              </button>
+              <AccountBriefCard selectedCustomer={selectedCustomer} currentDateRange={dateRange} />
               {(selectedCustomer.campaigns || []).some((c) => {
                 const v = getCampaignVerdict(c);
                 return v.key === 'FIX_QS' || v.key === 'OPTIMIZE' || v.key === 'INVESTIGATE';

@@ -27,7 +27,11 @@
       "Bash(cmd *)",
       "Bash(netstat -ano)",
       "Bash(findstr \":3000\")",
-      "Bash(findstr \"LISTENING\")"
+      "Bash(findstr \"LISTENING\")",
+      "Bash(npx vitest *)",
+      "Bash(git -C \"C:\\\\Users\\\\frank\\\\Documents\\\\GitHub\\\\Google-Ads-Api\\\\.worktrees\\\\seo-meta-content\" add src/app/api/fetch-page-content/route.js src/__tests__/api/fetch-page-content.test.js)",
+      "Bash(git -C \"C:\\\\Users\\\\frank\\\\Documents\\\\GitHub\\\\Google-Ads-Api\\\\.worktrees\\\\seo-meta-content\" commit -m \"fix: use AbortSignal.timeout, add null-session test\")",
+      "PowerShell(New-Item *)"
     ]
   }
 }

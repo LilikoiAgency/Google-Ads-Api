@@ -79,6 +79,8 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
   const [newFetchError, setNewFetchError] = useState('');
   const [existingFocus, setExistingFocus] = useState('');
   const newFetchAbortRef = useRef(null);
+  const [adsMap, setAdsMap] = useState({}); // campaignId -> ads[]
+  const [adsLoading, setAdsLoading] = useState(false);
 
   const campaigns = useMemo(() => selectedCustomer?.campaigns || [], [selectedCustomer]);
   const customerId = String(selectedCustomer?.customer?.customer_client?.id || "");
@@ -107,6 +109,25 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
     return () => controller.abort();
   }, [open, customerId]);
 
+  // Fetch ads for the selected campaign in existing mode if not already cached
+  useEffect(() => {
+    if (mode !== 'existing' || !selectedId || !customerId) return;
+    const campaign = campaigns.find((c) => String(c.campaignId) === selectedId);
+    if (Array.isArray(campaign?.ads) && campaign.ads.length > 0) return;
+    if (adsMap[selectedId]) return;
+    const controller = new AbortController();
+    setAdsLoading(true);
+    fetch(`/api/googleads/ads?customerId=${encodeURIComponent(customerId)}&campaignId=${encodeURIComponent(selectedId)}`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((json) => {
+        const ads = json?.data?.ads || [];
+        setAdsMap((prev) => ({ ...prev, [selectedId]: ads }));
+      })
+      .catch((err) => { if (err.name !== 'AbortError') setAdsMap((prev) => ({ ...prev, [selectedId]: [] })); })
+      .finally(() => setAdsLoading(false));
+    return () => controller.abort();
+  }, [mode, selectedId, customerId, campaigns, adsMap]);
+
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
@@ -127,7 +148,7 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
     }
   }, [open]);
 
-  const canGenerateExisting = !!selectedId && !auditLoading;
+  const canGenerateExisting = !!selectedId && !auditLoading && !adsLoading;
   const canGenerateNew = !!(newProduct.trim() && newKeywords.trim() && newUsps.trim() && newCta.trim() && newFetchStatus !== 'loading');
   const canGenerate = mode === 'existing' ? canGenerateExisting : canGenerateNew;
 
@@ -155,7 +176,10 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
         setResults({ mode: 'new', ...json.data });
       } else {
         const campaign = campaigns.find(c => String(c.campaignId) === selectedId);
-        const selectedCampaigns = campaign ? [buildCampaignPayload(campaign, auditData)] : [];
+        const campaignWithAds = campaign
+          ? { ...campaign, ads: adsMap[selectedId] ?? campaign.ads ?? [] }
+          : null;
+        const selectedCampaigns = campaignWithAds ? [buildCampaignPayload(campaignWithAds, auditData)] : [];
         const res = await fetch('/api/claude/ad-copy-strategy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -249,6 +273,8 @@ export default function AdCopyPanel({ open, onClose, selectedCustomer }) {
               newFetchAbortRef={newFetchAbortRef}
               canGenerate={canGenerate}
               auditLoading={auditLoading}
+              adsMap={adsMap}
+              adsLoading={adsLoading}
               onGenerate={handleGenerate}
             />
           )}
@@ -366,7 +392,7 @@ function NewCampaignForm({ newProduct, setNewProduct, newKeywords, setNewKeyword
   );
 }
 
-function FormView({ mode, setMode, campaigns, selectedId, setSelectedId, existingFocus, setExistingFocus, newProduct, setNewProduct, newKeywords, setNewKeywords, newUsps, setNewUsps, newCta, setNewCta, newGoal, setNewGoal, newTone, setNewTone, newPageUrl, setNewPageUrl, newPageContent, setNewPageContent, newFetchStatus, setNewFetchStatus, newFetchError, setNewFetchError, newFetchAbortRef, canGenerate, auditLoading, onGenerate }) {
+function FormView({ mode, setMode, campaigns, selectedId, setSelectedId, existingFocus, setExistingFocus, newProduct, setNewProduct, newKeywords, setNewKeywords, newUsps, setNewUsps, newCta, setNewCta, newGoal, setNewGoal, newTone, setNewTone, newPageUrl, setNewPageUrl, newPageContent, setNewPageContent, newFetchStatus, setNewFetchStatus, newFetchError, setNewFetchError, newFetchAbortRef, canGenerate, auditLoading, adsMap, adsLoading, onGenerate }) {
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 };
 
   return (
@@ -423,9 +449,10 @@ function FormView({ mode, setMode, campaigns, selectedId, setSelectedId, existin
 
           {selectedId && (() => {
             const sel = campaigns.find(c => String(c.campaignId) === selectedId);
-            const ads = sel?.ads || [];
+            const ads = adsMap[selectedId] ?? sel?.ads ?? [];
             const headlines = ads.flatMap(ad => ad.headlines || []).filter(Boolean).slice(0, 10);
             const descriptions = ads.flatMap(ad => ad.descriptions || []).filter(Boolean).slice(0, 4);
+            if (adsLoading) return <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>Loading current ad copy…</div>;
             if (!headlines.length && !descriptions.length) return null;
             return (
               <div style={{ border: '1px solid #e0e7ff', background: '#f8faff', borderRadius: 10, padding: 12, marginBottom: 16 }}>

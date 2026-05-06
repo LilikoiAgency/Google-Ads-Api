@@ -1028,16 +1028,19 @@ export async function GET(request) {
       );
     }
 
-    // ── Cron idempotency guard ────────────────────────────────────────────
-    const mongoClient = await dbConnect();
-    const guardDb = mongoClient.db('tokensApi');
+    // ── Cron idempotency guard (write-mode only) ─────────────────────────
+    let guardDb = null;
     const jobName = `audience-lab-sync-slot-${slot}`;
-    const lastRun = await getCronLastRun(guardDb, jobName);
-    if (shouldSkipCronRun(lastRun)) {
-      return new Response(
-        JSON.stringify({ skipped: true, reason: 'ran recently', lastRun }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+    if (writeEnabled) {
+      const mongoClient = await dbConnect();
+      guardDb = mongoClient.db('tokensApi');
+      const lastRun = await getCronLastRun(guardDb, jobName);
+      if (shouldSkipCronRun(lastRun)) {
+        return new Response(
+          JSON.stringify({ skipped: true, reason: 'ran recently', lastRun }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Build a single target from the MongoDB document
@@ -1139,7 +1142,7 @@ export async function GET(request) {
       return new Response(JSON.stringify({ error: err.message, slot, key: segDoc.key, runId: logState.runId }), { status: 500, headers: NO_STORE_HEADERS });
     }
 
-    await setCronLastRun(guardDb, jobName);
+    if (writeEnabled && guardDb) await setCronLastRun(guardDb, jobName);
     return new Response(JSON.stringify({ ok: true, slot, key: segDoc.key, result: syncResult, runId: logState.runId, logs: logState.includeLogs ? logState.entries : undefined }), { status: 200, headers: NO_STORE_HEADERS });
   }
   // ── End slot-based routing ───────────────────────────────────────────────────
