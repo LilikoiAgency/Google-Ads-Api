@@ -19,6 +19,14 @@ export default function SeoMetaPanel({ open, onClose }) {
   const [keyword, setKeyword] = useState("");
   const [pageType, setPageType] = useState("Page");
 
+  // Content source state
+  const [contentMode, setContentMode] = useState("url"); // "url" | "text"
+  const [pageUrl, setPageUrl] = useState("");
+  const [fetchedContent, setFetchedContent] = useState("");
+  const [pastedContent, setPastedContent] = useState("");
+  const [fetchStatus, setFetchStatus] = useState("idle"); // "idle" | "loading" | "error"
+  const [fetchError, setFetchError] = useState("");
+
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -40,6 +48,12 @@ export default function SeoMetaPanel({ open, onClose }) {
         setKeyword("");
         setPageType("Page");
         setCopied({});
+        setContentMode("url");
+        setPageUrl("");
+        setFetchedContent("");
+        setPastedContent("");
+        setFetchStatus("idle");
+        setFetchError("");
       }, 220);
       return () => clearTimeout(tid);
     }
@@ -47,14 +61,45 @@ export default function SeoMetaPanel({ open, onClose }) {
 
   const canGenerate = pageTitle.trim().length > 0 && !loading;
 
+  async function handleFetchContent() {
+    if (!pageUrl.trim() || fetchStatus === "loading") return;
+    setFetchStatus("loading");
+    setFetchError("");
+    setFetchedContent("");
+    try {
+      const res = await fetch("/api/fetch-page-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: pageUrl.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setFetchStatus("error");
+        setFetchError(json.error || `Error ${res.status}`);
+      } else {
+        setFetchedContent(json.text || "");
+        setFetchStatus("idle");
+      }
+    } catch (err) {
+      setFetchStatus("error");
+      setFetchError(err.message || "Failed to fetch content");
+    }
+  }
+
   const handleGenerate = async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
+      const pageContent = contentMode === "url" ? fetchedContent : pastedContent;
       const res = await fetch("/api/claude/seo-meta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pageTitle: pageTitle.trim(), keyword: keyword.trim() || undefined, pageType: pageType !== "Page" ? pageType : undefined }),
+        body: JSON.stringify({
+          pageTitle: pageTitle.trim(),
+          keyword: keyword.trim() || undefined,
+          pageType: pageType !== "Page" ? pageType : undefined,
+          pageContent: pageContent || undefined,
+        }),
       });
       const json = await res.json();
       if (!res.ok || json.error) {
@@ -81,6 +126,9 @@ export default function SeoMetaPanel({ open, onClose }) {
 
   const inputStyle = { width: "100%", padding: "10px 12px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 10, outline: "none", boxSizing: "border-box", background: "#fff", color: "#111827" };
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 };
+
+  const activeTabStyle = { padding: "7px 16px", fontSize: 12, fontWeight: 700, background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" };
+  const inactiveTabStyle = { padding: "7px 16px", fontSize: 12, fontWeight: 700, background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: 8, cursor: "pointer" };
 
   const content = (
     <>
@@ -113,6 +161,88 @@ export default function SeoMetaPanel({ open, onClose }) {
                   style={inputStyle}
                 />
               </div>
+
+              {/* Content source section */}
+              <div>
+                <p style={{ ...labelStyle, marginBottom: 10 }}>Content source <span style={{ color: "#9ca3af", fontWeight: 400 }}>(optional)</span></p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <button
+                    onClick={() => setContentMode("url")}
+                    style={contentMode === "url" ? activeTabStyle : inactiveTabStyle}
+                  >
+                    Paste URL
+                  </button>
+                  <button
+                    onClick={() => setContentMode("text")}
+                    style={contentMode === "text" ? activeTabStyle : inactiveTabStyle}
+                  >
+                    Paste text
+                  </button>
+                </div>
+
+                {contentMode === "url" && (
+                  <div>
+                    <label htmlFor="seo-page-url" style={labelStyle}>Page URL (optional)</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        id="seo-page-url"
+                        type="text"
+                        value={pageUrl}
+                        onChange={(e) => setPageUrl(e.target.value)}
+                        placeholder="https://example.com/page"
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                      <button
+                        onClick={handleFetchContent}
+                        disabled={!pageUrl.trim() || fetchStatus === "loading"}
+                        style={{
+                          padding: "10px 16px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          background: pageUrl.trim() && fetchStatus !== "loading" ? "#7c3aed" : "#e5e7eb",
+                          color: pageUrl.trim() && fetchStatus !== "loading" ? "#fff" : "#9ca3af",
+                          border: "none",
+                          borderRadius: 10,
+                          cursor: pageUrl.trim() && fetchStatus !== "loading" ? "pointer" : "not-allowed",
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {fetchStatus === "loading" ? "Fetching..." : "Fetch content"}
+                      </button>
+                    </div>
+                    {fetchStatus === "error" && (
+                      <p style={{ fontSize: 12, color: "#dc2626", margin: "6px 0 0" }}>{fetchError}</p>
+                    )}
+                    {fetchedContent && (
+                      <div style={{ marginTop: 10 }}>
+                        <label style={labelStyle}>Fetched page content</label>
+                        <textarea
+                          readOnly
+                          value={fetchedContent}
+                          rows={6}
+                          style={{ ...inputStyle, resize: "vertical", background: "#f9fafb", color: "#374151" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {contentMode === "text" && (
+                  <div>
+                    <label htmlFor="seo-pasted-content" style={labelStyle}>Paste page content (optional)</label>
+                    <textarea
+                      id="seo-pasted-content"
+                      value={pastedContent}
+                      onChange={(e) => setPastedContent(e.target.value)}
+                      placeholder="Paste your page content here..."
+                      rows={6}
+                      style={{ ...inputStyle, resize: "vertical" }}
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label htmlFor="seo-keyword" style={labelStyle}>Target keyword <span style={{ color: "#9ca3af", fontWeight: 400 }}>(optional)</span></label>
                 <input
