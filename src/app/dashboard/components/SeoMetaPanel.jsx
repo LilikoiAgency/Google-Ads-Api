@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 const PAGE_TYPES = ["Page", "Homepage", "Product", "Service", "Blog Post", "Category"];
@@ -32,6 +32,8 @@ export default function SeoMetaPanel({ open, onClose }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [copied, setCopied] = useState({});
 
+  const abortRef = useRef(null);
+
   useEffect(() => { setMounted(true); return () => setMounted(false); }, []);
 
   useEffect(() => {
@@ -55,22 +57,25 @@ export default function SeoMetaPanel({ open, onClose }) {
         setFetchStatus("idle");
         setFetchError("");
       }, 220);
+      abortRef.current?.abort();
       return () => clearTimeout(tid);
     }
   }, [open]);
 
-  const canGenerate = pageTitle.trim().length > 0 && !loading;
+  const canGenerate = pageTitle.trim().length > 0 && !loading && fetchStatus !== 'loading';
 
   async function handleFetchContent() {
     if (!pageUrl.trim() || fetchStatus === "loading") return;
     setFetchStatus("loading");
     setFetchError("");
     setFetchedContent("");
+    abortRef.current = new AbortController();
     try {
       const res = await fetch("/api/fetch-page-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: pageUrl.trim() }),
+        signal: abortRef.current.signal,
       });
       const json = await res.json();
       if (!res.ok) {
@@ -81,6 +86,7 @@ export default function SeoMetaPanel({ open, onClose }) {
         setFetchStatus("idle");
       }
     } catch (err) {
+      if (err.name === 'AbortError') return;
       setFetchStatus("error");
       setFetchError(err.message || "Failed to fetch content");
     }
@@ -165,14 +171,18 @@ export default function SeoMetaPanel({ open, onClose }) {
               {/* Content source section */}
               <div>
                 <p style={{ ...labelStyle, marginBottom: 10 }}>Content source <span style={{ color: "#9ca3af", fontWeight: 400 }}>(optional)</span></p>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <div role="tablist" aria-label="Content source" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                   <button
+                    role="tab"
+                    aria-selected={contentMode === "url"}
                     onClick={() => setContentMode("url")}
                     style={contentMode === "url" ? activeTabStyle : inactiveTabStyle}
                   >
                     Paste URL
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={contentMode === "text"}
                     onClick={() => setContentMode("text")}
                     style={contentMode === "text" ? activeTabStyle : inactiveTabStyle}
                   >

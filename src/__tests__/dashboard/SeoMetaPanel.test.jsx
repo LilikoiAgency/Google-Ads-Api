@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SeoMetaPanel from '@/app/dashboard/components/SeoMetaPanel.jsx';
@@ -38,9 +39,9 @@ describe('SeoMetaPanel', () => {
 
   it('renders the form when open', () => {
     render(<SeoMetaPanel open={true} onClose={() => {}} />);
-    expect(screen.getByLabelText(/page title/i)).toBeTruthy();
-    expect(screen.getByLabelText(/target keyword/i)).toBeTruthy();
-    expect(screen.getByLabelText(/page type/i)).toBeTruthy();
+    expect(screen.getByLabelText(/page title/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/target keyword/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/page type/i)).toBeInTheDocument();
   });
 
   it('disables Generate button when page title is empty', () => {
@@ -66,15 +67,15 @@ describe('SeoMetaPanel', () => {
   // Content source tests
   it('URL mode tab is selected by default', () => {
     render(<SeoMetaPanel open={true} onClose={() => {}} />);
-    expect(screen.getByLabelText(/page url/i)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /fetch content/i })).toBeTruthy();
+    expect(screen.getByLabelText(/page url/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fetch content/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/paste page content/i)).toBeNull();
   });
 
   it('clicking Paste text tab switches to text mode', () => {
     render(<SeoMetaPanel open={true} onClose={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /paste text/i }));
-    expect(screen.getByLabelText(/paste page content/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /paste text/i }));
+    expect(screen.getByLabelText(/paste page content/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/page url/i)).toBeNull();
   });
 
@@ -91,7 +92,7 @@ describe('SeoMetaPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /fetch content/i }));
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Hello fetched content')).toBeTruthy();
+      expect(screen.getByDisplayValue('Hello fetched content')).toBeInTheDocument();
     });
 
     expect(global.fetch).toHaveBeenCalledWith('/api/fetch-page-content', expect.objectContaining({
@@ -113,7 +114,7 @@ describe('SeoMetaPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /fetch content/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Could not fetch page')).toBeTruthy();
+      expect(screen.getByText('Could not fetch page')).toBeInTheDocument();
     });
   });
 
@@ -132,7 +133,7 @@ describe('SeoMetaPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /fetch content/i }));
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Fetched page text')).toBeTruthy();
+      expect(screen.getByDisplayValue('Fetched page text')).toBeInTheDocument();
     });
 
     // Fill in page title and generate
@@ -148,13 +149,24 @@ describe('SeoMetaPanel', () => {
     });
   });
 
+  it('Generate button is disabled while fetch is in progress', async () => {
+    global.fetch.mockImplementation(() => new Promise(() => {})); // never resolves
+    render(<SeoMetaPanel open={true} onClose={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText(/page title/i), { target: { value: 'My Page' } });
+    fireEvent.change(screen.getByLabelText(/page url/i), { target: { value: 'https://example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /fetch content/i }));
+
+    expect(screen.getByRole('button', { name: /generate/i })).toBeDisabled();
+  });
+
   it('submits pageContent from text mode', async () => {
     global.fetch.mockResolvedValueOnce(seoMetaResponse);
 
     render(<SeoMetaPanel open={true} onClose={() => {}} />);
 
     // Switch to text mode
-    fireEvent.click(screen.getByRole('button', { name: /paste text/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /paste text/i }));
 
     // Paste content
     fireEvent.change(screen.getByLabelText(/paste page content/i), { target: { value: 'My pasted content here' } });
