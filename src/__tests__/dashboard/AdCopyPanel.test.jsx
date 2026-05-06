@@ -90,3 +90,66 @@ describe('AdCopyPanel', () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe('Mode toggle', () => {
+  it('shows mode toggle with New campaign and Existing campaign options', async () => {
+    render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
+    await waitFor(() => screen.getByLabelText(/business/i));
+    expect(screen.getByText('New campaign')).toBeTruthy();
+    expect(screen.getByText('Existing campaign')).toBeTruthy();
+  });
+
+  it('defaults to existing campaign mode when underperforming campaigns exist', async () => {
+    render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
+    await waitFor(() => screen.getByLabelText(/business/i));
+    // Existing mode shows campaign list and existing form fields
+    expect(screen.getByLabelText(/business/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/what are you selling/i)).toBeNull();
+  });
+
+  it('switches to new campaign form when New campaign is clicked', async () => {
+    render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
+    await waitFor(() => screen.getByText('New campaign'));
+    fireEvent.click(screen.getByText('New campaign'));
+    await waitFor(() => expect(screen.getByLabelText(/what are you selling/i)).toBeTruthy());
+    expect(screen.queryByLabelText(/business/i)).toBeNull();
+  });
+
+  it('defaults to new campaign mode when no underperforming campaigns exist', async () => {
+    // SCALE verdict: lostBudget > 0.25 && conv > 0 — not in UNDERPERFORMING set
+    const customer = makeSelectedCustomer([makeCampaign({ searchBudgetLostImpressionShare: 0.4, searchRankLostImpressionShare: 0 })]);
+    render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={customer} />);
+    await waitFor(() => expect(screen.getByLabelText(/what are you selling/i)).toBeTruthy());
+  });
+});
+
+describe('New campaign form', () => {
+  beforeEach(async () => {
+    // SCALE verdict: lostBudget > 0.25 && conv > 0 — not in UNDERPERFORMING set
+    const customer = makeSelectedCustomer([makeCampaign({ searchBudgetLostImpressionShare: 0.4, searchRankLostImpressionShare: 0 })]);
+    render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={customer} />);
+    await waitFor(() => screen.getByLabelText(/what are you selling/i));
+  });
+
+  it('disables generate button when required fields are empty', () => {
+    const btn = screen.getByRole('button', { name: /generate/i });
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('enables generate button when all required fields are filled', async () => {
+    fireEvent.change(screen.getByLabelText(/what are you selling/i), { target: { value: 'Plumbing services' } });
+    fireEvent.change(screen.getByLabelText(/target keywords/i), { target: { value: 'plumber, repair' } });
+    fireEvent.change(screen.getByLabelText(/what makes you different/i), { target: { value: 'Licensed' } });
+    fireEvent.change(screen.getByLabelText(/main offer or cta/i), { target: { value: 'Call now' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /generate/i }).disabled).toBe(false));
+  });
+});
+
+describe('Existing campaign current copy preview', () => {
+  it('shows current copy preview when a campaign with ads is selected', async () => {
+    render(<AdCopyPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
+    await waitFor(() => screen.getByLabelText(/business/i));
+    // The default campaign (Brand Search) has ads with headlines ['Buy Now', 'Shop Today']
+    await waitFor(() => expect(screen.getByText('Buy Now')).toBeTruthy());
+  });
+});
