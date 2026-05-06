@@ -17,6 +17,10 @@ Rules:
 - If a campaign has converting search terms not in current headlines, you must incorporate them
 - If a campaign has keywords failing on Ad Relevance, headlines must more closely match keyword intent
 - If broad match spend is over 60%, address intent specificity in your strategy
+- Reference the current copy explicitly: "Your current headline 'X' has low Ad Relevance because..."
+- Do not repeat what is already working — focus output on what needs to change and why
+- Replacement variants must be meaningfully different from the originals, not minor rewrites
+- Frame all output as improvement recommendations on the current copy, not as new suggestions
 
 Return ONLY valid JSON — no markdown fences, no explanation outside the JSON object.
 
