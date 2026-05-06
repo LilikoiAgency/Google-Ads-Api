@@ -11,7 +11,7 @@ import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetC
 function buildUserPrompt(pageTitle, keyword, pageType, pageContent) {
   const lines = [];
   if (pageTitle) lines.push(`Page title / URL: ${pageTitle}`);
-  if (pageContent) lines.push(`\nPage content (use as primary source of facts):\n${pageContent}`);
+  if (pageContent) lines.push(`Page content (use as primary source of facts):\n${pageContent}`);
   if (keyword) lines.push(`Target keyword: ${keyword}`);
   if (pageType) lines.push(`Page type: ${pageType}`);
   return lines.join('\n');
@@ -52,11 +52,12 @@ export async function POST(request) {
 
   const client = new Anthropic({ apiKey });
   const systemPrompt = getSeoMetaSystemPrompt();
+  const safeContent = pageContent?.trim() ? pageContent.trim().slice(0, 20000) : '';
   const userPrompt = buildUserPrompt(
     pageTitle?.trim() || '',
     keyword?.trim() || '',
     pageType?.trim() || '',
-    pageContent?.trim() || ''
+    safeContent
   );
 
   let response;
