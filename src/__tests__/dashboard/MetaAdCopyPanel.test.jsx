@@ -98,3 +98,58 @@ describe('MetaAdCopyPanel', () => {
     expect(screen.getByText('Primary 1')).toBeTruthy();
   });
 });
+
+describe('Mode toggle', () => {
+  it('shows mode toggle with New campaign and Existing campaign options', async () => {
+    render(<MetaAdCopyPanel open={true} onClose={() => {}} selectedAccount={makeAccount()} campaigns={[makeCampaign()]} />);
+    await waitFor(() => expect(screen.getByText('New campaign')).toBeTruthy());
+    expect(screen.getByText('Existing campaign')).toBeTruthy();
+  });
+
+  it('defaults to existing mode when underperforming campaigns exist', async () => {
+    render(<MetaAdCopyPanel open={true} onClose={() => {}} selectedAccount={makeAccount()} campaigns={[makeCampaign()]} />);
+    await waitFor(() => expect(screen.getByLabelText(/business/i)).toBeTruthy());
+    expect(screen.queryByLabelText(/what are you selling/i)).toBeNull();
+  });
+
+  it('switches to new campaign form when New campaign is clicked', async () => {
+    render(<MetaAdCopyPanel open={true} onClose={() => {}} selectedAccount={makeAccount()} campaigns={[makeCampaign()]} />);
+    await waitFor(() => screen.getByText('New campaign'));
+    fireEvent.click(screen.getByText('New campaign'));
+    await waitFor(() => expect(screen.getByLabelText(/what are you selling/i)).toBeTruthy());
+    expect(screen.queryByLabelText(/business/i)).toBeNull();
+  });
+
+  it('defaults to new campaign mode when no campaigns with spend', async () => {
+    // 0 spend campaigns → campaignsWithSpend is empty → no form shown
+    // But when campaigns have spend but ROAS >= 1: no underperforming → new mode
+    const healthyCampaign = makeCampaign({ roas: 2.5, conversions: 5, spend: 500 });
+    render(<MetaAdCopyPanel open={true} onClose={() => {}} selectedAccount={makeAccount()} campaigns={[healthyCampaign]} />);
+    await waitFor(() => expect(screen.getByLabelText(/what are you selling/i)).toBeTruthy());
+  });
+});
+
+describe('New campaign form — Meta', () => {
+  beforeEach(async () => {
+    const healthyCampaign = makeCampaign({ roas: 2.5, conversions: 5, spend: 500 });
+    render(<MetaAdCopyPanel open={true} onClose={() => {}} selectedAccount={makeAccount()} campaigns={[healthyCampaign]} />);
+    await waitFor(() => screen.getByLabelText(/what are you selling/i));
+  });
+
+  it('has Target audience field (not keywords)', () => {
+    expect(screen.getByLabelText(/target audience/i)).toBeTruthy();
+  });
+
+  it('disables generate when required fields empty', () => {
+    const btn = screen.getByRole('button', { name: /generate/i });
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('enables generate when all required fields filled', async () => {
+    fireEvent.change(screen.getByLabelText(/what are you selling/i), { target: { value: 'Plumbing' } });
+    fireEvent.change(screen.getByLabelText(/target audience/i), { target: { value: 'Homeowners' } });
+    fireEvent.change(screen.getByLabelText(/what makes you different/i), { target: { value: 'Licensed' } });
+    fireEvent.change(screen.getByLabelText(/main offer or cta/i), { target: { value: 'Call now' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /generate/i }).disabled).toBe(false));
+  });
+});
