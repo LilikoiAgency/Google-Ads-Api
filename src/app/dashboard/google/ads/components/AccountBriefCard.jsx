@@ -205,7 +205,10 @@ function BriefingContent({ briefing }) {
           {briefing.actions.map((a, i) => (
             <div key={i} style={{ display: 'flex', gap: 10, marginBottom: i === briefing.actions.length - 1 ? 0 : 10 }}>
               <span style={{ width: 22, height: 22, borderRadius: 6, background: '#4f46e5', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
-              <p style={{ fontSize: 12, color: '#1e1b4b', margin: 0, lineHeight: 1.5, fontWeight: 600 }}>{a}</p>
+              <div>
+                <p style={{ fontSize: 12, color: '#1e1b4b', margin: 0, lineHeight: 1.5, fontWeight: 600 }}>{typeof a === 'string' ? a : a.action}</p>
+                {a?.impact && <p style={{ fontSize: 11, color: '#6366f1', margin: '2px 0 0', lineHeight: 1.4 }}>{a.impact}</p>}
+              </div>
             </div>
           ))}
         </div>
