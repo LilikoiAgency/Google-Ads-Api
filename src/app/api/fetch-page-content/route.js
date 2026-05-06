@@ -46,13 +46,10 @@ export async function POST(request) {
 
   let html;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(parsed.href, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(10000),
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOMetaBot/1.0)' },
     });
-    clearTimeout(timeout);
     if (!res.ok) {
       return NextResponse.json(
         { error: `Failed to fetch URL: ${res.status} ${res.statusText}` },
@@ -60,7 +57,7 @@ export async function POST(request) {
       );
     }
     const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
+    if (!contentType.includes('text/html')) {
       return NextResponse.json(
         { error: 'URL does not return HTML content' },
         { status: 422 }

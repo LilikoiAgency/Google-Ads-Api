@@ -27,7 +27,13 @@ beforeEach(() => {
 afterEach(() => { vi.clearAllMocks(); });
 
 describe('POST /api/fetch-page-content', () => {
-  it('returns 401 when not authenticated', async () => {
+  it('returns 401 when session is null', async () => {
+    getServerSession.mockResolvedValue(null);
+    const res = await POST(makeRequest({ url: 'https://example.com' }));
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 when email domain is not allowed', async () => {
     getServerSession.mockResolvedValue({ user: { email: 'outsider@other.com' } });
     const res = await POST(makeRequest({ url: 'https://example.com' }));
     expect(res.status).toBe(401);
@@ -84,5 +90,14 @@ describe('POST /api/fetch-page-content', () => {
     const res = await POST(makeRequest({ url: 'https://example.com' }));
     expect(res.status).toBe(200);
     expect(res._body.text.length).toBeLessThanOrEqual(5000);
+  });
+
+  it('returns 422 when fetch times out (AbortError)', async () => {
+    const abortError = new Error('The operation was aborted.');
+    abortError.name = 'AbortError';
+    global.fetch.mockRejectedValue(abortError);
+    const res = await POST(makeRequest({ url: 'https://example.com' }));
+    expect(res.status).toBe(422);
+    expect(res._body.error).toMatch(/timed out/i);
   });
 });
