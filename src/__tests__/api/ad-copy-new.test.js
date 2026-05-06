@@ -83,6 +83,8 @@ describe('POST /api/claude/ad-copy-new', () => {
   });
 
   it('returns 429 when daily limit is reached', async () => {
+    const { isAdmin } = await import('@/lib/admins');
+    isAdmin.mockReturnValueOnce(false);
     const mongooseConnect = (await import('@/lib/mongoose')).default;
     mongooseConnect.mockResolvedValueOnce({
       db: () => ({

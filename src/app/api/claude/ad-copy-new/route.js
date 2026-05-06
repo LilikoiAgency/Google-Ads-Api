@@ -1,12 +1,16 @@
+export const maxDuration = 120;
+
 import { getServerSession } from 'next-auth';
 import { authOptions, allowedEmailDomain } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
-import mongooseConnect from '@/lib/mongoose';
+import dbConnect from '@/lib/mongoose';
 import { getCredentials } from '@/lib/dbFunctions';
 import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '@/lib/usageLogger';
 import { getAdCopyNewSystemPrompt } from '@/lib/adCopyNewPrompt';
+import { isAdmin } from '@/lib/admins';
 
 const DAILY_LIMIT = parseInt(process.env.AD_COPY_NEW_DAILY_LIMIT || '10');
+const DB = 'tokensApi';
 
 async function getDailyUsageCount(db, email) {
   const today = new Date().toISOString().slice(0, 10);
@@ -67,23 +71,31 @@ export async function POST(request) {
     return Response.json({ error: 'Monthly AI budget reached. Contact your admin.' }, { status: 429 });
   }
 
-  const mongoose = await mongooseConnect();
-  const db = mongoose.db();
+  const dbClient = await dbConnect();
+  const db = dbClient.db(DB);
 
-  const dailyCount = await getDailyUsageCount(db, email);
-  if (dailyCount >= DAILY_LIMIT) {
-    return Response.json({ error: "You've used your daily AI limit. Try again tomorrow." }, { status: 429 });
+  if (!isAdmin(email)) {
+    const dailyCount = await getDailyUsageCount(db, email);
+    if (dailyCount >= DAILY_LIMIT) {
+      return Response.json({ error: "You've used your daily AI limit. Try again tomorrow." }, { status: 429 });
+    }
   }
 
   const credentials = await getCredentials(email);
   const client = new Anthropic({ apiKey: credentials.anthropic_api_key });
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    system: getAdCopyNewSystemPrompt(),
-    messages: [{ role: 'user', content: buildUserPrompt({ product, keywords, usps, cta, goal, tone, pageContent }) }],
-  });
+  let message;
+  try {
+    message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: getAdCopyNewSystemPrompt(),
+      messages: [{ role: 'user', content: buildUserPrompt({ product, keywords, usps, cta, goal, tone, pageContent }) }],
+    });
+  } catch (err) {
+    console.error('[claude/ad-copy-new] Claude error:', err?.message);
+    return Response.json({ error: 'Claude API error' }, { status: 502 });
+  }
 
   const rawText = message.content[0]?.text || '';
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
@@ -98,15 +110,21 @@ export async function POST(request) {
     return Response.json({ error: 'Failed to parse AI response' }, { status: 500 });
   }
 
-  await incrementDailyUsage(db, email);
-  await logApiUsage({
+  const inputTokens = message.usage?.input_tokens || 0;
+  const outputTokens = message.usage?.output_tokens || 0;
+  logApiUsage({
+    type: 'claude_tokens',
+    feature: 'ad_copy_new',
     email,
-    event: 'ad_copy_new',
     model: 'claude-sonnet-4-6',
-    inputTokens: message.usage.input_tokens,
-    outputTokens: message.usage.output_tokens,
-    cost: estimateClaudeCost('claude-sonnet-4-6', message.usage.input_tokens, message.usage.output_tokens),
-  });
+    inputTokens,
+    outputTokens,
+    estimatedCostUsd: estimateClaudeCost('claude-sonnet-4-6', inputTokens, outputTokens),
+  }).catch(() => {});
+
+  if (!isAdmin(email)) {
+    await incrementDailyUsage(db, email).catch(() => {});
+  }
 
   return Response.json({ data });
 }
