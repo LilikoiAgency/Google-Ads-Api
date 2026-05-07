@@ -79,12 +79,12 @@ describe('DeepAnalysisPanel', () => {
   it('shows all six category labels', async () => {
     render(<DeepAnalysisPanel open={true} onClose={() => {}} selectedCustomer={makeSelectedCustomer()} />);
     await waitFor(() => screen.getByText('72'));
-    expect(screen.getByText(/Conversion Tracking/i)).toBeTruthy();
-    expect(screen.getByText(/Wasted Spend/i)).toBeTruthy();
-    expect(screen.getByText(/Account Structure/i)).toBeTruthy();
-    expect(screen.getByText(/Keywords/i)).toBeTruthy();
-    expect(screen.getByText(/Ads/i)).toBeTruthy();
-    expect(screen.getByText(/Settings/i)).toBeTruthy();
+    expect(screen.getAllByText(/Conversion Tracking/i)[0]).toBeTruthy();
+    expect(screen.getAllByText(/Wasted Spend/i)[0]).toBeTruthy();
+    expect(screen.getAllByText(/Account Structure/i)[0]).toBeTruthy();
+    expect(screen.getAllByText(/Keywords/i)[0]).toBeTruthy();
+    expect(screen.getAllByText(/Ads/i)[0]).toBeTruthy();
+    expect(screen.getAllByText(/Settings/i)[0]).toBeTruthy();
   });
 
   it('shows quick wins', async () => {

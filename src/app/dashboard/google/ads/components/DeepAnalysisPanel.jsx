@@ -97,7 +97,10 @@ function CategorySection({ name, category }) {
         onClick={() => setOpen((o) => !o)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0', marginBottom: open ? 8 : 0 }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {CATEGORY_LABELS[name]}
+          </span>
           <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor(category.score) }}>{category.score}/100</span>
         </div>
         <span style={{ fontSize: 10, color: '#9ca3af' }}>{open ? '▲' : '▼'}</span>
