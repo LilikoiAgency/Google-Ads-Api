@@ -1038,15 +1038,32 @@ export default function MetaDashboard() {
       >
         <div className="desktop-only" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {selectedAccount && (
-            <button
-              onClick={() => router.push(`/dashboard/meta/audit?accountId=${encodeURIComponent(selectedAccount.accountId)}`)}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(24,119,242,0.15)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#1877F2", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(24,119,242,0.25)"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(24,119,242,0.15)"}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-              Audit Account
-            </button>
+            <>
+              <button
+                onClick={() => router.push(`/dashboard/meta/audit?accountId=${encodeURIComponent(selectedAccount.accountId)}`)}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(24,119,242,0.15)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#1877F2", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(24,119,242,0.25)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "rgba(24,119,242,0.15)"}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                Audit Account
+              </button>
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams({ accountId: selectedAccount.accountId });
+                  if (selectedAccount.name) params.set("accountName", encodeURIComponent(selectedAccount.name));
+                  router.push(`/dashboard/meta/deep-analysis?${params.toString()}`);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#6366f1", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.2)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.1)"}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
+                </svg>
+                Deep Analysis
+              </button>
+            </>
           )}
           <AccountPicker
             accounts={accounts}
