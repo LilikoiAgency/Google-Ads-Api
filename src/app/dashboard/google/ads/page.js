@@ -977,7 +977,7 @@ export default function GoogleAdsDashboard() {
                 p.set("panel", "deep-analysis");
                 router.push(`${window.location.pathname}?${p.toString()}`);
               }}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#6366f1", cursor: "pointer", whiteSpace: "nowrap" }}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#6366f1", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
               onMouseEnter={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.2)"}
               onMouseLeave={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.1)"}
             >
@@ -1246,13 +1246,11 @@ export default function GoogleAdsDashboard() {
                   onClose={closePanel}
                 />
               )}
-              {deepAnalysisPanelOpen && (
-                <DeepAnalysisPanel
-                  open={deepAnalysisPanelOpen}
-                  onClose={closePanel}
-                  selectedCustomer={selectedCustomer}
-                />
-              )}
+              <DeepAnalysisPanel
+                open={deepAnalysisPanelOpen}
+                onClose={closePanel}
+                selectedCustomer={selectedCustomer}
+              />
             </>
           )}
           <ContentArea
