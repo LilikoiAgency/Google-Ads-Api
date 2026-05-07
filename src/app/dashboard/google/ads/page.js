@@ -15,7 +15,6 @@ import AdCopyPanel from "./components/AdCopyPanel";
 import AccountBriefPanel from "./components/AccountBriefPanel";
 import AccountBriefCard from "./components/AccountBriefCard";
 import AuditPanel from "./components/AuditPanel";
-import DeepAnalysisPanel from "./components/DeepAnalysisPanel";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -455,13 +454,11 @@ export default function GoogleAdsDashboard() {
   const [adCopyPanelOpen, setAdCopyPanelOpen] = useState(false);
   const [auditPanelOpen, setAuditPanelOpen] = useState(false);
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
-  const [deepAnalysisPanelOpen, setDeepAnalysisPanelOpen] = useState(false);
 
   useEffect(() => {
     setAdCopyPanelOpen(panelParam === "ad-copy");
     setAuditPanelOpen(panelParam === "audit");
     setBriefPanelOpen(panelParam === "brief");
-    setDeepAnalysisPanelOpen(panelParam === "deep-analysis");
   }, [panelParam]);
 
   const closePanel = () => {
@@ -973,9 +970,17 @@ export default function GoogleAdsDashboard() {
             </button>
             <button
               onClick={() => {
-                const p = new URLSearchParams(window.location.search);
-                p.set("panel", "deep-analysis");
-                router.push(`${window.location.pathname}?${p.toString()}`);
+                const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
+                if (ad) {
+                  try { sessionStorage.setItem(`deepAnalysisCampaigns:${selectedCustomerId}`, JSON.stringify(ad.campaigns || [])); } catch {}
+                }
+                const params = new URLSearchParams({ customerId: selectedCustomerId });
+                params.set("dateRange", dateRange);
+                if (dateRange === "CUSTOM" && customDateRange?.startDate && customDateRange?.endDate) {
+                  params.set("startDate", customDateRange.startDate);
+                  params.set("endDate", customDateRange.endDate);
+                }
+                router.push(`/dashboard/google/ads/deep-analysis?${params.toString()}`);
               }}
               style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#6366f1", cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap" }}
               onMouseEnter={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.2)"}
@@ -1246,11 +1251,6 @@ export default function GoogleAdsDashboard() {
                   onClose={closePanel}
                 />
               )}
-              <DeepAnalysisPanel
-                open={deepAnalysisPanelOpen}
-                onClose={closePanel}
-                selectedCustomer={selectedCustomer}
-              />
             </>
           )}
           <ContentArea
