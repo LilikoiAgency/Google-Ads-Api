@@ -16,6 +16,7 @@ const TABS = [
   { key: "conversion_lag", label: "Lag" },
   { key: "bidding", label: "Bidding" },
   { key: "assets", label: "Assets" },
+  { key: "auction_insights", label: "Auction Insights" },
   { key: "action_plan", label: "Action Plan" },
   { key: "ai", label: "AI Insight" },
 ];
@@ -27,7 +28,7 @@ const AUDIT_TYPES = [
     shortLabel: "Full",
     description: "Complete account health, structure, search terms, bidding, assets, and action plan.",
     defaultTab: "overview",
-    tabs: ["overview", "campaigns", "keywords", "search_terms", "bidding", "assets", "action_plan", "ai"],
+    tabs: ["overview", "campaigns", "keywords", "search_terms", "bidding", "assets", "auction_insights", "action_plan", "ai"],
   },
   {
     key: "search_term_waste",
@@ -59,7 +60,7 @@ const AUDIT_TYPES = [
     shortLabel: "Budget / IS",
     description: "Separate budget constraints from rank constraints and identify where more budget would or would not help.",
     defaultTab: "campaigns",
-    tabs: ["campaigns", "overview", "bidding", "changes", "geo", "daypart", "action_plan", "ai"],
+    tabs: ["campaigns", "overview", "bidding", "auction_insights", "changes", "geo", "daypart", "action_plan", "ai"],
   },
   {
     key: "bidding_strategy",
@@ -880,6 +881,64 @@ function AssetsTab({ assetAnalysis, auditLoading, pmaxData }) {
         </Section>
       )}
     </>
+  );
+}
+
+// ── Tab: Auction Insights ─────────────────────────────────────────────────────
+
+function AuctionInsightsTab({ auctionInsights, auditLoading }) {
+  if (auditLoading && (!auctionInsights || auctionInsights.length === 0)) {
+    return <LoadingSpinner message="Fetching auction insights…" />;
+  }
+  if (!auctionInsights || auctionInsights.length === 0) {
+    return (
+      <div style={{ padding: "40px 24px", textAlign: "center" }}>
+        <p style={{ fontSize: 16, color: C.textSec }}>No auction insights data available for this date range.</p>
+        <p style={{ fontSize: 13, color: C.textSec, marginTop: 8 }}>Auction Insights require Search or Shopping campaigns with impression data.</p>
+      </div>
+    );
+  }
+
+  const pct = (v) => v != null ? `${(v * 100).toFixed(1)}%` : "—";
+
+  return (
+    <Section title={`Auction Insights — ${auctionInsights.length} Competitor${auctionInsights.length !== 1 ? "s" : ""}`}>
+      {auditLoading && <AuditLoadingBanner />}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+              {["Competitor", "Impression Share", "Overlap Rate", "Outranking Share", "Top of Page %", "Abs. Top %"].map((h) => (
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: C.textSec, whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {auctionInsights.map((row, i) => {
+              const isTop = i === 0;
+              return (
+                <tr key={row.domain} style={{ borderBottom: `1px solid ${C.border}`, background: isTop ? "rgba(233,69,96,0.04)" : "transparent" }}>
+                  <td style={{ padding: "12px 14px", fontWeight: 600, color: isTop ? C.accent : C.textPri, display: "flex", alignItems: "center", gap: 8 }}>
+                    {isTop && <span style={{ fontSize: 10, fontWeight: 800, color: C.accent, background: "rgba(233,69,96,0.15)", border: "1px solid rgba(233,69,96,0.3)", borderRadius: 4, padding: "2px 6px" }}>TOP</span>}
+                    {row.domain}
+                  </td>
+                  <td style={{ padding: "12px 14px", color: row.impressionShare > 0.5 ? C.accent : C.textPri }}>{pct(row.impressionShare)}</td>
+                  <td style={{ padding: "12px 14px", color: row.overlapRate > 0.7 ? C.amber : C.textPri }}>{pct(row.overlapRate)}</td>
+                  <td style={{ padding: "12px 14px", color: C.textPri }}>{pct(row.outrankingShare)}</td>
+                  <td style={{ padding: "12px 14px", color: C.textPri }}>{pct(row.topImpressionPct)}</td>
+                  <td style={{ padding: "12px 14px", color: C.textPri }}>{pct(row.absTopImpressionPct)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 20, padding: "14px 18px", background: "rgba(78,204,163,0.06)", border: `1px solid rgba(78,204,163,0.2)`, borderRadius: 10 }}>
+        <p style={{ fontSize: 13, color: C.textSec, margin: 0, lineHeight: 1.7 }}>
+          <strong style={{ color: C.teal }}>How to read this:</strong> Impression Share = % of auctions a competitor appeared in. Overlap Rate = % of your impressions where they also appeared. Outranking Share = % of auctions where you appeared above them or they didn&apos;t show. Top of Page / Abs. Top = how often they showed in premium positions.
+        </p>
+      </div>
+    </Section>
   );
 }
 
@@ -1852,6 +1911,7 @@ function AuditPageInner() {
                 {activeTab === "conversion_lag" && <ConversionLagTab conversionLag={audit.conversionLag} />}
                 {activeTab === "bidding" && <BiddingTab biddingAudits={audit.bidding} auditLoading={auditLoading} />}
                 {activeTab === "assets" && <AssetsTab assetAnalysis={audit.assets} auditLoading={auditLoading} pmaxData={audit.pmaxData} />}
+                {activeTab === "auction_insights" && <AuctionInsightsTab auctionInsights={audit.auctionInsights} auditLoading={auditLoading} />}
                 {activeTab === "action_plan" && <ActionPlanTab actions={focusedActionPlan} auditLoading={auditLoading} />}
                 {activeTab === "ai" && <AIInsightTab aiInsight={aiInsight} aiLoading={aiLoading} aiError={aiError} onRunAnalysis={runAiAnalysis} auditReady={!!audit && !auditLoading} />}
               </div>

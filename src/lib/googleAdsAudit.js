@@ -154,6 +154,7 @@ export function analyzeKeywords(keywords) {
   };
 
   const bottom10 = [...withQS]
+    .filter((k) => k.status === 'ENABLED')
     .sort((a, b) => {
       if (a.qualityScore !== b.qualityScore) return a.qualityScore - b.qualityScore;
       return (b.cost || 0) - (a.cost || 0);
@@ -170,7 +171,7 @@ export function analyzeKeywords(keywords) {
     .slice(0, 10);
 
   const topByConversions = keywords
-    .filter((k) => (k.conversions || 0) > 0)
+    .filter((k) => k.status === 'ENABLED' && (k.conversions || 0) > 0)
     .sort((a, b) => (b.conversions || 0) - (a.conversions || 0))
     .slice(0, 15);
 
@@ -686,5 +687,6 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     geoPerformance: auditData?.geoPerformance || [],
     daypartPerformance: auditData?.daypartPerformance || [],
     conversionLag: auditData?.conversionLag || [],
+    auctionInsights: auditData?.auctionInsights || [],
   };
 }

@@ -99,6 +99,7 @@ export async function GET(request) {
       campaignPerfRaw,
       campaignAssetsRaw,
       accountAssetsRaw,
+      adGroupAssetsRaw,
       adStrengthRaw,
       pmaxAssetGroupsRaw,
       pmaxBrandExclusionsRaw,
@@ -109,6 +110,7 @@ export async function GET(request) {
       geoPerformanceRaw,
       daypartRaw,
       conversionLagRaw,
+      auctionInsightsRaw,
     ] = await Promise.all([
       // QS + attributes — ad_group_criterion does NOT allow performance metrics with date filtering;
       // fetch criterion data only (no metrics) so quality_score is returned for all active keywords
@@ -126,7 +128,7 @@ export async function GET(request) {
           ad_group.id, ad_group.name
         FROM ad_group_criterion
         WHERE ad_group_criterion.type = 'KEYWORD'
-          AND ad_group_criterion.status != 'REMOVED'
+          AND ad_group_criterion.status = 'ENABLED'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
         LIMIT 5000
@@ -141,14 +143,14 @@ export async function GET(request) {
           metrics.impressions,
           metrics.clicks,
           metrics.cost_micros,
-          metrics.all_conversions
+          metrics.conversions
         FROM keyword_view
-        WHERE ad_group_criterion.status != 'REMOVED'
+        WHERE ad_group_criterion.status = 'ENABLED'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-        ORDER BY metrics.cost_micros DESC LIMIT 1000
+        LIMIT 5000
       `).catch((e) => { console.error('[audit] keyword metrics query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       // Campaign config — no date filter needed (bidding strategy is structural)
@@ -196,6 +198,15 @@ export async function GET(request) {
         SELECT customer_asset.field_type
         FROM customer_asset
         WHERE customer_asset.status != 'REMOVED'
+      `).catch(() => []),
+
+      // Ad-group-level assets (e.g. call extensions added at ad group level)
+      customer.query(`
+        SELECT ad_group.campaign_id, ad_group_asset.field_type
+        FROM ad_group_asset
+        WHERE ad_group_asset.status != 'REMOVED'
+          AND ad_group.status != 'REMOVED'
+          AND campaign.status != 'REMOVED'
       `).catch(() => []),
 
       customer.query(`
@@ -373,6 +384,23 @@ export async function GET(request) {
         ORDER BY metrics.all_conversions DESC
         LIMIT 500
       `).catch((e) => { console.error('[audit] conversion lag query failed:', e?.message || JSON.stringify(e)); return []; }),
+
+      customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          segments.auction_insight_domain,
+          metrics.auction_insight_search_impression_share,
+          metrics.auction_insight_search_overlap_rate,
+          metrics.auction_insight_search_outranking_share,
+          metrics.auction_insight_search_top_impression_percentage,
+          metrics.auction_insight_search_absolute_top_impression_percentage
+        FROM auction_insight_campaign
+        WHERE campaign.status != 'REMOVED'
+          AND segments.date >= '${startDate}'
+          AND segments.date <= '${endDate}'
+        LIMIT 500
+      `).catch((e) => { console.warn('[audit] auction insights query failed:', e?.message || JSON.stringify(e)); return []; }),
     ]);
 
     console.log(`[audit] raw rows — kwQS:${(keywordQsRaw||[]).length} kwMetrics:${(keywordMetricsRaw||[]).length} campaigns:${(campaignConfigRaw||[]).length} accountAssets:${(accountAssetsRaw||[]).length}`);
@@ -409,7 +437,7 @@ export async function GET(request) {
         impressions: Number(metrics.impressions || 0),
         clicks: Number(metrics.clicks || 0),
         cost: Number(metrics.cost_micros || 0),
-        conversions: Number(metrics.all_conversions || 0),
+        conversions: Number(metrics.conversions || 0),
       };
     });
 
@@ -485,6 +513,20 @@ export async function GET(request) {
       campaignId: String(row.campaign?.id || ''),
       assetType: resolveFieldType(row.campaign_asset?.field_type),
     }));
+
+    // Ad-group-level assets — merge into campaignAssets using campaign_id from ad_group
+    const adGroupAssetEntries = (adGroupAssetsRaw || []).map((row) => ({
+      campaignId: String(row.ad_group?.campaign_id || ''),
+      assetType: resolveFieldType(row.ad_group_asset?.field_type),
+    })).filter((e) => e.campaignId && e.assetType);
+    // Deduplicate: if a campaign already has this type via campaign_asset, no need to add again
+    const existingCampaignAssetKeys = new Set(campaignAssets.map((a) => `${a.campaignId}:${a.assetType}`));
+    adGroupAssetEntries.forEach((e) => {
+      if (!existingCampaignAssetKeys.has(`${e.campaignId}:${e.assetType}`)) {
+        campaignAssets.push(e);
+        existingCampaignAssetKeys.add(`${e.campaignId}:${e.assetType}`);
+      }
+    });
 
     const adStrength = (adStrengthRaw || []).map((row) => {
       const strengthRaw = row.ad_group_ad?.ad_strength;
@@ -692,11 +734,45 @@ export async function GET(request) {
       };
     });
 
+    // Auction insights — aggregate by competitor domain across all campaigns
+    const auctionInsightsByDomain = {};
+    (auctionInsightsRaw || []).forEach((row) => {
+      const domain = row.segments?.auction_insight_domain || '';
+      const m = row.metrics || {};
+      if (!domain) return;
+      if (!auctionInsightsByDomain[domain]) {
+        auctionInsightsByDomain[domain] = {
+          domain,
+          impressionShare: [],
+          overlapRate: [],
+          outrankingShare: [],
+          topImpressionPct: [],
+          absTopImpressionPct: [],
+        };
+      }
+      const d = auctionInsightsByDomain[domain];
+      if (m.auction_insight_search_impression_share != null) d.impressionShare.push(Number(m.auction_insight_search_impression_share));
+      if (m.auction_insight_search_overlap_rate != null) d.overlapRate.push(Number(m.auction_insight_search_overlap_rate));
+      if (m.auction_insight_search_outranking_share != null) d.outrankingShare.push(Number(m.auction_insight_search_outranking_share));
+      if (m.auction_insight_search_top_impression_percentage != null) d.topImpressionPct.push(Number(m.auction_insight_search_top_impression_percentage));
+      if (m.auction_insight_search_absolute_top_impression_percentage != null) d.absTopImpressionPct.push(Number(m.auction_insight_search_absolute_top_impression_percentage));
+    });
+
+    const avg = (arr) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+    const auctionInsights = Object.values(auctionInsightsByDomain).map((d) => ({
+      domain: d.domain,
+      impressionShare: avg(d.impressionShare),
+      overlapRate: avg(d.overlapRate),
+      outrankingShare: avg(d.outrankingShare),
+      topImpressionPct: avg(d.topImpressionPct),
+      absTopImpressionPct: avg(d.absTopImpressionPct),
+    })).sort((a, b) => (b.impressionShare || 0) - (a.impressionShare || 0));
+
     logApiUsage({
       type: 'google_ads_audit',
       email: sessionEmail,
       customerId: String(customerId),
-      queriesRun: 16,
+      queriesRun: 18,
     }).catch(() => {});
 
     return NextResponse.json({
@@ -716,6 +792,7 @@ export async function GET(request) {
         geoPerformance,
         daypartPerformance,
         conversionLag,
+        auctionInsights,
         dateWindow,
       },
       requestId,
