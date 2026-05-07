@@ -105,7 +105,7 @@ function CategorySection({ name, category }) {
         </div>
         <span style={{ fontSize: 10, color: '#9ca3af' }}>{open ? '▲' : '▼'}</span>
       </button>
-      {open && findings.map((f, i) => <FindingRow key={i} finding={f} />)}
+      {open && findings.map((f) => <FindingRow key={f.label} finding={f} />)}
     </div>
   );
 }
@@ -115,13 +115,15 @@ function useAnalysis(open, customerId, campaigns) {
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const abortRef = useRef(null);
+  const campaignsRef = useRef(campaigns);
+  useEffect(() => { campaignsRef.current = campaigns; }, [campaigns]);
 
   function cacheKey() {
     return `deepAnalysis:${customerId}:${new Date().toISOString().slice(0, 10)}`;
   }
 
   async function run(skipCache = false) {
-    if (!customerId || campaigns.length === 0) return;
+    if (!customerId || campaignsRef.current.length === 0) return;
     if (!skipCache) {
       const cached = safeGet(cacheKey());
       if (cached) {
@@ -141,7 +143,7 @@ function useAnalysis(open, customerId, campaigns) {
       const deepRes = await fetch('/api/claude/google-deep-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, campaigns, auditData }),
+        body: JSON.stringify({ customerId, campaigns: campaignsRef.current, auditData }),
         signal: controller.signal,
       });
       const deepJson = await deepRes.json();
@@ -165,7 +167,6 @@ function useAnalysis(open, customerId, campaigns) {
     if (!open) return;
     run();
     return () => abortRef.current?.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customerId]);
 
   return { status, result, errorMsg, rerun };
@@ -207,7 +208,7 @@ export default function DeepAnalysisPanel({ open, onClose, selectedCustomer }) {
                 Re-run
               </button>
             )}
-            <button onClick={onClose} aria-label="✕" style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>✕</button>
+            <button onClick={onClose} aria-label="Close" style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>✕</button>
           </div>
         </div>
 
@@ -246,8 +247,8 @@ export default function DeepAnalysisPanel({ open, onClose, selectedCustomer }) {
               {(result.quickWins || []).length > 0 && (
                 <div style={{ marginBottom: 24 }}>
                   <p style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '0 0 12px' }}>Quick Wins</p>
-                  {result.quickWins.map((w, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 12, background: '#f8faff', border: '1px solid #e0e7ff', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  {result.quickWins.map((w) => (
+                    <div key={w.action} style={{ display: 'flex', gap: 12, background: '#f8faff', border: '1px solid #e0e7ff', borderRadius: 10, padding: 12, marginBottom: 8 }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: w.effort === 'low' ? '#15803d' : w.effort === 'medium' ? '#b45309' : '#dc2626', borderRadius: 6, padding: '3px 7px', flexShrink: 0, alignSelf: 'flex-start', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{w.effort}</span>
                       <div>
                         <p style={{ fontSize: 12, fontWeight: 700, color: '#111827', margin: '0 0 3px' }}>{w.action}</p>

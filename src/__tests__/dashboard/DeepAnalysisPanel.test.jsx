@@ -101,7 +101,7 @@ describe('DeepAnalysisPanel', () => {
     const onClose = vi.fn();
     render(<DeepAnalysisPanel open={true} onClose={onClose} selectedCustomer={makeSelectedCustomer()} />);
     await waitFor(() => screen.getByText('72'));
-    fireEvent.click(screen.getByRole('button', { name: /✕/i }));
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
   });
 });
