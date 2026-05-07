@@ -1,9 +1,10 @@
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import { StreamingIcon as StreamingNavIcon } from "../components/DashboardIcons";
@@ -16,7 +17,7 @@ import {
 } from "../../../lib/ptcProcessor";
 import { CtvAppLookUp } from "../../../lib/ctvAppLookup";
 
-const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, loading: () => <div className="h-48 bg-gray-100 rounded-xl animate-pulse" /> });
+const Plot = nextDynamic(() => import("react-plotly.js"), { ssr: false, loading: () => <div className="h-48 bg-gray-100 rounded-xl animate-pulse" /> });
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 const n2  = (v, d = 2) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: d });

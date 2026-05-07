@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+export const dynamic = 'force-dynamic';
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ function InfoModal({ onClose }) {
 
 // ─── main page ─────────────────────────────────────────────────────────────────
 
-export default function MetaDeepAnalysisPage() {
+function MetaDeepAnalysisPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -395,4 +396,8 @@ export default function MetaDeepAnalysisPage() {
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
     </div>
   );
+}
+
+export default function MetaDeepAnalysisPageWrapper() {
+  return <Suspense fallback={null}><MetaDeepAnalysisPage /></Suspense>;
 }

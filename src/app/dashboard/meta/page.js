@@ -1,6 +1,7 @@
 "use client";
+export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clientCache } from "../../../lib/clientCache";
 import Link from "next/link";
@@ -842,7 +843,7 @@ function AiInsightsPanel() {
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
-export default function MetaDashboard() {
+function MetaDashboard() {
   const router = useRouter();
   const { status } = useSession();
 
@@ -1401,4 +1402,8 @@ export default function MetaDashboard() {
       />
     </div>
   );
+}
+
+export default function MetaDashboardPage() {
+  return <Suspense fallback={null}><MetaDashboard /></Suspense>;
 }

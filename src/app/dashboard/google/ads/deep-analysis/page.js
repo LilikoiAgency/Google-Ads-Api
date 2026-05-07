@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+export const dynamic = 'force-dynamic';
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -174,7 +175,7 @@ function InfoModal({ onClose }) {
 
 // ─── main page ─────────────────────────────────────────────────────────────────
 
-export default function DeepAnalysisPage() {
+function DeepAnalysisPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -428,4 +429,8 @@ export default function DeepAnalysisPage() {
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
     </div>
   );
+}
+
+export default function DeepAnalysisPageWrapper() {
+  return <Suspense fallback={null}><DeepAnalysisPage /></Suspense>;
 }

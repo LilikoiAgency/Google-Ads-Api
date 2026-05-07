@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+export const dynamic = 'force-dynamic';
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import "../../../globals.css";
@@ -425,7 +426,7 @@ function CampaignDropdown({ campaigns, selectedCampaign, onChange, onClear }) {
   );
 }
 
-export default function GoogleAdsDashboard() {
+function GoogleAdsDashboard() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [allCampaignData, setAllCampaignData] = useState([]);
@@ -1265,4 +1266,8 @@ export default function GoogleAdsDashboard() {
       </div>
     </div>
   );
+}
+
+export default function GoogleAdsDashboardPage() {
+  return <Suspense fallback={null}><GoogleAdsDashboard /></Suspense>;
 }

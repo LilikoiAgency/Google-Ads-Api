@@ -1,5 +1,6 @@
 // src/app/dashboard/meta/creatives/page.js
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
