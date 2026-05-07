@@ -83,6 +83,7 @@ function AllCreativesInner() {
   const [range, setRange] = useState(initialRange);
   const [status, setStatus] = useState("active");
   const [sortKey, setSortKey] = useState("spend_desc");
+  const [sortFlipped, setSortFlipped] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -132,7 +133,9 @@ function AllCreativesInner() {
       }
       return ad.insights?.[sort.field];
     };
-    const dir = sort.dir === "asc" ? 1 : -1;
+    const baseAsc = sort.dir === "asc";
+    const effectiveAsc = sortFlipped ? !baseAsc : baseAsc;
+    const dir = effectiveAsc ? 1 : -1;
     list = [...list].sort((a, b) => {
       const av = pull(a);
       const bv = pull(b);
@@ -140,17 +143,17 @@ function AllCreativesInner() {
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
-      return dir * ((bv || 0) - (av || 0));
+      return dir * ((av || 0) - (bv || 0));
     });
     return list;
-  }, [ads, search, status, sortKey]);
+  }, [ads, search, status, sortKey, sortFlipped]);
 
   const PAGE_SIZE = 24;
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Reset to page 1 whenever filters or sort change
-  useEffect(() => { setPage(1); }, [search, status, sortKey, range]);
+  // Reset to page 1 whenever filters or sort change; reset flip when sort key changes
+  useEffect(() => { setPage(1); setSortFlipped(false); }, [search, status, sortKey, range]);
 
   async function reviewAll() {
     if (!filtered.length || reviewLoading) return;
@@ -246,6 +249,28 @@ function AllCreativesInner() {
           <SelectPill label="Date" value={range} options={RANGES} onChange={setRange} />
           <SelectPill label="Status" value={status} options={STATUSES} onChange={setStatus} />
           <SelectPill label="Sort" value={sortKey} options={SORTS} onChange={setSortKey} />
+          {(() => {
+            const sort = SORTS.find((s) => s.key === sortKey) || SORTS[0];
+            const baseAsc = sort.dir === "asc";
+            const effectiveAsc = sortFlipped ? !baseAsc : baseAsc;
+            return (
+              <button
+                onClick={() => setSortFlipped((f) => !f)}
+                title={effectiveAsc ? "Currently ascending — click for descending" : "Currently descending — click for ascending"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                  border: `1px solid ${sortFlipped ? ACCENT : "#e5e7eb"}`,
+                  background: sortFlipped ? `${ACCENT}12` : "#fff",
+                  color: sortFlipped ? ACCENT : "#6b7280",
+                  fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {effectiveAsc ? "↑" : "↓"}
+              </button>
+            );
+          })()}
           <input
             type="text"
             value={search}
