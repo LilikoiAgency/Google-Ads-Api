@@ -15,6 +15,7 @@ import AdCopyPanel from "./components/AdCopyPanel";
 import AccountBriefPanel from "./components/AccountBriefPanel";
 import AccountBriefCard from "./components/AccountBriefCard";
 import AuditPanel from "./components/AuditPanel";
+import DeepAnalysisPanel from "./components/DeepAnalysisPanel";
 
 const DATE_RANGE_OPTIONS = [
   { value: "LAST_7_DAYS", label: "Last 7 days" },
@@ -454,11 +455,13 @@ export default function GoogleAdsDashboard() {
   const [adCopyPanelOpen, setAdCopyPanelOpen] = useState(false);
   const [auditPanelOpen, setAuditPanelOpen] = useState(false);
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
+  const [deepAnalysisPanelOpen, setDeepAnalysisPanelOpen] = useState(false);
 
   useEffect(() => {
     setAdCopyPanelOpen(panelParam === "ad-copy");
     setAuditPanelOpen(panelParam === "audit");
     setBriefPanelOpen(panelParam === "brief");
+    setDeepAnalysisPanelOpen(panelParam === "deep-analysis");
   }, [panelParam]);
 
   const closePanel = () => {
@@ -970,6 +973,21 @@ export default function GoogleAdsDashboard() {
             </button>
             <button
               onClick={() => {
+                const p = new URLSearchParams(window.location.search);
+                p.set("panel", "deep-analysis");
+                router.push(`${window.location.pathname}?${p.toString()}`);
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#6366f1", cursor: "pointer", whiteSpace: "nowrap" }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.2)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.1)"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
+              </svg>
+              Deep Analysis
+            </button>
+            <button
+              onClick={() => {
                 const ad = allCampaignData.find((d) => String(d.customer.customer_client.id) === String(selectedCustomerId));
                 if (ad) {
                   storeAuditAccountData(ad, selectedCustomerId);
@@ -1226,6 +1244,13 @@ export default function GoogleAdsDashboard() {
                   customerId={String(selectedCustomerId || "")}
                   selectedCampaign={selectedCampaign}
                   onClose={closePanel}
+                />
+              )}
+              {deepAnalysisPanelOpen && (
+                <DeepAnalysisPanel
+                  open={deepAnalysisPanelOpen}
+                  onClose={closePanel}
+                  selectedCustomer={selectedCustomer}
                 />
               )}
             </>
