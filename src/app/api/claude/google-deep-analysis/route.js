@@ -29,17 +29,18 @@ async function incrementDailyUsage(db, email) {
 }
 
 function buildUserPrompt(campaigns, auditData) {
-  const keywords = auditData?.keywords || [];
-  const campaignConfig = auditData?.campaignConfig || [];
-  const adStrength = auditData?.adStrength || [];
-  const conversionActions = auditData?.conversionActions || [];
-  const searchTerms = auditData?.campaignSearchTerms || [];
-  const geoPerformance = auditData?.geoPerformance || [];
-  const daypartPerformance = auditData?.daypartPerformance || [];
-  const pmaxAssetGroups = auditData?.pmaxAssetGroups || [];
-  const pmaxBrandExclusions = auditData?.pmaxBrandExclusions || [];
-  const campaignAssets = auditData?.campaignAssets || [];
-  const accountAssetTypes = auditData?.accountAssetTypes || [];
+  const toArr = (v) => (Array.isArray(v) ? v : []);
+  const keywords = toArr(auditData?.keywords);
+  const campaignConfig = toArr(auditData?.campaignConfig);
+  const adStrength = toArr(auditData?.adStrength);
+  const conversionActions = toArr(auditData?.conversionActions);
+  const searchTerms = toArr(auditData?.campaignSearchTerms);
+  const geoPerformance = toArr(auditData?.geoPerformance);
+  const daypartPerformance = toArr(auditData?.daypartPerformance);
+  const pmaxAssetGroups = toArr(auditData?.pmaxAssetGroups);
+  const pmaxBrandExclusions = toArr(auditData?.pmaxBrandExclusions);
+  const campaignAssets = toArr(auditData?.campaignAssets);
+  const accountAssetTypes = toArr(auditData?.accountAssetTypes);
 
   const campaignLines = campaigns.map((c) => {
     const spend = ((c.cost || 0) / 1_000_000).toFixed(0);
@@ -148,6 +149,9 @@ export async function POST(request) {
   if (!Array.isArray(campaigns) || campaigns.length === 0) {
     return NextResponse.json({ error: 'campaigns must be a non-empty array', requestId }, { status: 400 });
   }
+  if (campaigns.length > 50) {
+    return NextResponse.json({ error: 'Too many campaigns. Maximum 50 per request.', requestId }, { status: 400 });
+  }
 
   const dbClient = await dbConnect();
   const db = dbClient.db(DB);
@@ -195,6 +199,7 @@ export async function POST(request) {
   }
 
   if (response.stop_reason === 'max_tokens') {
+    console.error('[google-deep-analysis] Response truncated at max_tokens');
     return NextResponse.json({ error: 'AI response was too long. Try again.', requestId }, { status: 500 });
   }
 
