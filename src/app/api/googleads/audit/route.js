@@ -395,11 +395,12 @@ export async function GET(request) {
           metrics.auction_insight_search_outranking_share,
           metrics.auction_insight_search_top_impression_percentage,
           metrics.auction_insight_search_absolute_top_impression_percentage
-        FROM auction_insight_campaign
+        FROM campaign
         WHERE campaign.status != 'REMOVED'
+          AND segments.auction_insight_domain IS NOT NULL
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-        LIMIT 500
+        LIMIT 1000
       `).catch((e) => { console.warn('[audit] auction insights query failed:', e?.message || JSON.stringify(e)); return []; }),
     ]);
 
