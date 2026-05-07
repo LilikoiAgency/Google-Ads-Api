@@ -105,7 +105,7 @@ export async function GET(request) {
         filtering: activeFilter,
         limit: 500,
       }, token),
-      graphGet(`${actId}/adspixels`, { fields: 'id,name,last_fired_time' }, token).catch(() => ({ data: [] })),
+      graphGet(`${actId}/adspixels`, { fields: 'id,name,last_fired_time,is_unavailable,data_use_setting,automatic_matching_fields,match_rate_approximate' }, token).catch(() => ({ data: [] })),
       graphGet(`${actId}/insights`, {
         time_range: timeRangeJson,
         fields: insightsFields,
@@ -214,7 +214,22 @@ export async function GET(request) {
       };
     });
 
-    const pixels = (pixelsResp.data || []);
+    // Fetch per-pixel diagnostics (da_checks) for up to 5 pixels — one call each.
+    // These return structured health checks (pixel firing, event deduplication, etc.).
+    const rawPixels = pixelsResp.data || [];
+    const daChecksResults = await Promise.all(
+      rawPixels.slice(0, 5).map((p) =>
+        graphGet(`${p.id}/da_checks`, { fields: 'description,action_uri,title,result' }, token)
+          .then((r) => ({ pixelId: p.id, checks: r.data || [] }))
+          .catch(() => ({ pixelId: p.id, checks: [] }))
+      )
+    );
+    const daChecksByPixelId = Object.fromEntries(daChecksResults.map(({ pixelId, checks }) => [pixelId, checks]));
+
+    const pixels = rawPixels.map((p) => ({
+      ...p,
+      da_checks: daChecksByPixelId[p.id] || [],
+    }));
     const accountInsights = shapeInsights(accountInsightsResp.data?.[0]);
 
     const responseData = {

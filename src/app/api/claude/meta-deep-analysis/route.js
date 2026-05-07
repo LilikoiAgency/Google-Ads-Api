@@ -65,9 +65,24 @@ function buildUserPrompt(auditData) {
     else creativeFormats.add('image');
   });
 
-  const pixelLines = pixels.map((p) =>
-    `Pixel ${p.id}: name="${p.name}" | code=${p.code_status || 'N/A'} | emq=${p.data_use_setting || 'N/A'} | events=${(p.matched_entries || []).join(', ') || 'N/A'}`
-  ).join('\n');
+  const pixelLines = pixels.map((p) => {
+    const lastFired = p.last_fired_time
+      ? `last fired ${new Date(p.last_fired_time).toISOString().slice(0, 10)}`
+      : 'never fired';
+    const matchRate = p.match_rate_approximate != null
+      ? `match rate ~${p.match_rate_approximate}%`
+      : 'match rate unknown';
+    const autoFields = Array.isArray(p.automatic_matching_fields) && p.automatic_matching_fields.length
+      ? `auto-match fields: ${p.automatic_matching_fields.join(', ')}`
+      : 'no automatic matching fields configured';
+    const dataSetting = p.data_use_setting || 'data_use_setting unknown';
+    const unavailable = p.is_unavailable ? 'UNAVAILABLE' : 'available';
+    const checks = (p.da_checks || []).map((c) => `  - [${c.result || '?'}] ${c.title || c.description || 'check'}`).join('\n');
+    return [
+      `Pixel ${p.id} "${p.name}": ${unavailable} | ${lastFired} | ${matchRate} | ${autoFields} | ${dataSetting}`,
+      checks ? `  Diagnostics:\n${checks}` : '  Diagnostics: none returned',
+    ].join('\n');
+  }).join('\n\n');
 
   const accountLine = `Spend: $${Number(insights.spend || 0).toFixed(2)} | Impressions: ${insights.impressions || 0} | Clicks: ${insights.clicks || 0} | CTR: ${Number(insights.ctr || 0).toFixed(3)}% | CPM: $${Number(insights.cpm || 0).toFixed(2)} | Conversions: ${insights.conversions || 0} | ROAS: ${Number(insights.roas || 0).toFixed(2)} | Frequency: ${Number(insights.frequency || 0).toFixed(2)}`;
 
@@ -87,7 +102,9 @@ CREATIVE FORMATS DETECTED: ${Array.from(creativeFormats).join(', ') || 'unknown'
 TOTAL ADS: ${ads.length}
 
 PIXELS / CAPI:
-${pixelLines || 'No pixel data'}`;
+${pixelLines || 'No pixel data'}
+
+NOTE: Conversions API (CAPI) active status, exact EMQ score, event deduplication rate, and AEM configuration are not exposed via the Meta Graph API and cannot be determined from this data. Flag these as requiring manual verification in Events Manager. Do not mark them PASS or FAIL — use WARNING with a note to verify manually.`;
 }
 
 export async function POST(request) {
