@@ -327,7 +327,6 @@ export async function GET(request) {
         FROM search_term_view
         WHERE segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-          ${campaignIdClause}
         ORDER BY metrics.cost_micros DESC
         LIMIT 2000
       `).catch((e) => { console.error('[audit] campaign search terms query failed:', e?.message || JSON.stringify(e)); return []; }),
@@ -439,17 +438,7 @@ export async function GET(request) {
       `).catch(() => []),
     ]);
 
-    console.log(`[audit] raw rows — kwQS:${(keywordQsRaw||[]).length} kwMetrics:${(keywordMetricsRaw||[]).length} campaigns:${(campaignConfigRaw||[]).length} accountAssets:${(accountAssetsRaw||[]).length}`);
-
-    // Debug asset field types
-    const _accountFieldTypes = (accountAssetsRaw||[]).map((r) => r.customer_asset?.field_type);
-    const _campaignFieldTypes = (campaignAssetsRaw||[]).map((r) => r.campaign_asset?.field_type);
-    const _adGroupFieldTypes  = (adGroupAssetsRaw||[]).map((r) => r.ad_group_asset?.field_type);
-    console.log(`[audit] asset rows — campaign:${(campaignAssetsRaw||[]).length} account:${(accountAssetsRaw||[]).length} adgroup:${(adGroupAssetsRaw||[]).length}`);
-    console.log(`[audit] account field_types (raw):`, JSON.stringify([...new Set(_accountFieldTypes)]));
-    console.log(`[audit] campaign field_types (raw):`, JSON.stringify([...new Set(_campaignFieldTypes)]));
-    console.log(`[audit] adgroup field_types (raw):`, JSON.stringify([...new Set(_adGroupFieldTypes)]));
-    console.log(`[audit] auction insights rows:${(auctionInsightsRaw||[]).length}`);
+    console.log(`[audit] rows — kwQS:${(keywordQsRaw||[]).length} kwMetrics:${(keywordMetricsRaw||[]).length} campaigns:${(campaignConfigRaw||[]).length} searchTerms:${(campaignSearchTermsRaw||[]).length} assets:campaign=${(campaignAssetsRaw||[]).length}/account=${(accountAssetsRaw||[]).length}/adgroup=${(adGroupAssetsRaw||[]).length}`);
 
     // Build metrics lookup keyed by criterion_id
     const metricsById = new Map();
@@ -842,17 +831,6 @@ export async function GET(request) {
         auctionInsights,
         optimizationScore,
         recommendations,
-        _debugAssets: {
-          campaignAssetCount: (campaignAssetsRaw||[]).length,
-          accountAssetCount: (accountAssetsRaw||[]).length,
-          adGroupAssetCount: (adGroupAssetsRaw||[]).length,
-          campaignFieldTypes: [...new Set((campaignAssetsRaw||[]).map((r) => r.campaign_asset?.field_type))],
-          accountFieldTypes: [...new Set((accountAssetsRaw||[]).map((r) => r.customer_asset?.field_type))],
-          adGroupFieldTypes: [...new Set((adGroupAssetsRaw||[]).map((r) => r.ad_group_asset?.field_type))],
-          resolvedAccountTypes: [...accountAssetTypes],
-          auctionInsightRowCount: (auctionInsightsRaw||[]).length,
-          auctionInsightDomains: [...new Set((auctionInsightsRaw||[]).map((r) => r.segments?.auction_insight_domain).filter(Boolean))].slice(0,10),
-        },
         dateWindow,
       },
       requestId,
