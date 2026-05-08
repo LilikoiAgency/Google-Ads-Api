@@ -598,9 +598,13 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     });
   })();
 
-  const searchTerms = campaignId
-    ? ((accountData.campaigns || []).find((c) => String(c.campaignId) === String(campaignId))?.searchTerms || [])
-    : (accountData.searchTerms || []);
+  // Use auditData.campaignSearchTerms (date-range-accurate, up to 2000 terms) when available;
+  // fall back to accountData search terms when audit hasn't been run yet.
+  const searchTerms = auditData
+    ? (auditData.campaignSearchTerms || []).filter(campaignId ? (t) => String(t.campaignId) === String(campaignId) : () => true)
+    : (campaignId
+        ? ((accountData.campaigns || []).find((c) => String(c.campaignId) === String(campaignId))?.searchTerms || [])
+        : (accountData.searchTerms || []));
 
   const allKeywords = auditData?.keywords || [];
   const keywords = auditData
@@ -666,6 +670,36 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     pmaxData,
   );
 
+  // Filter campaign-specific datasets when doing a campaign audit
+  const filterByCampaign = (arr) => campaignId
+    ? (arr || []).filter((r) => String(r.campaignId) === String(campaignId))
+    : (arr || []);
+
+  // Aggregate auction insights by competitor domain (after campaign filtering)
+  const auctionInsightsRaw = filterByCampaign(auditData?.auctionInsights);
+  const aiByDomain = {};
+  auctionInsightsRaw.forEach((row) => {
+    const d = row.domain;
+    if (!d) return;
+    if (!aiByDomain[d]) aiByDomain[d] = { domain: d, impressionShare: [], overlapRate: [], outrankingShare: [], topImpressionPct: [], absTopImpressionPct: [] };
+    if (row.impressionShare != null) aiByDomain[d].impressionShare.push(row.impressionShare);
+    if (row.overlapRate != null) aiByDomain[d].overlapRate.push(row.overlapRate);
+    if (row.outrankingShare != null) aiByDomain[d].outrankingShare.push(row.outrankingShare);
+    if (row.topImpressionPct != null) aiByDomain[d].topImpressionPct.push(row.topImpressionPct);
+    if (row.absTopImpressionPct != null) aiByDomain[d].absTopImpressionPct.push(row.absTopImpressionPct);
+  });
+  const avg = (arr) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+  const auctionInsights = Object.values(aiByDomain)
+    .map((d) => ({
+      domain: d.domain,
+      impressionShare: avg(d.impressionShare),
+      overlapRate: avg(d.overlapRate),
+      outrankingShare: avg(d.outrankingShare),
+      topImpressionPct: avg(d.topImpressionPct),
+      absTopImpressionPct: avg(d.absTopImpressionPct),
+    }))
+    .sort((a, b) => (b.impressionShare || 0) - (a.impressionShare || 0));
+
   return {
     summary: {
       totalCost,
@@ -689,12 +723,12 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     actionPlan,
     recommendations: accountData.recommendations || [],
     conversionActions: auditData?.conversionActions || [],
-    landingPages: auditData?.landingPages || [],
-    campaignSearchTerms: auditData?.campaignSearchTerms || [],
+    landingPages: filterByCampaign(auditData?.landingPages),
+    campaignSearchTerms: filterByCampaign(auditData?.campaignSearchTerms),
     changeStatus: auditData?.changeStatus || [],
-    geoPerformance: auditData?.geoPerformance || [],
-    daypartPerformance: auditData?.daypartPerformance || [],
-    conversionLag: auditData?.conversionLag || [],
-    auctionInsights: auditData?.auctionInsights || [],
+    geoPerformance: filterByCampaign(auditData?.geoPerformance),
+    daypartPerformance: filterByCampaign(auditData?.daypartPerformance),
+    conversionLag: filterByCampaign(auditData?.conversionLag),
+    auctionInsights,
   };
 }

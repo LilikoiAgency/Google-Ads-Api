@@ -131,7 +131,7 @@ export async function GET(request) {
           AND ad_group_criterion.status = 'ENABLED'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
-        LIMIT 5000
+        LIMIT 15000
       `).catch((e) => { console.error('[audit] QS query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       // Performance metrics — keyword_view supports date-ranged metrics
@@ -150,7 +150,7 @@ export async function GET(request) {
           AND ad_group.status != 'REMOVED'
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-        LIMIT 5000
+        LIMIT 15000
       `).catch((e) => { console.error('[audit] keyword metrics query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       // Campaign config — no date filter needed (bidding strategy is structural)
@@ -304,14 +304,14 @@ export async function GET(request) {
           metrics.impressions,
           metrics.clicks,
           metrics.cost_micros,
-          metrics.all_conversions,
-          metrics.all_conversions_value
+          metrics.conversions,
+          metrics.conversions_value
         FROM search_term_view
         WHERE segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
           AND campaign.advertising_channel_type = 'SEARCH'
         ORDER BY metrics.cost_micros DESC
-        LIMIT 1000
+        LIMIT 2000
       `).catch((e) => { console.error('[audit] campaign search terms query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       customer.query(`
@@ -662,8 +662,8 @@ export async function GET(request) {
         impressions: Number(m.impressions || 0),
         clicks: Number(m.clicks || 0),
         cost: Number(m.cost_micros || 0),
-        conversions: Number(m.all_conversions || 0),
-        conversionValue: Number(m.all_conversions_value || 0),
+        conversions: Number(m.conversions || 0),
+        conversionValue: Number(m.conversions_value || 0),
       };
     });
 
@@ -735,39 +735,22 @@ export async function GET(request) {
       };
     });
 
-    // Auction insights — aggregate by competitor domain across all campaigns
-    const auctionInsightsByDomain = {};
-    (auctionInsightsRaw || []).forEach((row) => {
-      const domain = row.segments?.auction_insight_domain || '';
-      const m = row.metrics || {};
-      if (!domain) return;
-      if (!auctionInsightsByDomain[domain]) {
-        auctionInsightsByDomain[domain] = {
-          domain,
-          impressionShare: [],
-          overlapRate: [],
-          outrankingShare: [],
-          topImpressionPct: [],
-          absTopImpressionPct: [],
+    // Auction insights — keep per-campaign rows so client can filter by campaign
+    const auctionInsights = (auctionInsightsRaw || [])
+      .filter((row) => row.segments?.auction_insight_domain)
+      .map((row) => {
+        const m = row.metrics || {};
+        return {
+          campaignId: String(row.campaign?.id || ''),
+          campaignName: row.campaign?.name || '',
+          domain: row.segments.auction_insight_domain,
+          impressionShare: m.auction_insight_search_impression_share ?? null,
+          overlapRate: m.auction_insight_search_overlap_rate ?? null,
+          outrankingShare: m.auction_insight_search_outranking_share ?? null,
+          topImpressionPct: m.auction_insight_search_top_impression_percentage ?? null,
+          absTopImpressionPct: m.auction_insight_search_absolute_top_impression_percentage ?? null,
         };
-      }
-      const d = auctionInsightsByDomain[domain];
-      if (m.auction_insight_search_impression_share != null) d.impressionShare.push(Number(m.auction_insight_search_impression_share));
-      if (m.auction_insight_search_overlap_rate != null) d.overlapRate.push(Number(m.auction_insight_search_overlap_rate));
-      if (m.auction_insight_search_outranking_share != null) d.outrankingShare.push(Number(m.auction_insight_search_outranking_share));
-      if (m.auction_insight_search_top_impression_percentage != null) d.topImpressionPct.push(Number(m.auction_insight_search_top_impression_percentage));
-      if (m.auction_insight_search_absolute_top_impression_percentage != null) d.absTopImpressionPct.push(Number(m.auction_insight_search_absolute_top_impression_percentage));
-    });
-
-    const avg = (arr) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
-    const auctionInsights = Object.values(auctionInsightsByDomain).map((d) => ({
-      domain: d.domain,
-      impressionShare: avg(d.impressionShare),
-      overlapRate: avg(d.overlapRate),
-      outrankingShare: avg(d.outrankingShare),
-      topImpressionPct: avg(d.topImpressionPct),
-      absTopImpressionPct: avg(d.absTopImpressionPct),
-    })).sort((a, b) => (b.impressionShare || 0) - (a.impressionShare || 0));
+      });
 
     logApiUsage({
       type: 'google_ads_audit',
