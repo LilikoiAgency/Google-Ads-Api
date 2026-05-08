@@ -851,8 +851,8 @@ function ConversionLagTab({ conversionLag = [] }) {
 
 // ── Tab: Assets ───────────────────────────────────────────────────────────────
 
-const ASSET_TYPES  = ["SITELINK","CALLOUT","STRUCTURED_SNIPPET","CALL","MARKETING_IMAGE"];
-const ASSET_LABELS = { SITELINK: "Sitelinks", CALLOUT: "Callouts", STRUCTURED_SNIPPET: "Snippets", CALL: "Call", MARKETING_IMAGE: "Image" };
+const ASSET_TYPES  = ["SITELINK","CALLOUT","STRUCTURED_SNIPPET","CALL","AD_IMAGE"];
+const ASSET_LABELS = { SITELINK: "Sitelinks", CALLOUT: "Callouts", STRUCTURED_SNIPPET: "Snippets", CALL: "Call", AD_IMAGE: "Image" };
 
 function AssetsTab({ assetAnalysis, auditLoading, pmaxData }) {
   if (auditLoading && !assetAnalysis.length) return <LoadingSpinner message="Fetching asset coverage…" />;

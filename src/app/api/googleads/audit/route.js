@@ -202,12 +202,12 @@ export async function GET(request) {
 
       // Ad-group-level assets (e.g. call extensions added at ad group level)
       customer.query(`
-        SELECT ad_group.campaign_id, ad_group_asset.field_type
+        SELECT campaign.id, ad_group_asset.field_type
         FROM ad_group_asset
         WHERE ad_group_asset.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
-      `).catch(() => []),
+      `).catch((e) => { console.error('[audit] ad_group_asset query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       customer.query(`
         SELECT
@@ -397,10 +397,10 @@ export async function GET(request) {
           metrics.auction_insight_search_absolute_top_impression_percentage
         FROM campaign
         WHERE campaign.status != 'REMOVED'
-          AND segments.auction_insight_domain IS NOT NULL
+          AND segments.auction_insight_domain != ''
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-        LIMIT 1000
+        LIMIT 5000
       `).catch((e) => { console.warn('[audit] auction insights query failed:', e?.message || JSON.stringify(e)); return []; }),
     ]);
 
@@ -517,7 +517,7 @@ export async function GET(request) {
 
     // Ad-group-level assets — merge into campaignAssets using campaign_id from ad_group
     const adGroupAssetEntries = (adGroupAssetsRaw || []).map((row) => ({
-      campaignId: String(row.ad_group?.campaign_id || ''),
+      campaignId: String(row.campaign?.id || ''),
       assetType: resolveFieldType(row.ad_group_asset?.field_type),
     })).filter((e) => e.campaignId && e.assetType);
     // Deduplicate: if a campaign already has this type via campaign_asset, no need to add again

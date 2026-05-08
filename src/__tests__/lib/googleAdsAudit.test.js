@@ -544,7 +544,7 @@ describe('analyzeAssets', () => {
       { campaignId: '111', assetType: 'CALLOUT' },
       { campaignId: '111', assetType: 'STRUCTURED_SNIPPET' },
       { campaignId: '111', assetType: 'CALL' },
-      { campaignId: '111', assetType: 'MARKETING_IMAGE' },
+      { campaignId: '111', assetType: 'AD_IMAGE' },
     ];
     const r = analyzeAssets(assets, campaigns);
     const camp = r.find(c => c.campaignId === '111');

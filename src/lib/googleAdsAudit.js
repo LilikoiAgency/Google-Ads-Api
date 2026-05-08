@@ -327,7 +327,9 @@ export function analyzeBidding(campaignConfig, campaigns) {
 }
 
 // ── Pillar 9: Asset coverage ──────────────────────────────────────────────────
-const REQUIRED_ASSET_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'MARKETING_IMAGE'];
+// AD_IMAGE = image extensions on search ads (field_type 25)
+// MARKETING_IMAGE (5) is for display/responsive ads, not search image extensions
+const REQUIRED_ASSET_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'AD_IMAGE'];
 
 export function analyzeAssets(campaignAssets, campaigns, accountAssetTypes = []) {
   const accountTypes = new Set(accountAssetTypes);
