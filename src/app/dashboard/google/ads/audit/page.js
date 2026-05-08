@@ -17,7 +17,6 @@ const TABS = [
   { key: "conversion_lag", label: "Lag" },
   { key: "bidding", label: "Bidding" },
   { key: "assets", label: "Assets" },
-  { key: "auction_insights", label: "Auction Insights" },
   { key: "action_plan", label: "Action Plan" },
   { key: "ai", label: "AI Insight" },
 ];
@@ -29,7 +28,7 @@ const AUDIT_TYPES = [
     shortLabel: "Full",
     description: "Complete account health, structure, search terms, bidding, assets, and action plan.",
     defaultTab: "overview",
-    tabs: ["overview", "campaigns", "keywords", "search_terms", "bidding", "assets", "auction_insights", "action_plan", "ai"],
+    tabs: ["overview", "campaigns", "keywords", "search_terms", "bidding", "assets", "action_plan", "ai"],
   },
   {
     key: "search_term_waste",
@@ -61,7 +60,7 @@ const AUDIT_TYPES = [
     shortLabel: "Budget / IS",
     description: "Separate budget constraints from rank constraints and identify where more budget would or would not help.",
     defaultTab: "campaigns",
-    tabs: ["campaigns", "overview", "bidding", "auction_insights", "changes", "geo", "daypart", "action_plan", "ai"],
+    tabs: ["campaigns", "overview", "bidding", "changes", "geo", "daypart", "action_plan", "ai"],
   },
   {
     key: "bidding_strategy",
@@ -324,11 +323,11 @@ function AuditTypeStrip({ selectedType, onSelect, audit }) {
   );
 }
 
-function AuditLoadingBanner() {
+function AuditLoadingBanner({ message }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(233,69,96,0.08)", border: "1px solid rgba(233,69,96,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
-      <div style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: `2px solid rgba(233,69,96,0.4)`, borderTopColor: C.accent, animation: "spin 0.8s linear infinite" }} />
-      <p style={{ fontSize: 15, color: C.textSec, margin: 0 }}>Fetching deep audit data — keywords, bidding, assets…</p>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.25)", borderRadius: 10, padding: "11px 16px", marginBottom: 20 }}>
+      <div style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: `2px solid rgba(245,166,35,0.3)`, borderTopColor: C.amber, animation: "spin 0.8s linear infinite" }} />
+      <p style={{ fontSize: 13, color: C.amber, margin: 0, fontWeight: 600 }}>{message || "Fetching audit data — numbers shown may be incomplete until loading finishes"}</p>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -450,9 +449,11 @@ function OverviewTab({ audit, auditLoading }) {
 
 // ── Tab: Campaigns ────────────────────────────────────────────────────────────
 
-function CampaignsTab({ campaigns }) {
+function CampaignsTab({ campaigns, auditLoading }) {
   const [expanded, setExpanded] = useState(null);
   return (
+    <>
+    {auditLoading && <AuditLoadingBanner message="Fetching campaign metrics — cost, conversions, and impression share may be incomplete" />}
     <Section title={`${campaigns.length} Campaign${campaigns.length !== 1 ? "s" : ""}`}>
       {campaigns.map((c, i) => {
         const isOpen = expanded === i;
@@ -481,6 +482,7 @@ function CampaignsTab({ campaigns }) {
         );
       })}
     </Section>
+    </>
   );
 }
 
@@ -626,7 +628,8 @@ function KeywordsTab({ keywordAnalysis, auditLoading, isCampaignAudit }) {
 
 // ── Tab: Search Terms ─────────────────────────────────────────────────────────
 
-function SearchTermsTab({ searchTerms }) {
+function SearchTermsTab({ searchTerms, auditLoading }) {
+  if (auditLoading && (!searchTerms?.wasted?.length && !searchTerms?.winners?.length)) return <LoadingSpinner message="Fetching search terms…" />;
   const { wasted, winners, totalWastedCost, wasteRatio, uncoveredWinners } = searchTerms;
   return (
     <>
@@ -713,7 +716,8 @@ function BiddingTab({ biddingAudits, auditLoading }) {
   );
 }
 
-function TrackingTab({ conversionActions = [], campaigns = [] }) {
+function TrackingTab({ conversionActions = [], campaigns = [], auditLoading }) {
+  if (auditLoading && !conversionActions.length) return <LoadingSpinner message="Fetching conversion tracking data…" />;
   const primary = conversionActions.filter((a) => a.primaryForGoal);
   const stalePrimary = primary.filter((a) => !a.lastReceivedRequestDateTime && !a.lastConversionDate);
   const zeroConvSpend = campaigns.filter((c) => (c.cost || 0) > 0 && (c.conversions || 0) === 0).sort((a, b) => (b.cost || 0) - (a.cost || 0));
@@ -752,7 +756,8 @@ function TrackingTab({ conversionActions = [], campaigns = [] }) {
   );
 }
 
-function LandingPagesTab({ landingPages = [] }) {
+function LandingPagesTab({ landingPages = [], auditLoading }) {
+  if (auditLoading && !landingPages.length) return <LoadingSpinner message="Fetching landing page data…" />;
   const sorted = [...landingPages].sort((a, b) => (b.cost || 0) - (a.cost || 0));
   const zeroConv = sorted.filter((p) => (p.cost || 0) > 0 && (p.conversions || 0) === 0);
   return (
@@ -780,7 +785,8 @@ function LandingPagesTab({ landingPages = [] }) {
   );
 }
 
-function ChangesTab({ changes = [] }) {
+function ChangesTab({ changes = [], auditLoading }) {
+  if (auditLoading && !changes.length) return <LoadingSpinner message="Fetching account change history…" />;
   return (
     <Section title="Recent Account Changes">
       {changes.length === 0 ? <p style={{ color: C.textSec, fontSize: 16 }}>No recent change data available.</p> : changes.slice(0, 80).map((c, i) => (
@@ -794,7 +800,8 @@ function ChangesTab({ changes = [] }) {
   );
 }
 
-function GeoTab({ geoPerformance = [] }) {
+function GeoTab({ geoPerformance = [], auditLoading }) {
+  if (auditLoading && !geoPerformance.length) return <LoadingSpinner message="Fetching geographic performance data…" />;
   const sorted = [...geoPerformance].sort((a, b) => (b.cost || 0) - (a.cost || 0));
   return (
     <Section title="Geo Performance by Spend">
@@ -811,7 +818,8 @@ function GeoTab({ geoPerformance = [] }) {
   );
 }
 
-function DaypartTab({ daypartPerformance = [] }) {
+function DaypartTab({ daypartPerformance = [], auditLoading }) {
+  if (auditLoading && !daypartPerformance.length) return <LoadingSpinner message="Fetching daypart performance data…" />;
   const sorted = [...daypartPerformance].sort((a, b) => (b.cost || 0) - (a.cost || 0));
   return (
     <Section title="Daypart Performance by Spend">
@@ -828,7 +836,8 @@ function DaypartTab({ daypartPerformance = [] }) {
   );
 }
 
-function ConversionLagTab({ conversionLag = [] }) {
+function ConversionLagTab({ conversionLag = [], auditLoading }) {
+  if (auditLoading && !conversionLag.length) return <LoadingSpinner message="Fetching conversion lag data…" />;
   const byBucket = conversionLag.reduce((acc, row) => {
     const key = row.lagBucket || "Unknown";
     if (!acc[key]) acc[key] = { cost: 0, conversions: 0 };
@@ -1938,7 +1947,9 @@ function AuditPageInner() {
             {visibleTabs.map((t) => (
               <button key={t.key} onClick={() => setActiveTab(t.key)} style={{ flexShrink: 0, padding: "13px 16px", fontSize: 14, fontWeight: 600, background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap", color: activeTab === t.key ? C.textPri : C.textSec, borderBottom: `2px solid ${activeTab === t.key ? C.accent : "transparent"}`, transition: "all 0.15s" }}>
                 {t.label}
-                {auditLoading && ["keywords", "bidding", "assets"].includes(t.key) && <span style={{ marginLeft: 5, fontSize: 9, color: C.amber }}>*</span>}
+                {auditLoading && ["keywords","search_terms","tracking","landing_pages","changes","geo","daypart","conversion_lag","bidding","assets","action_plan"].includes(t.key) && (
+                  <span style={{ display: "inline-block", marginLeft: 6, width: 6, height: 6, borderRadius: "50%", border: `1.5px solid ${C.amber}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite", verticalAlign: "middle" }} />
+                )}
                 {aiLoading && t.key === "ai" && <span style={{ marginLeft: 5, fontSize: 9, color: C.accent }}>*</span>}
               </button>
             ))}
@@ -1948,18 +1959,17 @@ function AuditPageInner() {
             {audit ? (
               <div className="audit-tab-content">
                 {activeTab === "overview" && <OverviewTab audit={audit} auditLoading={auditLoading} />}
-                {activeTab === "campaigns" && <CampaignsTab campaigns={audit.campaigns} />}
+                {activeTab === "campaigns" && <CampaignsTab campaigns={audit.campaigns} auditLoading={auditLoading} />}
                 {activeTab === "keywords" && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} isCampaignAudit={!!campaignId} />}
-                {activeTab === "search_terms" && <SearchTermsTab searchTerms={audit.searchTerms} />}
-                {activeTab === "tracking" && <TrackingTab conversionActions={audit.conversionActions} campaigns={audit.campaigns} />}
-                {activeTab === "landing_pages" && <LandingPagesTab landingPages={audit.landingPages} />}
-                {activeTab === "changes" && <ChangesTab changes={audit.changeStatus} />}
-                {activeTab === "geo" && <GeoTab geoPerformance={audit.geoPerformance} />}
-                {activeTab === "daypart" && <DaypartTab daypartPerformance={audit.daypartPerformance} />}
-                {activeTab === "conversion_lag" && <ConversionLagTab conversionLag={audit.conversionLag} />}
+                {activeTab === "search_terms" && <SearchTermsTab searchTerms={audit.searchTerms} auditLoading={auditLoading} />}
+                {activeTab === "tracking" && <TrackingTab conversionActions={audit.conversionActions} campaigns={audit.campaigns} auditLoading={auditLoading} />}
+                {activeTab === "landing_pages" && <LandingPagesTab landingPages={audit.landingPages} auditLoading={auditLoading} />}
+                {activeTab === "changes" && <ChangesTab changes={audit.changeStatus} auditLoading={auditLoading} />}
+                {activeTab === "geo" && <GeoTab geoPerformance={audit.geoPerformance} auditLoading={auditLoading} />}
+                {activeTab === "daypart" && <DaypartTab daypartPerformance={audit.daypartPerformance} auditLoading={auditLoading} />}
+                {activeTab === "conversion_lag" && <ConversionLagTab conversionLag={audit.conversionLag} auditLoading={auditLoading} />}
                 {activeTab === "bidding" && <BiddingTab biddingAudits={audit.bidding} auditLoading={auditLoading} />}
                 {activeTab === "assets" && <AssetsTab assetAnalysis={audit.assets} auditLoading={auditLoading} pmaxData={audit.pmaxData} debugAssets={auditData?._debugAssets} />}
-                {activeTab === "auction_insights" && <AuctionInsightsTab auctionInsights={audit.auctionInsights} auditLoading={auditLoading} debugAssets={auditData?._debugAssets} />}
                 {activeTab === "action_plan" && <ActionPlanTab actions={focusedActionPlan} auditLoading={auditLoading} />}
                 {activeTab === "ai" && <AIInsightTab aiInsight={aiInsight} aiLoading={aiLoading} aiError={aiError} onRunAnalysis={runAiAnalysis} auditReady={!!audit && !auditLoading} />}
               </div>
