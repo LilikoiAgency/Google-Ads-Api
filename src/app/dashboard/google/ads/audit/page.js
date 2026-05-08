@@ -217,8 +217,9 @@ function getAuditTypeSummary(audit, typeKey) {
   const lowQs = audit.keywords?.qs1to3?.length || 0;
   const primaryConversions = (audit.conversionActions || []).filter((a) => a.primaryForGoal).length;
   const staleConversions = (audit.conversionActions || []).filter((a) => a.primaryForGoal && !a.lastReceivedRequestDateTime && !a.lastConversionDate).length;
+  // CAMPAIGN_TARGETING = DSA/PMax keywordless; AI_MAX_* = AI Max for Search
   const aiSearchTermSpend = (audit.campaignSearchTerms || [])
-    .filter((t) => ["PERFORMANCE_MAX", "AI_MAX_BROAD_MATCH", "AI_MAX_KEYWORDLESS", "DYNAMIC_SEARCH_ADS"].includes(t.matchSource))
+    .filter((t) => ["CAMPAIGN_TARGETING", "AI_MAX_BROAD_MATCH", "AI_MAX_KEYWORDLESS"].includes(t.matchSource))
     .reduce((sum, t) => sum + (t.cost || 0), 0);
   const lowCvrLandingPages = (audit.landingPages || []).filter((p) => (p.cost || 0) > 100_000_000 && (p.conversions || 0) === 0).length;
   const recentChanges = audit.changeStatus?.length || 0;
@@ -657,7 +658,7 @@ function SearchTermsTab({ searchTerms, auditLoading }) {
           : winners.map((t, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 16, color: C.textPri }}>{t.term}</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: C.teal }}>{t.conversions.toFixed(1)} conv · {fmtCurrency(t.cost)}</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.teal }}>{(t.conversions || 0).toFixed(1)} conv · {fmtCurrency(t.cost)}</span>
             </div>
           ))
         }
@@ -673,7 +674,7 @@ function SearchTermsTab({ searchTerms, auditLoading }) {
           {uncoveredWinners.map((t, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 16, color: C.textPri }}>{t.term}</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>{t.conversions.toFixed(1)} conv</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>{(t.conversions || 0).toFixed(1)} conv</span>
             </div>
           ))}
         </Section>

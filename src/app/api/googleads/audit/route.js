@@ -301,6 +301,7 @@ export async function GET(request) {
           campaign.id,
           campaign.name,
           segments.search_term_match_type,
+          segments.search_term_match_source,
           metrics.impressions,
           metrics.clicks,
           metrics.cost_micros,
@@ -309,7 +310,6 @@ export async function GET(request) {
         FROM search_term_view
         WHERE segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-          AND campaign.advertising_channel_type = 'SEARCH'
         ORDER BY metrics.cost_micros DESC
         LIMIT 2000
       `).catch((e) => { console.error('[audit] campaign search terms query failed:', e?.message || JSON.stringify(e)); return []; }),
