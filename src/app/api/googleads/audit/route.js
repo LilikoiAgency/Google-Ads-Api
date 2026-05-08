@@ -198,9 +198,9 @@ export async function GET(request) {
           ${campaignIdClause}
       `).catch(() => []),
 
-      // Campaign-level assets — use field_type (AssetFieldType) not asset_type (AssetType)
+      // Campaign-level assets — GAQL requires filtered fields to also appear in SELECT
       customer.query(`
-        SELECT campaign.id, campaign_asset.field_type
+        SELECT campaign.id, campaign.status, campaign_asset.field_type
         FROM campaign_asset
         WHERE campaign_asset.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
@@ -214,9 +214,9 @@ export async function GET(request) {
         WHERE customer_asset.status != 'REMOVED'
       `).catch(() => []),
 
-      // Ad-group-level assets (e.g. call extensions added at ad group level)
+      // Ad-group-level assets — GAQL requires filtered fields to also appear in SELECT
       customer.query(`
-        SELECT campaign.id, ad_group_asset.field_type
+        SELECT campaign.id, campaign.status, ad_group.status, ad_group_asset.field_type
         FROM ad_group_asset
         WHERE ad_group_asset.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
@@ -318,7 +318,6 @@ export async function GET(request) {
           campaign.id,
           campaign.name,
           segments.search_term_match_type,
-          segments.search_term_match_source,
           metrics.impressions,
           metrics.clicks,
           metrics.cost_micros,
@@ -700,7 +699,7 @@ export async function GET(request) {
         term: view.search_term || '',
         campaignId: String(c.id || ''),
         campaignName: c.name || '',
-        matchSource: enumValue(s.search_term_match_source),
+        matchSource: null,
         matchType: enumValue(s.search_term_match_type),
         targetingStatus: enumValue(s.search_term_targeting_status || view.status),
         impressions: Number(m.impressions || 0),
