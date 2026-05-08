@@ -486,12 +486,29 @@ function CampaignsTab({ campaigns }) {
 
 // ── Tab: Keywords ─────────────────────────────────────────────────────────────
 
-function KeywordsTab({ keywordAnalysis, auditLoading }) {
+function KeywordsTab({ keywordAnalysis, auditLoading, isCampaignAudit }) {
   if (auditLoading && !keywordAnalysis) return <LoadingSpinner message="Fetching keyword quality data…" />;
   if (!keywordAnalysis) return <p style={{ color: C.textSec, fontSize: 16 }}>No keyword data available.</p>;
 
-  const { qs1to3, qs4to6, qs7to10, totalWithQS, weightedAvgQS, matchTypeSpend, bottom10, topByConversions, componentBreakdown } = keywordAnalysis;
+  const { totalKeywords, qs1to3, qs4to6, qs7to10, totalWithQS, weightedAvgQS, matchTypeSpend, bottom10, topByConversions, componentBreakdown } = keywordAnalysis;
   const total = qs1to3.length + qs4to6.length + qs7to10.length;
+
+  if (totalKeywords === 0) {
+    return (
+      <div style={{ padding: "32px 24px", textAlign: "center" }}>
+        <p style={{ fontSize: 16, color: C.textSec, margin: "0 0 8px" }}>
+          {isCampaignAudit
+            ? "No enabled keywords found for this campaign."
+            : "No keyword data found for this account."}
+        </p>
+        <p style={{ fontSize: 13, color: C.textSec, opacity: 0.7, margin: 0 }}>
+          {isCampaignAudit
+            ? "Check that the campaign has active keywords, or run a fresh audit after adding keywords."
+            : "Keyword quality data requires at least one enabled keyword in an active campaign."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -514,6 +531,11 @@ function KeywordsTab({ keywordAnalysis, auditLoading }) {
         {weightedAvgQS != null && (
           <p style={{ fontSize: 16, color: C.textSec }}>
             Weighted avg QS: <strong style={{ color: weightedAvgQS >= 7 ? C.teal : weightedAvgQS >= 5 ? C.amber : C.accent }}>{weightedAvgQS}</strong> across {totalWithQS} keywords
+          </p>
+        )}
+        {total === 0 && totalKeywords > 0 && (
+          <p style={{ fontSize: 13, color: C.textSec, margin: "8px 0 0", opacity: 0.7 }}>
+            {totalKeywords} keyword{totalKeywords !== 1 ? "s" : ""} found — Quality Score not yet assigned by Google (requires sufficient impressions).
           </p>
         )}
       </Section>
@@ -1902,7 +1924,7 @@ function AuditPageInner() {
               <div className="audit-tab-content">
                 {activeTab === "overview" && <OverviewTab audit={audit} auditLoading={auditLoading} />}
                 {activeTab === "campaigns" && <CampaignsTab campaigns={audit.campaigns} />}
-                {activeTab === "keywords" && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} />}
+                {activeTab === "keywords" && <KeywordsTab keywordAnalysis={audit.keywords} auditLoading={auditLoading} isCampaignAudit={!!campaignId} />}
                 {activeTab === "search_terms" && <SearchTermsTab searchTerms={audit.searchTerms} />}
                 {activeTab === "tracking" && <TrackingTab conversionActions={audit.conversionActions} campaigns={audit.campaigns} />}
                 {activeTab === "landing_pages" && <LandingPagesTab landingPages={audit.landingPages} />}

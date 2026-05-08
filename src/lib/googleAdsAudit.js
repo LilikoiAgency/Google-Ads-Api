@@ -188,6 +188,7 @@ export function analyzeKeywords(keywords) {
   });
 
   return {
+    totalKeywords: keywords.length,
     qs1to3,
     qs4to6,
     qs7to10,
@@ -601,9 +602,16 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     ? ((accountData.campaigns || []).find((c) => String(c.campaignId) === String(campaignId))?.searchTerms || [])
     : (accountData.searchTerms || []);
 
+  const allKeywords = auditData?.keywords || [];
   const keywords = auditData
-    ? (auditData.keywords || []).filter(campaignId ? (k) => String(k.campaignId) === String(campaignId) : () => true)
+    ? allKeywords.filter(campaignId ? (k) => String(k.campaignId) === String(campaignId) : () => true)
     : [];
+
+  // Debug: log campaign filter results so browser devtools can diagnose mismatches
+  if (campaignId && auditData && typeof window !== 'undefined') {
+    const sample = allKeywords.slice(0, 3).map((k) => k.campaignId);
+    console.log(`[runAudit] campaignId filter="${campaignId}" — total kws: ${allKeywords.length}, matched: ${keywords.length}, sample ids:`, sample);
+  }
 
   const campaignConfig = auditData
     ? (auditData.campaignConfig || []).filter(campaignId ? (c) => String(c.campaignId) === String(campaignId) : () => true)
