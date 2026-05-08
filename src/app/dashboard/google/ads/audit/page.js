@@ -854,12 +854,20 @@ function ConversionLagTab({ conversionLag = [] }) {
 const ASSET_TYPES  = ["SITELINK","CALLOUT","STRUCTURED_SNIPPET","CALL","AD_IMAGE"];
 const ASSET_LABELS = { SITELINK: "Sitelinks", CALLOUT: "Callouts", STRUCTURED_SNIPPET: "Snippets", CALL: "Call", AD_IMAGE: "Image" };
 
-function AssetsTab({ assetAnalysis, auditLoading, pmaxData }) {
+function AssetsTab({ assetAnalysis, auditLoading, pmaxData, debugAssets }) {
   if (auditLoading && !assetAnalysis.length) return <LoadingSpinner message="Fetching asset coverage…" />;
 
   return (
     <>
       {auditLoading && <AuditLoadingBanner />}
+      {debugAssets && (
+        <div style={{ margin: "0 0 12px", padding: "10px 14px", background: "rgba(255,165,0,0.06)", borderRadius: 8, fontSize: 11, fontFamily: "monospace", color: C.textSec }}>
+          <strong>Asset Debug:</strong> campaign={debugAssets.campaignAssetCount} account={debugAssets.accountAssetCount} adgroup={debugAssets.adGroupAssetCount}<br/>
+          acct types: {JSON.stringify(debugAssets.accountFieldTypes)} | resolved: {JSON.stringify(debugAssets.resolvedAccountTypes)}<br/>
+          campaign types: {JSON.stringify(debugAssets.campaignFieldTypes)}<br/>
+          adgroup types: {JSON.stringify(debugAssets.adGroupFieldTypes)}
+        </div>
+      )}
       {assetAnalysis.length > 0 && (
         <Section title="Extension Coverage by Campaign">
           <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "auto" }}>
@@ -909,7 +917,7 @@ function AssetsTab({ assetAnalysis, auditLoading, pmaxData }) {
 
 // ── Tab: Auction Insights ─────────────────────────────────────────────────────
 
-function AuctionInsightsTab({ auctionInsights, auditLoading }) {
+function AuctionInsightsTab({ auctionInsights, auditLoading, debugAssets }) {
   if (auditLoading && (!auctionInsights || auctionInsights.length === 0)) {
     return <LoadingSpinner message="Fetching auction insights…" />;
   }
@@ -918,6 +926,13 @@ function AuctionInsightsTab({ auctionInsights, auditLoading }) {
       <div style={{ padding: "40px 24px", textAlign: "center" }}>
         <p style={{ fontSize: 16, color: C.textSec }}>No auction insights data available for this date range.</p>
         <p style={{ fontSize: 13, color: C.textSec, marginTop: 8 }}>Auction Insights require Search or Shopping campaigns with impression data.</p>
+        {debugAssets && (
+          <div style={{ marginTop: 16, padding: "12px 16px", background: "rgba(255,165,0,0.08)", borderRadius: 8, textAlign: "left", maxWidth: 600, margin: "16px auto 0" }}>
+            <p style={{ fontSize: 11, color: C.textSec, fontFamily: "monospace", margin: 0 }}>
+              Debug: raw rows={debugAssets.auctionInsightRowCount ?? "?"} · domains found={JSON.stringify(debugAssets.auctionInsightDomains ?? [])}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1833,6 +1848,16 @@ function AuditPageInner() {
     [accountData, auditData, campaignId]
   );
 
+  // Debug: log raw asset and auction insights info when auditData updates
+  useMemo(() => {
+    if (auditData?._debugAssets) {
+      console.log('[AuditDebug] Asset raw counts:', auditData._debugAssets);
+      console.log('[AuditDebug] campaignAssets (processed):', auditData.campaignAssets?.slice(0, 20));
+      console.log('[AuditDebug] accountAssetTypes (processed):', auditData.accountAssetTypes);
+      console.log('[AuditDebug] auctionInsights (processed):', auditData.auctionInsights?.slice(0, 10));
+    }
+  }, [auditData]);
+
   if (!accountData) {
     return (
       <div style={{ height: "100vh", background: C.bg, display: "flex" }}>
@@ -1933,8 +1958,8 @@ function AuditPageInner() {
                 {activeTab === "daypart" && <DaypartTab daypartPerformance={audit.daypartPerformance} />}
                 {activeTab === "conversion_lag" && <ConversionLagTab conversionLag={audit.conversionLag} />}
                 {activeTab === "bidding" && <BiddingTab biddingAudits={audit.bidding} auditLoading={auditLoading} />}
-                {activeTab === "assets" && <AssetsTab assetAnalysis={audit.assets} auditLoading={auditLoading} pmaxData={audit.pmaxData} />}
-                {activeTab === "auction_insights" && <AuctionInsightsTab auctionInsights={audit.auctionInsights} auditLoading={auditLoading} />}
+                {activeTab === "assets" && <AssetsTab assetAnalysis={audit.assets} auditLoading={auditLoading} pmaxData={audit.pmaxData} debugAssets={auditData?._debugAssets} />}
+                {activeTab === "auction_insights" && <AuctionInsightsTab auctionInsights={audit.auctionInsights} auditLoading={auditLoading} debugAssets={auditData?._debugAssets} />}
                 {activeTab === "action_plan" && <ActionPlanTab actions={focusedActionPlan} auditLoading={auditLoading} />}
                 {activeTab === "ai" && <AIInsightTab aiInsight={aiInsight} aiLoading={aiLoading} aiError={aiError} onRunAnalysis={runAiAnalysis} auditReady={!!audit && !auditLoading} />}
               </div>
