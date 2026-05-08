@@ -578,49 +578,45 @@ export function buildActionPlan(
 export function runAudit(accountData, auditData = null, campaignId = null) {
   const campaignFilter = campaignId ? (c) => String(c.campaignId) === String(campaignId) : () => true;
 
-  // Build campaigns from fresh auditData when available so we never rely on
-  // stale sessionStorage. accountData is kept as a fallback for supplemental
-  // fields (trend, impression share, optimization score) that the audit API
-  // does not return.
+  // When auditData is available, build campaigns exclusively from fresh API data.
+  // auditData now contains status, channelType, searchImpressionShare, optimizationScore,
+  // and recommendations — so accountData is not consulted at all for audit computation.
+  // accountData is only used as a pre-audit display fallback (before the button is clicked).
   const campaigns = (() => {
-    const acctMap = new Map((accountData?.campaigns || []).map((c) => [String(c.campaignId), c]));
-
     if (auditData?.campaignConfig?.length || auditData?.campaignMetrics?.length) {
       const cfgMap  = new Map((auditData.campaignConfig  || []).map((c) => [String(c.campaignId), c]));
       const perfMap = new Map((auditData.campaignMetrics || []).map((m) => [String(m.campaignId), m]));
-      // Union of campaign IDs present in either fresh source
       const ids = new Set([...cfgMap.keys(), ...perfMap.keys()]);
       return [...ids]
         .map((id) => {
-          const cfg  = cfgMap.get(id)  || {};
-          const m    = perfMap.get(id) || {};
-          const acct = acctMap.get(id) || {};
+          const cfg = cfgMap.get(id) || {};
+          const m   = perfMap.get(id) || {};
           return {
             campaignId:   id,
-            campaignName: cfg.campaignName  || acct.campaignName  || '',
-            biddingStrategyType: cfg.biddingStrategyType || acct.biddingStrategyType || '',
-            budget:   cfg.budget  ?? acct.budget  ?? 0,
+            campaignName: cfg.campaignName || '',
+            status:       cfg.status || 'ENABLED',
+            channelType:  cfg.channelType || m.channelType || '',
+            biddingStrategyType: cfg.biddingStrategyType || '',
+            budget:   cfg.budget   ?? 0,
             targetCpa:   cfg.targetCpa   ?? null,
             targetRoas:  cfg.targetRoas  ?? null,
             enhancedCpc: cfg.enhancedCpc ?? false,
-            channelType: m.channelType || acct.channelType || '',
-            status: acct.status || 'ENABLED',
             cost:        m.cost        || 0,
             clicks:      m.clicks      || 0,
             impressions: m.impressions || 0,
             conversions: m.conversions || 0,
-            searchBudgetLostImpressionShare: m.searchBudgetLostImpressionShare ?? acct.searchBudgetLostImpressionShare ?? null,
-            searchRankLostImpressionShare:   m.searchRankLostImpressionShare   ?? acct.searchRankLostImpressionShare   ?? null,
-            searchImpressionShare: acct.searchImpressionShare ?? null,
-            optimizationScore: acct.optimizationScore ?? null,
-            trend:   acct.trend   || [],
-            devices: acct.devices || [],
+            searchBudgetLostImpressionShare: m.searchBudgetLostImpressionShare ?? null,
+            searchRankLostImpressionShare:   m.searchRankLostImpressionShare   ?? null,
+            searchImpressionShare: m.searchImpressionShare ?? null,
+            // trend and devices are display-only; fall back to accountData if available
+            trend:   (accountData?.campaigns || []).find((c) => String(c.campaignId) === id)?.trend   || [],
+            devices: (accountData?.campaigns || []).find((c) => String(c.campaignId) === id)?.devices || [],
           };
         })
         .filter(campaignFilter);
     }
 
-    // Pre-audit fallback: accountData only, overlay any partial metrics that exist
+    // Pre-audit fallback: accountData only, no audit has been run yet
     const base = (accountData?.campaigns || []).filter(campaignFilter);
     const perfRows = auditData?.campaignMetrics;
     if (!perfRows?.length) return base;
@@ -749,7 +745,7 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
       totalClicks,
       blendedCPA,
       campaignCount:     campaigns.length,
-      optimizationScore: accountData.optimizationScore,
+      optimizationScore: auditData?.optimizationScore ?? accountData?.optimizationScore ?? null,
       criticalCount:     actionPlan.filter((a) => a.ice >= 500).length,
       warningCount:      actionPlan.filter((a) => a.ice >= 200 && a.ice < 500).length,
       lrRatio:           lrData?.lrRatio ?? null,
@@ -763,7 +759,7 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
     adStrength:  adStrengthAnalysis,
     pmaxData,
     actionPlan,
-    recommendations: accountData.recommendations || [],
+    recommendations: auditData?.recommendations || accountData?.recommendations || [],
     conversionActions: auditData?.conversionActions || [],
     landingPages: filterByCampaign(auditData?.landingPages),
     campaignSearchTerms: filterByCampaign(auditData?.campaignSearchTerms),

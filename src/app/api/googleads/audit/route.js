@@ -115,6 +115,8 @@ export async function GET(request) {
       daypartRaw,
       conversionLagRaw,
       auctionInsightsRaw,
+      optimizationScoreRaw,
+      recommendationsRaw,
     ] = await Promise.all([
       // QS + attributes — ad_group_criterion does NOT allow performance metrics with date filtering;
       // fetch criterion data only (no metrics) so quality_score is returned for all active keywords
@@ -159,10 +161,12 @@ export async function GET(request) {
         LIMIT 20000
       `).catch((e) => { console.error('[audit] keyword metrics query failed:', e?.message || JSON.stringify(e)); return []; }),
 
-      // Campaign config — no date filter needed (bidding strategy is structural)
+      // Campaign config — structural fields, no date filter needed
       customer.query(`
         SELECT
           campaign.id, campaign.name,
+          campaign.status,
+          campaign.advertising_channel_type,
           campaign.bidding_strategy_type,
           campaign_budget.amount_micros,
           campaign.target_cpa.target_cpa_micros,
@@ -172,6 +176,7 @@ export async function GET(request) {
           campaign.manual_cpc.enhanced_cpc_enabled
         FROM campaign
         WHERE campaign.status != 'REMOVED'
+          ${campaignIdClause}
       `).catch(() => []),
 
       // Campaign performance metrics for the selected date range
@@ -184,11 +189,13 @@ export async function GET(request) {
           metrics.impressions,
           metrics.all_conversions,
           metrics.search_budget_lost_impression_share,
-          metrics.search_rank_lost_impression_share
+          metrics.search_rank_lost_impression_share,
+          metrics.search_impression_share
         FROM campaign
         WHERE campaign.status != 'REMOVED'
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
+          ${campaignIdClause}
       `).catch(() => []),
 
       // Campaign-level assets — use field_type (AssetFieldType) not asset_type (AssetType)
@@ -416,6 +423,20 @@ export async function GET(request) {
           AND segments.date <= '${endDate}'
         LIMIT 5000
       `).catch((e) => { console.warn('[audit] auction insights query failed:', e?.message || JSON.stringify(e)); return []; }),
+
+      // Account optimization score — fresh, not from sessionStorage
+      customer.query(`
+        SELECT customer.optimization_score
+        FROM customer
+        LIMIT 1
+      `).catch(() => []),
+
+      // Account-level recommendations — fresh, not from sessionStorage
+      customer.query(`
+        SELECT recommendation.resource_name, recommendation.type, recommendation.campaign
+        FROM recommendation
+        LIMIT 20
+      `).catch(() => []),
     ]);
 
     console.log(`[audit] raw rows — kwQS:${(keywordQsRaw||[]).length} kwMetrics:${(keywordMetricsRaw||[]).length} campaigns:${(campaignConfigRaw||[]).length} accountAssets:${(accountAssetsRaw||[]).length}`);
@@ -499,9 +520,18 @@ export async function GET(request) {
         c.maximize_conversion_value?.target_roas ||
         null;
 
+      const campaignStatusMap = { 2: 'ENABLED', 3: 'PAUSED', 4: 'REMOVED' };
+      const status = typeof c.status === 'number'
+        ? (campaignStatusMap[c.status] || String(c.status))
+        : (c.status || '');
+
       return {
         campaignId: String(c.id || ''),
         campaignName: c.name || '',
+        status,
+        channelType: typeof c.advertising_channel_type === 'number'
+          ? ({ 2: 'SEARCH', 3: 'DISPLAY', 4: 'SHOPPING', 5: 'HOTEL', 6: 'VIDEO', 7: 'MULTI_CHANNEL', 9: 'PERFORMANCE_MAX' }[c.advertising_channel_type] || `CHANNEL_${c.advertising_channel_type}`)
+          : (c.advertising_channel_type || ''),
         biddingStrategyType: biddingType,
         budget: Number(budget.amount_micros || 0),
         targetCpa: targetCpa ? Number(targetCpa) : null,
@@ -616,6 +646,7 @@ export async function GET(request) {
         conversions: Number(m.all_conversions || 0),
         searchBudgetLostImpressionShare: m.search_budget_lost_impression_share ?? null,
         searchRankLostImpressionShare: m.search_rank_lost_impression_share ?? null,
+        searchImpressionShare: m.search_impression_share ?? null,
       };
     });
 
@@ -776,11 +807,19 @@ export async function GET(request) {
         };
       });
 
+    const optimizationScore = (optimizationScoreRaw || [])[0]?.customer?.optimization_score ?? null;
+
+    const recommendations = (recommendationsRaw || []).map((row) => ({
+      resource_name: row.recommendation?.resource_name || '',
+      type: row.recommendation?.type || 'UNSPECIFIED',
+      campaign_resource_name: row.recommendation?.campaign || '',
+    }));
+
     logApiUsage({
       type: 'google_ads_audit',
       email: sessionEmail,
       customerId: String(customerId),
-      queriesRun: 18,
+      queriesRun: 20,
     }).catch(() => {});
 
     const resp = NextResponse.json({
@@ -801,6 +840,8 @@ export async function GET(request) {
         daypartPerformance,
         conversionLag,
         auctionInsights,
+        optimizationScore,
+        recommendations,
         _debugAssets: {
           campaignAssetCount: (campaignAssetsRaw||[]).length,
           accountAssetCount: (accountAssetsRaw||[]).length,
