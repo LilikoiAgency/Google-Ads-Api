@@ -1519,8 +1519,14 @@ function AccountsSidebar({ accounts, currentCustomerId, onSelect }) {
 
 // ── Audit History Sidebar ─────────────────────────────────────────────────────
 
+const PAGE_SIZE = 5;
+
 function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onRunAudit, auditLoading }) {
   const [hoveredId, setHoveredId] = useState(null);
+  const [page, setPage] = useState(0);
+
+  const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+  const pageEntries = entries.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="audit-history" style={{ borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column" }}>
@@ -1545,7 +1551,7 @@ function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onR
           <p style={{ fontSize: 13, color: C.textSec, padding: "20px 14px", lineHeight: 1.7, textAlign: "center" }}>
             No saved audits yet.<br />Run an audit to get started.
           </p>
-        ) : entries.map((entry) => {
+        ) : pageEntries.map((entry) => {
           const id = String(entry._id);
           const isActive = id === activeId;
           const isHovered = id === hoveredId;
@@ -1592,6 +1598,16 @@ function AuditHistorySidebar({ entries, activeId, usage, onSelect, onDelete, onR
           );
         })}
       </div>
+
+      {totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+            style={{ background: "none", border: "none", color: page === 0 ? C.border : C.textSec, fontSize: 16, cursor: page === 0 ? "default" : "pointer", padding: "2px 6px", lineHeight: 1 }}>‹</button>
+          <span style={{ fontSize: 11, color: C.textSec }}>{page + 1} / {totalPages}</span>
+          <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+            style={{ background: "none", border: "none", color: page === totalPages - 1 ? C.border : C.textSec, fontSize: 16, cursor: page === totalPages - 1 ? "default" : "pointer", padding: "2px 6px", lineHeight: 1 }}>›</button>
+        </div>
+      )}
 
       <div style={{ padding: "10px 14px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
         {usage ? (
