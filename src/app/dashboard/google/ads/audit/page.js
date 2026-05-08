@@ -864,34 +864,97 @@ function ConversionLagTab({ conversionLag = [], auditLoading }) {
 const ASSET_TYPES  = ["SITELINK","CALLOUT","STRUCTURED_SNIPPET","CALL","AD_IMAGE"];
 const ASSET_LABELS = { SITELINK: "Sitelinks", CALLOUT: "Callouts", STRUCTURED_SNIPPET: "Snippets", CALL: "Call", AD_IMAGE: "Image" };
 
+const ASSET_SETUP_GUIDE = {
+  SITELINK: {
+    label: "Sitelinks",
+    why: "Give users additional links to specific pages. Increases CTR and takes up more SERP real estate. Add at least 4.",
+    path: "Google Ads → Campaigns → Assets → + → Sitelink",
+    tip: "Use distinct landing pages — don't repeat your final URL.",
+  },
+  CALLOUT: {
+    label: "Callouts",
+    why: 'Short phrases highlighting benefits or offers (e.g. "Free Shipping", "24/7 Support"). Add at least 4.',
+    path: "Google Ads → Campaigns → Assets → + → Callout",
+    tip: "Keep each callout under 25 characters.",
+  },
+  STRUCTURED_SNIPPET: {
+    label: "Structured Snippets",
+    why: "Lists of products, services, or features under a header (e.g. 'Services: Installation, Repair, Maintenance').",
+    path: "Google Ads → Campaigns → Assets → + → Structured snippet",
+    tip: "Choose the header type that best fits your offering.",
+  },
+  CALL: {
+    label: "Call Extension",
+    why: "Shows your phone number directly in the ad. Critical for local businesses and service-based accounts.",
+    path: "Google Ads → Campaigns → Assets → + → Call",
+    tip: "Set a call schedule matching your business hours so the number only shows when someone can answer.",
+  },
+  AD_IMAGE: {
+    label: "Image Extension",
+    why: "Adds a visual image alongside your text ad on mobile and desktop, improving CTR and brand recall.",
+    path: "Google Ads → Campaigns → Assets → + → Image",
+    tip: "Upload at least one landscape image (1.91:1 ratio, min 600×314px). Square images (1:1) also supported.",
+  },
+};
+
 function AssetsTab({ assetAnalysis, auditLoading, pmaxData }) {
   if (auditLoading && !assetAnalysis.length) return <LoadingSpinner message="Fetching asset coverage…" />;
 
   return (
     <>
       {auditLoading && <AuditLoadingBanner />}
-      {assetAnalysis.length > 0 && (
-        <Section title="Extension Coverage by Campaign">
-          <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: `1fr ${ASSET_TYPES.map(() => "90px").join(" ")} 90px`, padding: "10px 16px", borderBottom: `1px solid ${C.border}`, minWidth: 580 }}>
-              <span style={{ fontSize: 13, color: C.textSec, fontWeight: 700 }}>Campaign</span>
-              {ASSET_TYPES.map((t) => <span key={t} style={{ fontSize: 12, color: C.textSec, textAlign: "center" }}>{ASSET_LABELS[t]}</span>)}
-              <span style={{ fontSize: 13, color: C.textSec, textAlign: "center" }}>Score</span>
-            </div>
-            {assetAnalysis.map((a, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: `1fr ${ASSET_TYPES.map(() => "90px").join(" ")} 90px`, padding: "13px 16px", borderBottom: `1px solid ${C.border}`, gap: 4, alignItems: "center", minWidth: 580 }}>
-                <p style={{ fontSize: 15, color: C.textPri, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.campaignName}>{a.campaignName}</p>
-                {ASSET_TYPES.map((type) => (
-                  <span key={type} style={{ fontSize: 16, textAlign: "center" }}>{a.presentTypes.includes(type) ? "✅" : "❌"}</span>
+      {assetAnalysis.length > 0 && (() => {
+        // Collect all missing types across all campaigns (deduped)
+        const allMissing = [...new Set(assetAnalysis.flatMap((a) => a.missingTypes))];
+        return (
+          <>
+            <Section title="Extension Coverage by Campaign">
+              <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: `1fr ${ASSET_TYPES.map(() => "90px").join(" ")} 90px`, padding: "10px 16px", borderBottom: `1px solid ${C.border}`, minWidth: 580 }}>
+                  <span style={{ fontSize: 13, color: C.textSec, fontWeight: 700 }}>Campaign</span>
+                  {ASSET_TYPES.map((t) => <span key={t} style={{ fontSize: 12, color: C.textSec, textAlign: "center" }}>{ASSET_LABELS[t]}</span>)}
+                  <span style={{ fontSize: 13, color: C.textSec, textAlign: "center" }}>Score</span>
+                </div>
+                {assetAnalysis.map((a, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: `1fr ${ASSET_TYPES.map(() => "90px").join(" ")} 90px`, padding: "13px 16px", borderBottom: `1px solid ${C.border}`, gap: 4, alignItems: "center", minWidth: 580 }}>
+                    <p style={{ fontSize: 15, color: C.textPri, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.campaignName}>{a.campaignName}</p>
+                    {ASSET_TYPES.map((type) => (
+                      <span key={type} style={{ fontSize: 16, textAlign: "center" }}>{a.presentTypes.includes(type) ? "✅" : "❌"}</span>
+                    ))}
+                    <span style={{ fontSize: 15, fontWeight: 700, textAlign: "center", color: a.coverageScore >= 0.8 ? C.teal : a.coverageScore >= 0.6 ? C.amber : C.accent }}>
+                      {Math.round(a.coverageScore * 100)}%
+                    </span>
+                  </div>
                 ))}
-                <span style={{ fontSize: 15, fontWeight: 700, textAlign: "center", color: a.coverageScore >= 0.8 ? C.teal : a.coverageScore >= 0.6 ? C.amber : C.accent }}>
-                  {Math.round(a.coverageScore * 100)}%
-                </span>
               </div>
-            ))}
-          </div>
-        </Section>
-      )}
+            </Section>
+
+            {allMissing.length > 0 && (
+              <Section title="How to Set Up Missing Extensions">
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {allMissing.filter((t) => ASSET_SETUP_GUIDE[t]).map((type) => {
+                    const g = ASSET_SETUP_GUIDE[type];
+                    return (
+                      <div key={type} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.accent, background: "rgba(233,69,96,0.1)", padding: "2px 10px", borderRadius: 6 }}>❌ Missing</span>
+                          <span style={{ fontSize: 16, fontWeight: 700, color: C.textPri }}>{g.label}</span>
+                        </div>
+                        <p style={{ fontSize: 14, color: C.textSec, margin: "0 0 10px" }}>{g.why}</p>
+                        <div style={{ background: "rgba(78,204,163,0.06)", border: `1px solid rgba(78,204,163,0.2)`, borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: C.teal, margin: "0 0 3px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Where to set it up</p>
+                          <p style={{ fontSize: 14, color: C.textPri, margin: 0, fontFamily: "monospace" }}>{g.path}</p>
+                        </div>
+                        <p style={{ fontSize: 13, color: C.textSec, margin: 0 }}>💡 {g.tip}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+          </>
+        );
+      })()}
 
       {pmaxData && pmaxData.length > 0 && (
         <Section title={`Performance Max (${pmaxData.length} campaign${pmaxData.length > 1 ? "s" : ""})`}>
