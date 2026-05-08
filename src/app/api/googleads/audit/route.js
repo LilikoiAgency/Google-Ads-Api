@@ -783,7 +783,7 @@ export async function GET(request) {
       queriesRun: 18,
     }).catch(() => {});
 
-    return NextResponse.json({
+    const resp = NextResponse.json({
       data: {
         keywords,
         campaignConfig,
@@ -816,6 +816,8 @@ export async function GET(request) {
       },
       requestId,
     });
+    resp.headers.set('Cache-Control', 'no-store');
+    return resp;
   } catch (error) {
     console.error(`[googleads/audit] Error [${requestId}]:`, error?.message || error);
     return NextResponse.json(

@@ -1679,7 +1679,7 @@ function AuditPageInner() {
     }
     if (campaignId) params.set("campaignId", campaignId);
     try {
-      const r = await fetch(`/api/googleads/audit?${params.toString()}`);
+      const r = await fetch(`/api/googleads/audit?${params.toString()}`, { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
       const json = await r.json();
       if (json?.data) {

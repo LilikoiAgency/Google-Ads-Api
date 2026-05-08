@@ -578,10 +578,50 @@ export function buildActionPlan(
 export function runAudit(accountData, auditData = null, campaignId = null) {
   const campaignFilter = campaignId ? (c) => String(c.campaignId) === String(campaignId) : () => true;
 
-  // If the audit API returned date-range campaign metrics, overlay them onto the
-  // structural campaign data from accountData so KPIs reflect the selected date range.
+  // Build campaigns from fresh auditData when available so we never rely on
+  // stale sessionStorage. accountData is kept as a fallback for supplemental
+  // fields (trend, impression share, optimization score) that the audit API
+  // does not return.
   const campaigns = (() => {
-    const base = (accountData.campaigns || []).filter(campaignFilter);
+    const acctMap = new Map((accountData?.campaigns || []).map((c) => [String(c.campaignId), c]));
+
+    if (auditData?.campaignConfig?.length || auditData?.campaignMetrics?.length) {
+      const cfgMap  = new Map((auditData.campaignConfig  || []).map((c) => [String(c.campaignId), c]));
+      const perfMap = new Map((auditData.campaignMetrics || []).map((m) => [String(m.campaignId), m]));
+      // Union of campaign IDs present in either fresh source
+      const ids = new Set([...cfgMap.keys(), ...perfMap.keys()]);
+      return [...ids]
+        .map((id) => {
+          const cfg  = cfgMap.get(id)  || {};
+          const m    = perfMap.get(id) || {};
+          const acct = acctMap.get(id) || {};
+          return {
+            campaignId:   id,
+            campaignName: cfg.campaignName  || acct.campaignName  || '',
+            biddingStrategyType: cfg.biddingStrategyType || acct.biddingStrategyType || '',
+            budget:   cfg.budget  ?? acct.budget  ?? 0,
+            targetCpa:   cfg.targetCpa   ?? null,
+            targetRoas:  cfg.targetRoas  ?? null,
+            enhancedCpc: cfg.enhancedCpc ?? false,
+            channelType: m.channelType || acct.channelType || '',
+            status: acct.status || 'ENABLED',
+            cost:        m.cost        || 0,
+            clicks:      m.clicks      || 0,
+            impressions: m.impressions || 0,
+            conversions: m.conversions || 0,
+            searchBudgetLostImpressionShare: m.searchBudgetLostImpressionShare ?? acct.searchBudgetLostImpressionShare ?? null,
+            searchRankLostImpressionShare:   m.searchRankLostImpressionShare   ?? acct.searchRankLostImpressionShare   ?? null,
+            searchImpressionShare: acct.searchImpressionShare ?? null,
+            optimizationScore: acct.optimizationScore ?? null,
+            trend:   acct.trend   || [],
+            devices: acct.devices || [],
+          };
+        })
+        .filter(campaignFilter);
+    }
+
+    // Pre-audit fallback: accountData only, overlay any partial metrics that exist
+    const base = (accountData?.campaigns || []).filter(campaignFilter);
     const perfRows = auditData?.campaignMetrics;
     if (!perfRows?.length) return base;
     const perfMap = new Map(perfRows.map((m) => [String(m.campaignId), m]));
@@ -595,7 +635,7 @@ export function runAudit(accountData, auditData = null, campaignId = null) {
         impressions: m.impressions,
         conversions: m.conversions,
         searchBudgetLostImpressionShare: m.searchBudgetLostImpressionShare ?? c.searchBudgetLostImpressionShare,
-        searchRankLostImpressionShare: m.searchRankLostImpressionShare ?? c.searchRankLostImpressionShare,
+        searchRankLostImpressionShare:   m.searchRankLostImpressionShare   ?? c.searchRankLostImpressionShare,
       };
     });
   })();
