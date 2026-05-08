@@ -10,7 +10,6 @@ import {
 const CLIENT_COLORS = {
   BBT: "#4ecca3", // teal
   SMP: "#f5a623", // amber
-  CMK: "#3182ce", // blue
   MSP: "#a855f7", // purple
 };
 const FALLBACK = "#9ca3af";

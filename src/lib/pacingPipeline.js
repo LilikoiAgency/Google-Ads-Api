@@ -14,7 +14,6 @@ const CONFIG_ID = 'singleton';
 const DEFAULT_CLIENTS = [
   { key: 'BBT', name: 'Big Bully Turf',  sheetId: '1MSsCNhqCA53ToFAeAxIC45nxwETMWhg6Ip7eT9RBRgc', enabled: true },
   { key: 'SMP', name: 'Semper Solaris',  sheetId: '1xvWA1WWDHBrABYoWjMJJaaCCV3aQgofSV0m4GT4Eahw', enabled: true },
-  { key: 'CMK', name: 'CMK Construction', sheetId: '14hQSB8fQjDxNQ21qSoNeqgzd9RcVU3SahV5AyvKDiwY', enabled: true },
   { key: 'MSP', name: 'More Space Place', sheetId: '1qzAYyXUbtZ1FwXRkznvlna5g2OMAmby6GcF1sNBqlXE', enabled: true },
 ];
 

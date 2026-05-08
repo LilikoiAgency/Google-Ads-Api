@@ -475,14 +475,14 @@ export default function AdminClientsPage() {
                   <input type="text" value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, slug: modal.mode === "add" ? slugify(e.target.value) : f.slug }))}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-purple-400"
-                    placeholder="CMK Construction, Inc." />
+                    placeholder="Acme Corp, Inc." />
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">URL Slug *</span>
                   <input type="text" value={form.slug}
                     onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none focus:border-purple-400"
-                    placeholder="cmk-construction"
+                    placeholder="acme-corp"
                     disabled={modal.mode === "edit"} />
                   <p className="text-xs text-gray-400 mt-0.5">/portal/{form.slug || "…"}</p>
                 </label>

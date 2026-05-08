@@ -24,7 +24,7 @@ const ACCOUNT_STATUS = {
 const EXCLUDED_STATUSES = new Set([2, 3, 101]); // Disabled, Unsettled, Closed
 
 // Priority clients — shown first in every account list (order matters)
-const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf", "cmk"];
+const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf"];
 
 function priorityIndex(name) {
   const lower = (name || "").toLowerCase();

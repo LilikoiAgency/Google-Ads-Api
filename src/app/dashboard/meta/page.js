@@ -21,7 +21,7 @@ import MetaAdCopyPanel from "./components/MetaAdCopyPanel";
 
 // ─── priority sort ────────────────────────────────────────────────────────────
 
-const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf", "cmk"];
+const PRIORITY_KEYWORDS = ["semper solaris", "big bully turf"];
 function priorityIndex(name) {
   const lower = (name || "").toLowerCase();
   const idx = PRIORITY_KEYWORDS.findIndex((kw) => lower.includes(kw));
