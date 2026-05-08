@@ -501,7 +501,7 @@ function KeywordsTab({ keywordAnalysis, auditLoading, isCampaignAudit }) {
       <div style={{ padding: "32px 24px", textAlign: "center" }}>
         <p style={{ fontSize: 16, color: C.textSec, margin: "0 0 8px" }}>
           {isCampaignAudit
-            ? "No enabled keywords found for this campaign."
+            ? "No keywords found for this campaign."
             : "No keyword data found for this account."}
         </p>
         <p style={{ fontSize: 13, color: C.textSec, opacity: 0.7, margin: 0 }}>
@@ -1677,6 +1677,7 @@ function AuditPageInner() {
       params.set("startDate", start);
       params.set("endDate", end);
     }
+    if (campaignId) params.set("campaignId", campaignId);
     try {
       const r = await fetch(`/api/googleads/audit?${params.toString()}`);
       if (!r.ok) throw new Error(r.status);

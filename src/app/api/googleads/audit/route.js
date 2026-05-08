@@ -70,6 +70,10 @@ export async function GET(request) {
     const dateRange = searchParams.get('dateRange') || 'LAST_30_DAYS';
     const startDateParam = searchParams.get('startDate') || undefined;
     const endDateParam = searchParams.get('endDate') || undefined;
+    // Optional: when provided, GAQL queries are scoped to this campaign at the server level
+    const filterCampaignId = searchParams.get('campaignId') || null;
+    // GAQL fragment — campaign.id is BIGINT so no quotes
+    const campaignIdClause = filterCampaignId ? `AND campaign.id = ${filterCampaignId}` : '';
 
     if (!customerId || String(customerId).trim() === '') {
       return NextResponse.json({ error: 'customerId is required', requestId }, { status: 400 });
@@ -128,10 +132,11 @@ export async function GET(request) {
           ad_group.id, ad_group.name
         FROM ad_group_criterion
         WHERE ad_group_criterion.type = 'KEYWORD'
-          AND ad_group_criterion.status = 'ENABLED'
+          AND ad_group_criterion.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
-        LIMIT 15000
+          ${campaignIdClause}
+        LIMIT 20000
       `).catch((e) => { console.error('[audit] QS query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       // Performance metrics — keyword_view supports date-ranged metrics
@@ -145,12 +150,13 @@ export async function GET(request) {
           metrics.cost_micros,
           metrics.conversions
         FROM keyword_view
-        WHERE ad_group_criterion.status = 'ENABLED'
+        WHERE ad_group_criterion.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
-        LIMIT 15000
+          ${campaignIdClause}
+        LIMIT 20000
       `).catch((e) => { console.error('[audit] keyword metrics query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       // Campaign config — no date filter needed (bidding strategy is structural)
@@ -191,6 +197,7 @@ export async function GET(request) {
         FROM campaign_asset
         WHERE campaign_asset.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
+          ${campaignIdClause}
       `).catch(() => []),
 
       // Account-level assets apply to all campaigns
@@ -207,6 +214,7 @@ export async function GET(request) {
         WHERE ad_group_asset.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
+          ${campaignIdClause}
       `).catch((e) => { console.error('[audit] ad_group_asset query failed:', e?.message || JSON.stringify(e)); return []; }),
 
       customer.query(`
@@ -217,9 +225,10 @@ export async function GET(request) {
           ad_group_ad.status,
           ad_group_ad.ad.responsive_search_ad.headlines
         FROM ad_group_ad
-        WHERE ad_group_ad.status = 'ENABLED'
-          AND ad_group.status = 'ENABLED'
+        WHERE ad_group_ad.status != 'REMOVED'
+          AND ad_group.status != 'REMOVED'
           AND campaign.status != 'REMOVED'
+          ${campaignIdClause}
       `).catch(() => []),
 
       customer.query(`
@@ -290,6 +299,7 @@ export async function GET(request) {
         FROM expanded_landing_page_view
         WHERE segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
+          ${campaignIdClause}
         ORDER BY metrics.cost_micros DESC
         LIMIT 500
       `).catch((e) => { console.error('[audit] landing pages query failed:', e?.message || JSON.stringify(e)); return []; }),
@@ -310,6 +320,7 @@ export async function GET(request) {
         FROM search_term_view
         WHERE segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
+          ${campaignIdClause}
         ORDER BY metrics.cost_micros DESC
         LIMIT 2000
       `).catch((e) => { console.error('[audit] campaign search terms query failed:', e?.message || JSON.stringify(e)); return []; }),
@@ -349,6 +360,7 @@ export async function GET(request) {
         FROM geographic_view
         WHERE segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
+          ${campaignIdClause}
         ORDER BY metrics.cost_micros DESC
         LIMIT 500
       `).catch((e) => { console.error('[audit] geo performance query failed:', e?.message || JSON.stringify(e)); return []; }),
@@ -367,6 +379,7 @@ export async function GET(request) {
         WHERE campaign.status != 'REMOVED'
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
+          ${campaignIdClause}
         ORDER BY metrics.cost_micros DESC
         LIMIT 1000
       `).catch((e) => { console.error('[audit] daypart query failed:', e?.message || JSON.stringify(e)); return []; }),
@@ -381,6 +394,7 @@ export async function GET(request) {
         WHERE campaign.status != 'REMOVED'
           AND segments.date >= '${startDate}'
           AND segments.date <= '${endDate}'
+          ${campaignIdClause}
         ORDER BY metrics.all_conversions DESC
         LIMIT 500
       `).catch((e) => { console.error('[audit] conversion lag query failed:', e?.message || JSON.stringify(e)); return []; }),
