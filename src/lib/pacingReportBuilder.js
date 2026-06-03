@@ -97,12 +97,14 @@ function classifyClientTotal(totals) {
 
 function renderPlatformRow(line) {
   const cls = classifyLine(line);
-  const label = line.rawLabel || `${line.platform}${line.vertical ? ' / ' + line.vertical : ''}`;
+  const platform = escapeHtml(line.platform || '');
+  const campaignType = escapeHtml(line.vertical || '—');
 
   if (cls.status === 'INACTIVE') {
     return `
       <tr>
-        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};">${escapeHtml(label)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};">${platform}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};">${campaignType}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">${fmtCurrencyNoDec(line.campaignBudget)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowInactive};color:${PALETTE.textMuted};text-align:right;">—</td>
@@ -115,7 +117,8 @@ function renderPlatformRow(line) {
   if (cls.status === 'NO_BUDGET') {
     return `
       <tr>
-        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};font-weight:500;">${escapeHtml(label)} <span style="color:${PALETTE.criticalText};font-size:11px;">(no budget)</span></td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};font-weight:500;">${platform} <span style="color:${PALETTE.criticalText};font-size:11px;">(no budget)</span></td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};">${campaignType}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">—</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrencyNoDec(line.campaignBudget)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${PALETTE.rowCritical};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrency(line.spendMtd)}</td>
@@ -140,7 +143,8 @@ function renderPlatformRow(line) {
 
   return `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};font-weight:500;">${escapeHtml(label)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};font-weight:500;">${platform}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textSecondary};">${campaignType}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrencyNoDec(line.budget)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textSecondary};text-align:right;">${fmtCurrencyNoDec(line.campaignBudget)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid ${PALETTE.borderLight};background:${bg};color:${PALETTE.textPrimary};text-align:right;">${fmtCurrency(line.spendMtd)}</td>
@@ -161,7 +165,7 @@ function renderTotalRow(totals, cls) {
 
   return `
     <tr>
-      <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};">TOTAL</td>
+      <td colspan="2" style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};">TOTAL</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${totals.budget ? fmtCurrencyNoDec(totals.budget) : '—'}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textSecondary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${totals.campaignBudget != null ? fmtCurrencyNoDec(totals.campaignBudget) : '—'}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${fmtCurrency(totals.spendMtd)}</td>
@@ -255,7 +259,7 @@ function renderClientSection(client) {
 
   const tableBody = lines.length
     ? lines.map(renderPlatformRow).join('') + renderTotalRow(totals, cls)
-    : `<tr><td colspan="7" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No platform data</td></tr>`;
+    : `<tr><td colspan="8" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No platform data</td></tr>`;
 
   return `
   <div style="padding:24px 32px 8px 32px;">
@@ -267,7 +271,8 @@ function renderClientSection(client) {
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead>
         <tr>
-          <th style="text-align:left;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Platform / Vertical</th>
+          <th style="text-align:left;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Platform</th>
+          <th style="text-align:left;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Vertical</th>
           <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Budget</th>
           <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Campaign Budget</th>
           <th style="text-align:right;padding:8px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;">Spend MTD</th>

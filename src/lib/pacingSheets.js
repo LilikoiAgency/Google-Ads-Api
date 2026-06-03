@@ -131,7 +131,7 @@ function extractPlatformLines(rows) {
   const { headers, dataRows } = table;
 
   const cPlatform = colIndex(headers, ['platform', 'platformvertical']);
-  const cVertical = colIndex(headers, ['vertical']);
+  const cVertical = colIndex(headers, ['vertical', 'campaigntype', 'type', 'geo', 'market']);
   const cBudget   = colIndex(headers, ['budget', 'currentbudget', 'monthlybudget']);
   const cSpend    = colIndex(headers, ['spend', 'spendmtd', 'currentspend', 'mtdspend']);
   const cPacing   = colIndex(headers, ['totalbudgetpacing', 'eompacing', 'pacing', 'pacingeom', 'projected']);
