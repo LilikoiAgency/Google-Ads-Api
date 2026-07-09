@@ -148,11 +148,18 @@ function extractPlatformLines(rows) {
     const platform = KNOWN_PLATFORMS.find((p) => upper.includes(p));
     if (!platform) continue;
 
+    // Preserve qualifiers like "LSA" that live in the platform cell but get
+    // dropped by the base-platform normalization above (e.g. "GOOGLE LSA" → "GOOGLE").
+    const isLsa = upper.includes('LSA');
+    const displayPlatform = isLsa ? `${platform} LSA` : platform;
+
     const vertical = cVertical >= 0 ? String(row[cVertical] || '').trim() : '';
     lines.push({
       platform,
+      isLsa,
+      displayPlatform,
       vertical,
-      rawLabel: vertical ? `${platform} / ${vertical}` : platformCell,
+      rawLabel: vertical ? `${displayPlatform} / ${vertical}` : platformCell,
       budget:   cBudget >= 0 ? toNum(row[cBudget])   : null,
       spendMtd: cSpend  >= 0 ? toNum(row[cSpend])    : null,
       eomPacing: cPacing >= 0 ? toNum(row[cPacing])  : null,
@@ -375,7 +382,8 @@ export async function fetchClientSheet(sheetId, label = '') {
   // LSA and YOUTUBE are excluded (non-standard / non-daily budget types).
   if (Array.isArray(pacing.lines)) {
     for (const line of pacing.lines) {
-      const isLsa = (line.vertical || '').toUpperCase().includes('LSA')
+      const isLsa = line.isLsa
+        || (line.vertical || '').toUpperCase().includes('LSA')
         || (line.rawLabel || '').toUpperCase().includes('LSA');
       if (isLsa || line.platform === 'YOUTUBE') {
         line.campaignBudget = null;

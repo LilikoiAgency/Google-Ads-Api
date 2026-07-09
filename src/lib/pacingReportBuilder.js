@@ -83,6 +83,15 @@ function classifyLine(line) {
   return { status: 'OVER', pacingPct: pct };
 }
 
+// A line is "pretty much empty" when it has no monthly budget, no spend, and no
+// campaign budget — every displayed cell would be a dash. We drop these rows
+// entirely rather than render an "Inactive" line of dashes.
+function isEmptyLine(line) {
+  const cls = classifyLine(line);
+  const hasCampaignBudget = line.campaignBudget != null && line.campaignBudget > 0;
+  return cls.status === 'INACTIVE' && !hasCampaignBudget;
+}
+
 function classifyClientTotal(totals) {
   const { budget, eomPacing } = totals;
   if (!budget || budget === 0) return { status: 'NO_BUDGET', pacingPct: null };
@@ -95,9 +104,15 @@ function classifyClientTotal(totals) {
 
 // ── Row renderers ─────────────────────────────────────────────────────────────
 
+// Display label for a line's platform — preserves qualifiers like "LSA"
+// (e.g. "GOOGLE LSA") that the base-platform field normalizes away.
+function platformLabel(line) {
+  return line.displayPlatform || line.platform || '';
+}
+
 function renderPlatformRow(line) {
   const cls = classifyLine(line);
-  const platform = escapeHtml(line.platform || '');
+  const platform = escapeHtml(platformLabel(line));
   const campaignType = escapeHtml(line.vertical || '—');
 
   if (cls.status === 'INACTIVE') {
@@ -257,8 +272,9 @@ function renderClientSection(client) {
 
   const diffAlerts = (validation?.platforms || []).filter((p) => Math.abs(p.differencesUsd || 0) >= 0.01);
 
-  const tableBody = lines.length
-    ? lines.map(renderPlatformRow).join('') + renderTotalRow(totals, cls)
+  const visibleLines = lines.filter((l) => !isEmptyLine(l));
+  const tableBody = visibleLines.length
+    ? visibleLines.map(renderPlatformRow).join('') + renderTotalRow(totals, cls)
     : `<tr><td colspan="8" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No platform data</td></tr>`;
 
   return `
@@ -307,7 +323,7 @@ function buildRecommendedActions(clients) {
       actions.push({
         icon: '🚨',
         priority: 0,
-        text: `<strong style="color:${PALETTE.overText};">${escapeHtml(client.name)} — ${escapeHtml(l.platform)}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} CRITICALLY OVER PACING (${fmtPct(cls.pacingPct)}):</strong> Spent ${fmtCurrency(l.spendMtd)} against ${fmtCurrency(l.budget)} budget, pacing to ${fmtCurrency(l.eomPacing)} EOM. Reduce daily caps or pause to stop further overspend.`,
+        text: `<strong style="color:${PALETTE.overText};">${escapeHtml(client.name)} — ${escapeHtml(platformLabel(l))}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} CRITICALLY OVER PACING (${fmtPct(cls.pacingPct)}):</strong> Spent ${fmtCurrency(l.spendMtd)} against ${fmtCurrency(l.budget)} budget, pacing to ${fmtCurrency(l.eomPacing)} EOM. Reduce daily caps or pause to stop further overspend.`,
       });
     }
 
@@ -317,7 +333,7 @@ function buildRecommendedActions(clients) {
       actions.push({
         icon: '🔴',
         priority: 1,
-        text: `<strong>${escapeHtml(client.name)} — ${escapeHtml(l.platform)}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} spending with no budget loaded:</strong> ${fmtCurrency(l.spendMtd)} MTD (pacing ${fmtCurrency(l.eomPacing)} EOM) with no monthly budget set. Load a budget or pause.`,
+        text: `<strong>${escapeHtml(client.name)} — ${escapeHtml(platformLabel(l))}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} spending with no budget loaded:</strong> ${fmtCurrency(l.spendMtd)} MTD (pacing ${fmtCurrency(l.eomPacing)} EOM) with no monthly budget set. Load a budget or pause.`,
       });
     }
 
@@ -329,7 +345,7 @@ function buildRecommendedActions(clients) {
     if (moderateOver.length) {
       const items = moderateOver.map((l) => {
         const cls = classifyLine(l);
-        return `${escapeHtml(l.platform)}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} (${fmtPct(cls.pacingPct)})`;
+        return `${escapeHtml(platformLabel(l))}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} (${fmtPct(cls.pacingPct)})`;
       }).join(', ');
       actions.push({
         icon: '⚠️',
@@ -341,7 +357,7 @@ function buildRecommendedActions(clients) {
     // Zero spend on budgeted platforms
     const zeroSpend = lines.filter((l) => (l.budget || 0) > 0 && (l.spendMtd || 0) === 0);
     if (zeroSpend.length) {
-      const items = zeroSpend.map((l) => `${escapeHtml(l.platform)}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''}`).join(', ');
+      const items = zeroSpend.map((l) => `${escapeHtml(platformLabel(l))}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''}`).join(', ');
       const budgetTotal = zeroSpend.reduce((s, l) => s + (l.budget || 0), 0);
       actions.push({
         icon: '⚠️',
@@ -358,7 +374,7 @@ function buildRecommendedActions(clients) {
     if (under.length) {
       const items = under.map((l) => {
         const cls = classifyLine(l);
-        return `${escapeHtml(l.platform)}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} (${fmtPct(cls.pacingPct)})`;
+        return `${escapeHtml(platformLabel(l))}${l.vertical ? ' ' + escapeHtml(l.vertical) : ''} (${fmtPct(cls.pacingPct)})`;
       }).join(', ');
       actions.push({
         icon: '⚠️',
