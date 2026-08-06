@@ -393,7 +393,7 @@ function sumCampaignBudgetForVertical(campaigns, vertical) {
 
 export async function fetchClientSheet(sheetId, label = '') {
   console.log(`[pacing:${label || sheetId.slice(0, 6)}] fetch start sheetId=${sheetId.slice(0, 10)}…`);
-  const [pacing, validation, googleCampaigns, metaCampaigns, bingCampaigns] = await Promise.all([
+  const [pacing, validation, googleCampaigns, metaCampaigns, bingCampaigns, twitterCampaigns] = await Promise.all([
     fetchPacingTab(sheetId, label).catch((err) => {
       console.error(`[pacing:${label}] PACING fetch failed: ${err?.message}`);
       return { error: err?.message || 'PACING fetch failed' };
@@ -405,6 +405,7 @@ export async function fetchClientSheet(sheetId, label = '') {
     readBudgetTabCampaigns(sheetId, 'Google Budget', label),
     readBudgetTabCampaigns(sheetId, 'Meta Budget',   label),
     readBudgetTabCampaigns(sheetId, 'Bing Budget',   label),
+    readBudgetTabCampaigns(sheetId, 'Twitter Budget', label),
   ]);
 
   // Attach vertical-specific campaign budget to each platform line.
@@ -422,6 +423,8 @@ export async function fetchClientSheet(sheetId, label = '') {
         line.campaignBudget = sumCampaignBudgetForVertical(metaCampaigns, line.vertical);
       } else if (line.platform === 'BING') {
         line.campaignBudget = sumCampaignBudgetForVertical(bingCampaigns, line.vertical);
+      } else if (line.platform === 'X') {
+        line.campaignBudget = sumCampaignBudgetForVertical(twitterCampaigns, line.vertical);
       } else {
         line.campaignBudget = null;
       }
