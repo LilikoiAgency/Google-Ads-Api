@@ -15,6 +15,7 @@ const DEFAULT_CLIENTS = [
   { key: 'BBT', name: 'Big Bully Turf',  sheetId: '1MSsCNhqCA53ToFAeAxIC45nxwETMWhg6Ip7eT9RBRgc', enabled: true },
   { key: 'SMP', name: 'Semper Solaris',  sheetId: '1xvWA1WWDHBrABYoWjMJJaaCCV3aQgofSV0m4GT4Eahw', enabled: true },
   { key: 'MSP', name: 'More Space Place', sheetId: '1qzAYyXUbtZ1FwXRkznvlna5g2OMAmby6GcF1sNBqlXE', enabled: true },
+  { key: 'PLS', name: 'Payless For Solar', sheetId: '1FKPACgebq2_YAAsgswGeBROzJm5JH45c2s2G2k-siyo', enabled: true },
 ];
 
 const DEFAULT_RECIPIENTS = [
