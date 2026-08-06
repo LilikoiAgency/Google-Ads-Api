@@ -324,12 +324,32 @@ export async function fetchValidationTab(sheetId, label = '') {
   return { platforms: out };
 }
 
+// Budget tabs are named per platform ("GOOGLE Budget"), but some sheets prefix
+// them with the client key ("PLS GOOGLE Budget"). Try the prefixed name first so
+// a client-specific tab wins, then fall back to the shared convention.
+export function budgetTabCandidates(tabName, label) {
+  const key = String(label || '').trim();
+  return key ? [`${key} ${tabName}`, tabName] : [tabName];
+}
+
 // Read a Budget tab and return an array of { name, budget } for every campaign row.
 // Finds "Campaign Budget" and "Campaign Name" columns by header keyword — handles
 // column positions that vary sheet to sheet.
 async function readBudgetTabCampaigns(sheetId, tabName, label) {
   try {
-    const rows = await readTab(sheetId, tabName);
+    let rows = null;
+    let resolvedTab = tabName;
+    for (const candidate of budgetTabCandidates(tabName, label)) {
+      try {
+        rows = await readTab(sheetId, candidate);
+        resolvedTab = candidate;
+        break;
+      } catch {
+        // Tab doesn't exist under this name — try the next candidate.
+      }
+    }
+    if (rows == null) throw new Error(`no budget tab found for "${tabName}"`);
+    tabName = resolvedTab;
     if (rows.length < 2) return [];
     const headers = rows[0];
     const cBudget = colIndex(headers, ['campaignbudget', 'budget', 'dailybudget']);

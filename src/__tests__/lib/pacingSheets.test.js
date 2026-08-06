@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractPlatformLines } from '../../lib/pacingSheets';
+import { extractPlatformLines, budgetTabCandidates } from '../../lib/pacingSheets';
 
 // Mirrors the real PLS PACING tab: a totals row above the header, then the
 // header row, then one row per platform.
@@ -46,5 +46,17 @@ describe('extractPlatformLines', () => {
     expect(line.platform).toBe('GOOGLE');
     expect(line.displayPlatform).toBe('GOOGLE LSA');
     expect(line.isLsa).toBe(true);
+  });
+});
+
+describe('budgetTabCandidates', () => {
+  it('tries the client-prefixed tab name before the shared one', () => {
+    expect(budgetTabCandidates('Google Budget', 'PLS'))
+      .toEqual(['PLS Google Budget', 'Google Budget']);
+  });
+
+  it('falls back to the bare tab name when no client key is given', () => {
+    expect(budgetTabCandidates('Meta Budget', '')).toEqual(['Meta Budget']);
+    expect(budgetTabCandidates('Meta Budget', undefined)).toEqual(['Meta Budget']);
   });
 });
