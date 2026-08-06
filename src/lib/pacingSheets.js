@@ -4,7 +4,16 @@
 
 import { google } from 'googleapis';
 
-const KNOWN_PLATFORMS = ['GOOGLE', 'YOUTUBE', 'BING', 'FACEBOOK'];
+const KNOWN_PLATFORMS = ['GOOGLE', 'YOUTUBE', 'BING', 'FACEBOOK', 'X'];
+
+// Match a platform cell to a known platform. Multi-letter names match as a
+// substring so qualifiers survive ("GOOGLE LSA" → GOOGLE). Single-letter names
+// like "X" must match as a whole word, or they'd be picked up inside PMAX, MAX, etc.
+function matchPlatform(upper) {
+  return KNOWN_PLATFORMS.find((p) => (
+    p.length > 1 ? upper.includes(p) : new RegExp(`\\b${p}\\b`).test(upper)
+  ));
+}
 const KNOWN_GEOS = [
   'SD', 'LV', 'SLC', 'PHX', 'DAL', 'TUS', 'ALL', 'IE',
   'CA', 'SF', 'OC', 'TMP', 'NY', 'TX', 'FL', 'AZ', 'CO', 'WA',
@@ -125,7 +134,7 @@ function colIndex(headers, keys) {
   return -1;
 }
 
-function extractPlatformLines(rows) {
+export function extractPlatformLines(rows) {
   const table = findPlatformTable(rows);
   if (!table) return [];
   const { headers, dataRows } = table;
@@ -145,7 +154,7 @@ function extractPlatformLines(rows) {
     // Stop at "TOTAL" / blank separator rows
     if (upper === 'TOTAL' || upper === 'TOTALS' || upper.startsWith('GRAND')) break;
     // Must begin with a known platform name
-    const platform = KNOWN_PLATFORMS.find((p) => upper.includes(p));
+    const platform = matchPlatform(upper);
     if (!platform) continue;
 
     // Preserve qualifiers like "LSA" that live in the platform cell but get
@@ -263,7 +272,7 @@ export async function fetchValidationTab(sheetId, label = '') {
     const cell = String(row[cSummaryPlatform] || '').trim().toUpperCase();
     if (!cell) continue;
     if (cell === 'TOTAL') break;
-    const platform = KNOWN_PLATFORMS.find((p) => cell.includes(p));
+    const platform = matchPlatform(cell);
     if (!platform) continue;
 
     const diffRaw = cDiff >= 0 ? toNum(row[cDiff]) : null;
@@ -293,7 +302,7 @@ export async function fetchValidationTab(sheetId, label = '') {
       const cell = String(row[cNamesPlatform] || '').trim().toUpperCase();
       const name = String(row[cCampaignName] || '').trim();
       if (!cell || !name) continue;
-      const platform = KNOWN_PLATFORMS.find((p) => cell.includes(p));
+      const platform = matchPlatform(cell);
       if (!platform) continue;
       if (!summary.has(platform)) {
         summary.set(platform, { platform, differencesUsd: 0, incorrectCount: 0, incorrectNames: [] });
