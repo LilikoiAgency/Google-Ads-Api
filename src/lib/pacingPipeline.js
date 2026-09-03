@@ -16,6 +16,7 @@ const DEFAULT_CLIENTS = [
   { key: 'SMP', name: 'Semper Solaris',  sheetId: '1xvWA1WWDHBrABYoWjMJJaaCCV3aQgofSV0m4GT4Eahw', enabled: true },
   { key: 'MSP', name: 'More Space Place', sheetId: '1qzAYyXUbtZ1FwXRkznvlna5g2OMAmby6GcF1sNBqlXE', enabled: true },
   { key: 'PLS', name: 'Payless For Solar', sheetId: '1FKPACgebq2_YAAsgswGeBROzJm5JH45c2s2G2k-siyo', enabled: true },
+  { key: 'REC', name: 'Ranger Electric', sheetId: '1kmQ7NngORpNgGl1ywLdvfdMbv4dTxWVjxkfDgnpVztE', enabled: true },
 ];
 
 const DEFAULT_RECIPIENTS = [
