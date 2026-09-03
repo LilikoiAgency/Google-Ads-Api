@@ -1,5 +1,5 @@
 // One-off: confirm the REC sheet is readable and parses into the expected lines.
-// Run: node scripts/verify-pls-sheet.mjs
+// Run: node scripts/verify-rec-sheet.mjs
 import 'dotenv/config';
 import { fetchClientSheet } from '../src/lib/pacingSheets.js';
 
