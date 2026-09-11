@@ -49,7 +49,7 @@ export default function DashboardSidebar() {
   const firstName = session?.user?.name?.split(" ")[0] || "You";
   const adminUser = isAdmin(email);
   const sections = adminUser ? [...NAV, ADMIN_SECTION] : NAV;
-  const isActive = (href) => pathname?.startsWith(href) ?? false;
+  const isActive = (href) => pathname === href || (pathname?.startsWith(href + '/') ?? false);
   const router = useRouter();
   const aiTools = getToolsForRoute(pathname || "");
 

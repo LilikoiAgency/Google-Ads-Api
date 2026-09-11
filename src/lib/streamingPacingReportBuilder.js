@@ -144,9 +144,16 @@ function renderClientSection(client) {
   const totals = computeClientTotals(client);
   const cls = classifyTotals(totals);
   const groups = groupByVertical(client.lines);
+  const vb = client.verticalBudgets ?? {};
+
+  for (const g of groups) {
+    if (g.spendMtd > 0 && vb[g.vertical] == null && Object.keys(vb).length > 0) {
+      console.warn(`[streaming-pacing:${client.key}] vertical "${g.vertical}" has spend but no budget key; budget keys: ${Object.keys(vb).join(', ')}`);
+    }
+  }
 
   const body = groups.length
-    ? groups.map((g) => renderVerticalRow(g, client.verticalBudgets[g.vertical] ?? null) + g.lines.map(renderPlatformRow).join('')).join('') + renderTotalRow(totals, cls)
+    ? groups.map((g) => renderVerticalRow(g, vb[g.vertical] ?? null) + g.lines.map(renderPlatformRow).join('')).join('') + renderTotalRow(totals, cls)
     : `<tr><td colspan="7" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No spend data</td></tr>`;
 
   return `${title}
@@ -190,7 +197,8 @@ function buildRecommendedActions(clients, info, stale) {
     }
 
     const groups = groupByVertical(client.lines);
-    const byVertical = groups.map((g) => ({ g, budget: client.verticalBudgets[g.vertical] ?? null, cls: classifyTotals({ budget: client.verticalBudgets[g.vertical] ?? null, eomPacing: g.eomPacing }) }));
+    const vb = client.verticalBudgets ?? {};
+    const byVertical = groups.map((g) => ({ g, budget: vb[g.vertical] ?? null, cls: classifyTotals({ budget: vb[g.vertical] ?? null, eomPacing: g.eomPacing }) }));
 
     for (const { g, budget, cls } of byVertical.filter((x) => x.cls.status === 'OVER' && x.cls.pacingPct > 200)) {
       actions.push({ icon: '🚨', priority: 0, text: `<strong style="color:${PALETTE.overText};">${name} — ${escapeHtml(g.vertical)} CRITICALLY OVER PACING (${fmtPct(cls.pacingPct)}):</strong> Spent ${fmtCurrency(g.spendMtd)} against ${fmtCurrency(budget)} budget, pacing to ${fmtCurrency(g.eomPacing)} EOM. Reduce vendor caps or pause to stop further overspend.` });
@@ -206,7 +214,7 @@ function buildRecommendedActions(clients, info, stale) {
     }
 
     const spentVerticals = new Set(groups.map((g) => g.vertical));
-    const zero = Object.entries(client.verticalBudgets).filter(([v, b]) => b > 0 && !spentVerticals.has(v));
+    const zero = Object.entries(vb).filter(([v, b]) => b > 0 && !spentVerticals.has(v));
     if (zero.length && client.lines.length) {
       const total = zero.reduce((s, [, b]) => s + b, 0);
       actions.push({ icon: '⚠️', priority: 3, text: `<strong>${name} — ${zero.length} vertical${zero.length > 1 ? 's' : ''} at 0% spend:</strong> ${zero.map(([v]) => escapeHtml(v)).join(', ')} (combined ${fmtCurrencyNoDec(total)} budget). Confirm campaigns are live and vendor spend files have been loaded.` });
@@ -247,19 +255,30 @@ function renderRecommendedActions(actions) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 /**
- * @param {{ reportDate: string, info: object, clients: Array<object> }} params
- *   reportDate — YYYY-MM-DD (ET). info — parseClientInfo shape. clients — fetchStreamingSheet().clients.
+ * @param {{ reportDate: string, info: object, budgets?: object, clients: Array<object> }} params
+ *   reportDate — YYYY-MM-DD (ET). info — parseClientInfo shape. budgets — parseBudgets shape (may carry `.error`).
+ *   clients — fetchStreamingSheet().clients.
  */
-export function buildStreamingPacingReport({ reportDate, info, clients }) {
+export function buildStreamingPacingReport({ reportDate, info, budgets = {}, clients }) {
   const stale = isSheetStale(info, reportDate);
   const sheetMonth = info?.currentMonth ? `${info.currentMonth}${info.currentYear ? ' ' + info.currentYear : ''}` : null;
   const dayLine = info?.lastUpdatedDay != null && info?.daysInMonth != null ? ` &nbsp;·&nbsp; Day ${info.lastUpdatedDay} of ${info.daysInMonth}` : '';
+
+  const tabErrors = [
+    info?.error && { tab: 'Client Information', error: info.error },
+    budgets?.error && { tab: 'Budget', error: budgets.error },
+  ].filter(Boolean);
 
   const header = `
   <div style="background:${PALETTE.headerBg};color:#ffffff;padding:24px 32px;">
     <h1 style="margin:0 0 4px 0;font-size:20px;font-weight:bold;color:#ffffff;">📺 Targeted Streaming Pacing Report</h1>
     <div style="color:#a0aec0;font-size:13px;">${fmtDateLong(reportDate)}${info?.lastUpdated ? ` &nbsp;·&nbsp; Data as of ${fmtDateLong(info.lastUpdated)}` : ''}${sheetMonth ? ` &nbsp;·&nbsp; ${escapeHtml(sheetMonth)}` : ''}${dayLine}</div>
   </div>`;
+
+  const tabErrorBanner = tabErrors.length ? `
+  <div style="background:${PALETTE.noBudgetBg};color:${PALETTE.noBudgetText};padding:10px 32px;font-size:13px;font-weight:bold;">
+    ${tabErrors.map((e) => `⚠️ Sheet read failed: ${escapeHtml(e.tab)} — ${escapeHtml(e.error)}`).join('<br>')}
+  </div>` : '';
 
   const staleBanner = stale ? `
   <div style="background:${PALETTE.noBudgetBg};color:${PALETTE.noBudgetText};padding:10px 32px;font-size:13px;font-weight:bold;">
@@ -269,6 +288,14 @@ export function buildStreamingPacingReport({ reportDate, info, clients }) {
   const sections = clients.map(renderClientSection).join('');
   const actions = buildRecommendedActions(clients, info, stale);
 
+  for (const e of tabErrors) {
+    actions.unshift({
+      icon: '⚠️', priority: 0,
+      text: `<strong style="color:${PALETTE.criticalText};">Sheet read failed — ${escapeHtml(e.tab)}:</strong> ${escapeHtml(e.error)}. Budget and pacing figures below may be wrong until this is fixed.`,
+    });
+  }
+  actions.sort((a, b) => a.priority - b.priority);
+
   const footer = `
   <div style="background:${PALETTE.headerBg};color:#718096;padding:14px 32px;font-size:11px;text-align:center;">
     Lilikoi Agency — Automated Targeted Streaming Pacing Report &nbsp;·&nbsp; ${fmtDateLong(reportDate)}
@@ -277,7 +304,7 @@ export function buildStreamingPacingReport({ reportDate, info, clients }) {
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;font-size:13px;color:#222222;background-color:#f0f2f5;margin:0;padding:20px 0;">
 <div style="max-width:860px;margin:0 auto;background:#ffffff;border-radius:6px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-${header}${staleBanner}${sections}${renderRecommendedActions(actions)}${footer}
+${header}${tabErrorBanner}${staleBanner}${sections}${renderRecommendedActions(actions)}${footer}
 </div>
 </body></html>`;
 
@@ -302,6 +329,7 @@ ${header}${staleBanner}${sections}${renderRecommendedActions(actions)}${footer}
       };
     }),
     actionCount: actions.length,
+    tabErrors: tabErrors.map((e) => e.tab),
   };
 
   return { html, summary };

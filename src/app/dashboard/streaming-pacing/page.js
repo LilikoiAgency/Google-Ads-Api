@@ -7,7 +7,7 @@ export default function StreamingPacingDashboardPage() {
     <PacingReportsView
       apiBase="/api/streaming-pacing"
       title="Targeted Streaming Pacing"
-      subtitle="CTV, audio and DOOH vendors from the shared Targeted Streaming Spends sheet. Automated Mon–Fri at 9:05 AM ET."
+      subtitle="CTV, audio and DOOH vendors from the shared Targeted Streaming Spends sheet. Automated Mon–Fri, five minutes after the Paid Search report."
       sheetMode="shared"
     />
   );

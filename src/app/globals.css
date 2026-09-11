@@ -212,6 +212,7 @@ nav:hover .sb-active-dot {
 .pacing-actions       { display: flex; gap: 10px; flex-wrap: wrap; }
 .pacing-main-grid     { display: grid; grid-template-columns: 280px 1fr; gap: 16px; min-height: 600px; }
 .pacing-config-row    { display: grid; grid-template-columns: 80px 1fr 1fr 100px; gap: 10px; align-items: center; }
+.pacing-config-row--shared { grid-template-columns: 80px 1fr 100px; }
 .pacing-meta-row      { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .pacing-history-list  { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; max-height: 800px; overflow-y: auto; }
 .pacing-widget-cards  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
@@ -225,7 +226,7 @@ nav:hover .sb-active-dot {
   .pacing-main-grid    { grid-template-columns: 1fr; min-height: 0; }
   .pacing-history-list { max-height: 320px; }
   .pacing-config-row   { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .pacing-config-row > input:nth-of-type(2) { grid-column: span 2; }
+  .pacing-config-row:not(.pacing-config-row--shared) > input:nth-of-type(2) { grid-column: span 2; }
   .pacing-meta-row     { grid-template-columns: 1fr; }
   .pacing-widget-cards { grid-template-columns: 1fr; }
 }

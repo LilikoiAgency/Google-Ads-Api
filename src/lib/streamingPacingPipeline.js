@@ -86,8 +86,8 @@ export async function runStreamingPacingReport(opts = {}) {
   const active = (config.clients || []).filter((c) => c.enabled && c.key);
 
   console.log(`[streaming-pacing] run date=${reportDate} manual=${manual} dryRun=${dryRun} by=${triggeredBy} clients=${active.map((c) => c.key).join(',')}`);
-  const { info, clients } = await fetchStreamingSheet(sheetId, active);
-  const { html, summary } = buildStreamingPacingReport({ reportDate, info, clients });
+  const { info, budgets, clients } = await fetchStreamingSheet(sheetId, active);
+  const { html, summary } = buildStreamingPacingReport({ reportDate, info, budgets, clients });
   console.log('[streaming-pacing] summary:', JSON.stringify(summary));
 
   const subject = `${config.subjectPrefix || 'Targeted Streaming Pacing Report'} — ${reportDate}`;
@@ -111,7 +111,7 @@ export async function runStreamingPacingReport(opts = {}) {
     reportDate, subject, recipients, fromAddress,
     status: sendStatus, sendError, resendId,
     html, summary,
-    parsedData: { info, clients },
+    parsedData: { info, budgets, clients },
     manual, dryRun, triggeredBy,
     createdAt: new Date(),
   };

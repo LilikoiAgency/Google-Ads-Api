@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import PacingReportsView from '../../app/dashboard/components/PacingReportsView';
 
 vi.mock('../../app/dashboard/components/PacingTrendChart', () => ({ default: () => <div>chart</div> }));
@@ -32,7 +32,7 @@ describe('PacingReportsView', () => {
   it('shows one shared Sheet ID input in shared mode', async () => {
     render(<PacingReportsView apiBase="/api/streaming-pacing" title="T" subtitle="s" sheetMode="shared" />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    screen.getByText('Config').click();
+    fireEvent.click(screen.getByText('Config'));
     await waitFor(() => expect(screen.getByDisplayValue('SHARED123')).toBeInTheDocument());
     expect(screen.queryByDisplayValue('PER1')).toBeNull();
   });
@@ -40,7 +40,7 @@ describe('PacingReportsView', () => {
   it('shows per-client Sheet ID inputs in perClient mode', async () => {
     render(<PacingReportsView apiBase="/api/pacing" title="T" subtitle="s" sheetMode="perClient" />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    screen.getByText('Config').click();
+    fireEvent.click(screen.getByText('Config'));
     await waitFor(() => expect(screen.getByDisplayValue('PER1')).toBeInTheDocument());
     expect(screen.queryByDisplayValue('SHARED123')).toBeNull();
   });

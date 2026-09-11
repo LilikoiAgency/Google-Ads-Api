@@ -12,7 +12,8 @@ export async function GET(request) {
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { searchParams } = new URL(request.url);
-  const days = Math.min(parseInt(searchParams.get('days') || '30', 10), 90);
+  const rawDays = parseInt(searchParams.get('days') || '30', 10);
+  const days = Math.min(Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 30, 90);
   const since = new Date();
   since.setDate(since.getDate() - days);
 

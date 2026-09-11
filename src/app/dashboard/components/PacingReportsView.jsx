@@ -270,7 +270,7 @@ export default function PacingReportsView({
                 <label style={lbl}>{sheetMode === "perClient" ? "Clients & sheet IDs" : "Clients"}</label>
                 <div style={{ display: "grid", gap: 8 }}>
                   {(configDraft.clients || []).map((c, i) => (
-                    <div key={c.key} className="pacing-config-row" style={{
+                    <div key={c.key} className={`pacing-config-row${sheetMode === "shared" ? " pacing-config-row--shared" : ""}`} style={{
                       background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 12px",
                     }}>
                       <div style={{ fontSize: 12, color: C.textSec, fontWeight: 700 }}>{c.key}</div>

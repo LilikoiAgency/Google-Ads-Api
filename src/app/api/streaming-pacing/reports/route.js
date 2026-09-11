@@ -11,7 +11,8 @@ export async function GET(request) {
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100);
+  const rawLimit = parseInt(searchParams.get('limit') || '30', 10);
+  const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 30, 100);
 
   const client = await dbConnect();
   const docs = await client.db(DB).collection(COLL)

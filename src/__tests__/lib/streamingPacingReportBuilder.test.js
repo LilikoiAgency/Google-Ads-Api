@@ -106,4 +106,21 @@ describe('buildStreamingPacingReport', () => {
     expect(smp.lineCount).toBe(5);
     expect(summary.actionCount).toBeGreaterThan(0);
   });
+
+  it('has an empty tabErrors summary and no banner when there are no tab read errors', () => {
+    expect(html).not.toContain('Sheet read failed');
+    expect(summary.tabErrors).toEqual([]);
+  });
+});
+
+describe('buildStreamingPacingReport — tab read errors', () => {
+  it('surfaces a Budget tab read error as a banner, an action, and a summary entry', () => {
+    const { html, summary } = buildStreamingPacingReport({
+      reportDate: '2026-09-11', info: INFO, budgets: { error: 'The caller does not have permission' }, clients: [SMP],
+    });
+    expect(html).toContain('Sheet read failed: Budget');
+    expect(html).toContain('The caller does not have permission');
+    expect(html).toContain('Budget and pacing figures below may be wrong until this is fixed.');
+    expect(summary.tabErrors).toEqual(['Budget']);
+  });
 });
