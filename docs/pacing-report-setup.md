@@ -66,3 +66,33 @@ Vercel Cron only runs in UTC, so the local send time shifts by 1 hour between da
 - **"The caller does not have permission"** from Sheets API → the service account isn't shared on that sheet. Re-share as Viewer.
 - **Resend 403** → domain not verified yet, or the `from` address doesn't match the verified domain.
 - **Cron didn't run** → check Vercel dashboard **Crons** tab for last execution. The `CRON_SECRET` must match between Vercel's generated header and your env var.
+
+---
+
+## Targeted Streaming Pacing Report
+
+A second daily email fed by the shared **Targeted Streaming Spends** sheet
+(`1oD3I5rxg0BRylFm-JzGJlyE477foZ3shgBnjncqCDvU`). Same service account, same Resend sender, same `CRON_SECRET`.
+
+- Cron: `/api/cron/streaming-pacing-report` at `5 12 * * 1-5` UTC (five minutes after Paid Search).
+- Config: Mongo `tokensApi.StreamingPacingConfig` (`_id: 'singleton'`), seeded on first load of **/dashboard/streaming-pacing**. Holds one shared `sheetId`, the client list (`SMP`, `BBT`), recipients, subject prefix, from address.
+- History: `tokensApi.StreamingPacingReports`.
+- Tabs read: `Client Information`, `Budget`, and `<KEY> Pacing` for each enabled client. Nothing else.
+
+### Adding a client
+
+1. Make sure the sheet has a `<KEY> Pacing` tab for the client and its rows appear in the `Budget` tab.
+2. In **/dashboard/streaming-pacing → Config**, there is no add-client control yet. Use a one-off script modelled on `scripts/add-rec-client.mjs` but against collection `StreamingPacingConfig`, with entries of the form `{ key, name, enabled }` (no `sheetId` per client).
+3. Run `node scripts/verify-streaming-sheet.mjs` after adding the key to its `CLIENTS` array to confirm the tab parses.
+
+### Month rollover
+
+The sheet's `Client Information!C2` (Current Month) and `E2` (Last Updated) are typed by hand. When they lag the calendar, the report shows a yellow "Sheet is still on <month>" banner and a Recommended Action. That is expected; fix it in the sheet, not the code.
+
+### First run checklist
+
+1. `node scripts/verify-streaming-sheet.mjs` prints SMP and BBT lines with no errors.
+2. Open **/dashboard/streaming-pacing** once to seed the config; confirm recipients.
+3. Click **Preview** — the report renders with a "Data as of" line.
+4. Temporarily set recipients to yourself, **Send now**, check Gmail rendering (inline styles only), restore recipients.
+5. Deploy; the cron takes over the next weekday.
