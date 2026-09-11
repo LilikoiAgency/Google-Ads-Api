@@ -2,7 +2,8 @@
 // Service-account-backed fetchers for each client's PACING + Validation tabs.
 // Keep parsing defensive: locate columns by header keyword rather than fixed index.
 
-import { google } from 'googleapis';
+import { readTab } from './sheetsClient.js';
+import { toNum, normKey, colIndex } from './pacingShared.js';
 
 const KNOWN_PLATFORMS = ['GOOGLE', 'YOUTUBE', 'BING', 'FACEBOOK', 'X'];
 
@@ -18,43 +19,6 @@ const KNOWN_GEOS = [
   'SD', 'LV', 'SLC', 'PHX', 'DAL', 'TUS', 'ALL', 'IE',
   'CA', 'SF', 'OC', 'TMP', 'NY', 'TX', 'FL', 'AZ', 'CO', 'WA',
 ];
-
-function getAuth() {
-  const raw = process.env.GOOGLE_SHEETS_SA_KEY;
-  if (!raw) throw new Error('GOOGLE_SHEETS_SA_KEY env var not set');
-  let creds;
-  try { creds = JSON.parse(raw); }
-  catch { throw new Error('GOOGLE_SHEETS_SA_KEY is not valid JSON'); }
-  return new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-}
-
-async function readTab(sheetId, tabName) {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: tabName,
-    valueRenderOption: 'UNFORMATTED_VALUE',
-  });
-  return res.data.values || [];
-}
-
-function toNum(v) {
-  if (v == null || v === '') return null;
-  if (typeof v === 'number') return v;
-  const s = String(v).replace(/[$,\s]/g, '').replace(/%$/, '');
-  if (s === '' || s === '—' || s === '-' || s.toLowerCase() === 'n/a') return null;
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : null;
-}
-
-function normKey(s) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
 
 // Find (rowIdx, colIdx) of the first cell whose normalized text matches any of keys.
 function findLabel(rows, keys) {
@@ -124,14 +88,6 @@ function findPlatformTable(rows) {
     }
   }
   return null;
-}
-
-function colIndex(headers, keys) {
-  const wanted = keys.map(normKey);
-  for (let i = 0; i < headers.length; i++) {
-    if (wanted.includes(normKey(headers[i]))) return i;
-  }
-  return -1;
 }
 
 export function extractPlatformLines(rows) {

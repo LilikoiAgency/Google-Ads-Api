@@ -2,70 +2,10 @@
 // Pure functions: parsed sheet data → email HTML + structured summary.
 // Styling is 100% inline per Gmail constraints.
 
-const PALETTE = {
-  headerBg: '#1a1a2e',
-  onTrackBg: '#38a169',
-  underBg: '#3182ce',
-  overBg: '#dd6b20',
-  criticalBg: '#e53e3e',
-  noBudgetBg: '#fff3cd',
-  noBudgetText: '#856404',
-  inactiveBg: '#edf2f7',
-  inactiveText: '#4a5568',
-  rowNormal: '#ffffff',
-  rowWarn: '#fffff0',
-  rowCritical: '#fff5f5',
-  rowInactive: '#f9fafb',
-  rowTotal: '#f7fafc',
-  textPrimary: '#2d3748',
-  textSecondary: '#4a5568',
-  textMuted: '#a0aec0',
-  onTrackText: '#276749',
-  overText: '#c05621',
-  underText: '#2b6cb0',
-  criticalText: '#e53e3e',
-  borderLight: '#edf2f7',
-  borderMed: '#e2e8f0',
-};
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
-
-function fmtCurrency(n, decimals = 2) {
-  if (n == null || !Number.isFinite(n)) return '—';
-  return '$' + Number(n).toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-function fmtCurrencyNoDec(n) { return fmtCurrency(n, 0); }
-
-function fmtPct(n) {
-  if (n == null || !Number.isFinite(n)) return '—';
-  return n.toFixed(1) + '%';
-}
-
-function fmtDateLong(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function daysInMonth(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-}
-
-function dayOfMonth(dateStr) {
-  return new Date(dateStr + 'T00:00:00').getDate();
-}
-
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import {
+  PALETTE, fmtCurrency, fmtCurrencyNoDec, fmtPct, fmtDateLong,
+  daysInMonth, dayOfMonth, escapeHtml,
+} from './pacingShared.js';
 
 // ── Status classification ─────────────────────────────────────────────────────
 
