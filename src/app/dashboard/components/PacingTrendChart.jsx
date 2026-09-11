@@ -1,4 +1,4 @@
-// src/app/dashboard/pacing/PacingTrendChart.jsx
+// src/app/dashboard/components/PacingTrendChart.jsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -49,19 +49,19 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function PacingTrendChart() {
+export default function PacingTrendChart({ endpoint = "/api/pacing/trends", colors = CLIENT_COLORS }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/pacing/trends?days=${days}`)
+    fetch(`${endpoint}?days=${days}`)
       .then((r) => r.ok ? r.json() : null)
       .then((j) => { if (j?.data) setData(j.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [days]);
+  }, [days, endpoint]);
 
   const series = data?.series || [];
   const clients = data?.clients || [];
@@ -143,7 +143,7 @@ export default function PacingTrendChart() {
               type="monotone"
               dataKey={c.key + "_pct"}
               name={c.name}
-              stroke={CLIENT_COLORS[c.key] || FALLBACK}
+              stroke={colors[c.key] || FALLBACK}
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
