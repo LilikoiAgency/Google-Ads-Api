@@ -4,6 +4,7 @@
 // Parsing is header-keyword based so column order can move without breaking us.
 
 import { toNum, normKey, colIndex, findHeaderRow, serialToISO } from './pacingShared.js';
+import { readTab } from './sheetsClient.js';
 
 export const KNOWN_STREAMING_PLATFORMS = ['TRADE DESK', 'PARAMOUNT', 'SPOTIFY', 'DISNEY', 'ADLIB', 'PUBMATIC'];
 
@@ -118,4 +119,55 @@ export function extractStreamingLines(rows) {
     });
   }
   return lines;
+}
+
+// ── Fetcher ───────────────────────────────────────────────────────────────────
+
+async function safeReadTab(sheetId, tabName, tag) {
+  try {
+    const rows = await readTab(sheetId, tabName);
+    console.log(`${tag} "${tabName}" rows=${rows.length}`);
+    return { rows, error: null };
+  } catch (err) {
+    console.warn(`${tag} "${tabName}" read failed: ${err?.message}`);
+    return { rows: [], error: err?.message || `failed to read ${tabName}` };
+  }
+}
+
+/**
+ * Read Client Information, Budget, and every client's "<KEY> Pacing" tab in parallel.
+ * A missing/unreadable Pacing tab is a per-client error; Client Information and Budget
+ * errors are surfaced on `info.error` / `budgets.error` and the run continues.
+ */
+export async function fetchStreamingSheet(sheetId, clients) {
+  const tag = '[streaming-pacing]';
+  const [infoRes, budgetRes, ...pacingRes] = await Promise.all([
+    safeReadTab(sheetId, 'Client Information', tag),
+    safeReadTab(sheetId, 'Budget', tag),
+    ...clients.map((c) => safeReadTab(sheetId, `${c.key} Pacing`, `${tag}:${c.key}`)),
+  ]);
+
+  const info = { ...parseClientInfo(infoRes.rows), error: infoRes.error };
+  const budgets = { ...parseBudgetTab(budgetRes.rows), error: budgetRes.error };
+  console.log(`${tag} info`, JSON.stringify(info));
+  console.log(`${tag} budgets`, JSON.stringify(budgets.byClient));
+
+  const out = clients.map((c, i) => {
+    const res = pacingRes[i];
+    const lines = res.error ? [] : extractStreamingLines(res.rows);
+    const key = c.key.toUpperCase();
+    for (const l of lines) {
+      console.log(`${tag}:${key}   ${l.platform} / ${l.vertical}: spend=${l.spendMtd} eom=${l.eomPacing} geos=${l.geos.length}`);
+    }
+    return {
+      key,
+      name: c.name,
+      lines,
+      budget: budgets.byClient[key] ?? null,
+      verticalBudgets: budgets.byClientVertical[key] || {},
+      error: res.error,
+    };
+  });
+
+  return { info, budgets, clients: out };
 }
