@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildStreamingPacingReport, classifyTotals, groupByVertical, isSheetStale,
+  buildStreamingPacingReport, classifyTotals, groupByVertical, isSheetStale, aggregateGeos,
 } from '../../lib/streamingPacingReportBuilder';
 
 const INFO = { currentMonth: 'August', currentYear: 2026, lastUpdated: '2026-09-02', lastUpdatedDay: 31, daysInMonth: 31, error: null };
@@ -70,12 +70,31 @@ describe('buildStreamingPacingReport', () => {
     expect(cur.summary.stale).toBe(false);
   });
 
-  it('renders vertical subtotal rows and platform rows with geo breakdowns', () => {
+  it('renders vertical subtotal rows and platform rows without a per-row geo column', () => {
     expect(html).toContain('SOLAR');
     expect(html).toContain('$101,940');           // SOLAR vertical budget
-    expect(html).toContain('SD $11,601.81');       // geo breakdown, largest first
-    expect(html.indexOf('SD $11,601.81')).toBeLessThan(html.indexOf('SF $10,389.30'));
     expect(html).toContain('$44,223.07');          // SOLAR spend subtotal
+    expect(html).not.toContain('>Geo Pacing EOM</th>');
+    expect(html).not.toContain('SD $11,601.81');   // per-platform geo values no longer inline
+  });
+
+  it('renders one client-level Geo Pacing EOM bar summed across platforms, largest first', () => {
+    // SD = 11601.81 + 999.57 + 9000 = 21601.38; SF = 10389.30 + 1001.96 = 11391.26; ALL = 5330.05 + 499.98 = 5830.03
+    expect(html).toContain('Geo Pacing EOM:');
+    expect(html).toContain('SD $21,601.38');
+    expect(html).toContain('SF $11,391.26');
+    expect(html).toContain('ALL $5,830.03');
+    expect(html.indexOf('SD $21,601.38')).toBeLessThan(html.indexOf('SF $11,391.26'));
+    expect(html.indexOf('SF $11,391.26')).toBeLessThan(html.indexOf('ALL $5,830.03'));
+  });
+
+  it('aggregateGeos sums by geo and drops zero/missing pacing', () => {
+    const geos = aggregateGeos([
+      { geos: [{ name: 'SD', pacing: 10 }, { name: 'SF', pacing: 0 }] },
+      { geos: [{ name: 'SD', pacing: 5 }, { name: 'LA', pacing: null }] },
+      { geos: [] },
+    ]);
+    expect(geos).toEqual([{ name: 'SD', pacing: 15 }]);
   });
 
   it('renders a data-unavailable section for a client fetch error', () => {

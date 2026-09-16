@@ -7,7 +7,6 @@ import {
 } from './pacingShared.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const MAX_GEOS = 6;
 
 // ── Classification ────────────────────────────────────────────────────────────
 
@@ -62,12 +61,28 @@ function statusLabel(status, pct) {
   return 'On Track';
 }
 
-function geoBreakdown(geos) {
-  if (!geos?.length) return '—';
-  const sorted = [...geos].sort((a, b) => b.pacing - a.pacing);
-  const shown = sorted.slice(0, MAX_GEOS).map((g) => `${escapeHtml(g.name)} ${fmtCurrency(g.pacing)}`);
-  const extra = sorted.length - shown.length;
-  return shown.join(' &nbsp;·&nbsp; ') + (extra > 0 ? ` &nbsp;·&nbsp; +${extra} more` : '');
+// Sum each geo's EOM pacing across every platform line for a client, largest first.
+export function aggregateGeos(lines) {
+  const map = new Map();
+  for (const l of lines) {
+    for (const g of l.geos || []) {
+      if (!(g.pacing > 0)) continue;
+      map.set(g.name, (map.get(g.name) || 0) + g.pacing);
+    }
+  }
+  return [...map.entries()]
+    .map(([name, pacing]) => ({ name, pacing }))
+    .sort((a, b) => b.pacing - a.pacing);
+}
+
+// Matches the Paid Search report: one client-level geo bar under the table.
+function renderGeoBar(geos) {
+  if (!geos?.length) return '';
+  const parts = geos.map((g) => `${escapeHtml(g.name)} ${fmtCurrency(g.pacing)}`);
+  return `
+    <div style="margin-top:10px;font-size:12px;color:${PALETTE.textSecondary};background:${PALETTE.rowTotal};border-radius:4px;padding:10px 14px;">
+      <strong style="color:${PALETTE.textPrimary};">Geo Pacing EOM:</strong> &nbsp;${parts.join(' &nbsp;·&nbsp; ')}
+    </div>`;
 }
 
 function renderVerticalRow(group, budget) {
@@ -76,7 +91,7 @@ function renderVerticalRow(group, budget) {
   const bg = cls.status === 'OVER' ? PALETTE.rowWarn : cls.status === 'NO_BUDGET' ? PALETTE.rowCritical : PALETTE.rowTotal;
   return `
     <tr>
-      <td colspan="2" style="${td(`background:${bg};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};`)}">${escapeHtml(group.vertical)}</td>
+      <td style="${td(`background:${bg};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};`)}">${escapeHtml(group.vertical)}</td>
       <td style="${td(`background:${bg};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};`)}">${budget ? fmtCurrencyNoDec(budget) : '—'}</td>
       <td style="${td(`background:${bg};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};`)}">${fmtCurrency(group.spendMtd)}</td>
       <td style="${td(`background:${bg};color:${color};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};`)}">${fmtCurrency(group.eomPacing)}</td>
@@ -89,7 +104,6 @@ function renderPlatformRow(line) {
   return `
     <tr>
       <td style="${td(`background:${PALETTE.rowNormal};color:${PALETTE.textPrimary};padding-left:22px;`)}">${escapeHtml(line.platform)}</td>
-      <td style="${td(`background:${PALETTE.rowNormal};color:${PALETTE.textSecondary};font-size:11px;`)}">${geoBreakdown(line.geos)}</td>
       <td style="${td(`background:${PALETTE.rowNormal};color:${PALETTE.textMuted};text-align:right;`)}">—</td>
       <td style="${td(`background:${PALETTE.rowNormal};color:${PALETTE.textPrimary};text-align:right;`)}">${fmtCurrency(line.spendMtd)}</td>
       <td style="${td(`background:${PALETTE.rowNormal};color:${PALETTE.textPrimary};text-align:right;`)}">${fmtCurrency(line.eomPacing)}</td>
@@ -102,7 +116,7 @@ function renderTotalRow(totals, cls) {
   const color = statusColor(cls.status);
   return `
     <tr>
-      <td colspan="2" style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};">TOTAL</td>
+      <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;border-top:2px solid ${PALETTE.borderMed};">TOTAL</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${totals.budget ? fmtCurrencyNoDec(totals.budget) : '—'}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${fmtCurrency(totals.spendMtd)}</td>
       <td style="padding:8px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${fmtCurrency(totals.eomPacing)}</td>
@@ -154,7 +168,7 @@ function renderClientSection(client) {
 
   const body = groups.length
     ? groups.map((g) => renderVerticalRow(g, vb[g.vertical] ?? null) + g.lines.map(renderPlatformRow).join('')).join('') + renderTotalRow(totals, cls)
-    : `<tr><td colspan="7" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No spend data</td></tr>`;
+    : `<tr><td colspan="6" style="padding:14px;text-align:center;color:${PALETTE.textMuted};font-size:12px;">No spend data</td></tr>`;
 
   return `${title}
   ${renderClientBanner(totals, cls)}
@@ -163,7 +177,6 @@ function renderClientSection(client) {
       <thead>
         <tr>
           <th style="${th('left')}">Vertical / Platform</th>
-          <th style="${th('left')}">Geo Pacing EOM</th>
           <th style="${th('right')}">Budget</th>
           <th style="${th('right')}">Spend MTD</th>
           <th style="${th('right')}">EOM Pacing</th>
@@ -173,6 +186,7 @@ function renderClientSection(client) {
       </thead>
       <tbody>${body}</tbody>
     </table>
+    ${renderGeoBar(aggregateGeos(client.lines))}
   </div>
   <hr style="border:none;border-top:2px solid ${PALETTE.borderMed};margin:0 32px;">`;
 }
