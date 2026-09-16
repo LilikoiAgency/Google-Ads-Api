@@ -75,8 +75,8 @@ async function fetchAllClients(configClients) {
   console.log(`[pacing] fetching ${active.length} active clients: ${active.map((c) => c.key).join(', ')}`);
   return Promise.all(active.map(async (c) => {
     try {
-      const { pacing, validation } = await fetchClientSheet(c.sheetId, c.key);
-      return { key: c.key, name: c.name, pacing, validation };
+      const { pacing, validation, metaLocations } = await fetchClientSheet(c.sheetId, c.key);
+      return { key: c.key, name: c.name, pacing, validation, metaLocations: metaLocations || null };
     } catch (err) {
       console.error(`[pacing:${c.key}] fatal fetch error: ${err?.message}`);
       return {

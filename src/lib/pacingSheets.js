@@ -18,7 +18,77 @@ function matchPlatform(upper) {
 const KNOWN_GEOS = [
   'SD', 'LV', 'SLC', 'PHX', 'DAL', 'TUS', 'ALL', 'IE',
   'CA', 'SF', 'OC', 'TMP', 'NY', 'TX', 'FL', 'AZ', 'CO', 'WA',
+  'LA', 'SAC', 'FNO', 'BFD',
 ];
+
+// ── META Spends by Location ───────────────────────────────────────────────────
+// Optional per-client tab maintained by the data team. Meta spend is allocated
+// across markets in proportion to each market's share of platform leads, so
+// the "spend" here is a lead-weighted estimate, not platform-reported geo spend.
+// Layout (observed): Location | Lead Count | Spend % | Spend
+
+export const META_LOCATION_TAB = 'META Spends by Location';
+
+export function parseMetaLocationTab(rows) {
+  const empty = { locations: [], totalLeads: 0, totalSpend: 0 };
+  if (!rows?.length) return empty;
+
+  let h = -1;
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const row = (rows[r] || []).map(normKey);
+    if (row.some((c) => c === 'location' || c === 'market' || c === 'geo') && row.some((c) => c.includes('spend'))) { h = r; break; }
+  }
+  if (h < 0) return empty;
+
+  const headers = rows[h];
+  const cLoc   = colIndex(headers, ['location', 'market', 'geo']);
+  const cLeads = colIndex(headers, ['leadcount', 'leads', 'count']);
+  // normKey strips "%", so "Spend %" and "Spend" collide — split them on the raw header.
+  const isPctHeader = (c) => /%/.test(String(c || '')) || /pct|percent|share/.test(normKey(c));
+  const cPct   = headers.findIndex((c) => isPctHeader(c));
+  const cSpend = headers.findIndex((c) => !isPctHeader(c) && normKey(c).includes('spend'));
+
+  const locations = [];
+  for (const raw of rows.slice(h + 1)) {
+    const row = raw || [];
+    const name = String(row[cLoc] || '').trim();
+    if (!name) continue;
+    const upper = name.toUpperCase();
+    if (upper.startsWith('TOTAL') || upper.startsWith('GRAND')) break;
+    const leads = cLeads >= 0 ? toNum(row[cLeads]) : null;
+    const spend = cSpend >= 0 ? toNum(row[cSpend]) : null;
+    if (!(leads > 0) && !(spend > 0)) continue;
+    locations.push({
+      name,
+      leads: leads || 0,
+      sharePct: cPct >= 0 ? toNum(row[cPct]) : null,
+      spend: spend || 0,
+    });
+  }
+
+  const totalLeads = locations.reduce((s, l) => s + l.leads, 0);
+  const totalSpend = locations.reduce((s, l) => s + l.spend, 0);
+  // Derive the share when the sheet omits it.
+  for (const l of locations) {
+    if (l.sharePct == null && totalLeads > 0) l.sharePct = (l.leads / totalLeads) * 100;
+  }
+  locations.sort((a, b) => b.spend - a.spend);
+  return { locations, totalLeads, totalSpend };
+}
+
+// Returns null when the client sheet has no such tab (most clients).
+export async function fetchMetaLocationTab(sheetId, label = '') {
+  const tag = `[pacing:${label || sheetId.slice(0, 6)}:MetaLoc]`;
+  let rows;
+  try { rows = await readTab(sheetId, META_LOCATION_TAB); }
+  catch (err) {
+    console.log(`${tag} tab not present or unreadable (${err?.message}) — skipping`);
+    return null;
+  }
+  const parsed = parseMetaLocationTab(rows);
+  console.log(`${tag} rows=${rows.length} locations=${parsed.locations.length} totalSpend=${parsed.totalSpend}`);
+  return parsed.locations.length ? parsed : null;
+}
 
 // Find (rowIdx, colIdx) of the first cell whose normalized text matches any of keys.
 function findLabel(rows, keys) {
@@ -57,8 +127,11 @@ function extractHeaderMeta(rows) {
 }
 
 // Find the geo-pacing row: top area of sheet will list geo codes with their EOM pacing values.
-// Strategy: find a row that contains ≥2 known geo codes, read the row immediately below for values.
-function extractGeoPacing(rows) {
+// Strategy: find a row that contains ≥2 known geo codes. The PACING tabs keep the
+// client-wide geo totals in the row ABOVE that header (row 0); fall back to the row
+// below only when the row above has no numbers there (otherwise we'd be reading the
+// first platform line, not the total).
+export function extractGeoPacing(rows) {
   for (let r = 0; r < Math.min(rows.length, 20); r++) {
     const row = rows[r] || [];
     const matches = [];
@@ -67,10 +140,11 @@ function extractGeoPacing(rows) {
       if (KNOWN_GEOS.includes(up)) matches.push({ name: up, col: c });
     });
     if (matches.length >= 2) {
-      const valueRow = rows[r + 1] || [];
-      return matches
+      const pick = (valueRow) => matches
         .map(({ name, col }) => ({ name, pacing: toNum(valueRow[col]) }))
         .filter((g) => g.pacing != null && g.pacing > 0);
+      const above = r > 0 ? pick(rows[r - 1] || []) : [];
+      return above.length ? above : pick(rows[r + 1] || []);
     }
   }
   return [];
@@ -349,7 +423,7 @@ function sumCampaignBudgetForVertical(campaigns, vertical) {
 
 export async function fetchClientSheet(sheetId, label = '') {
   console.log(`[pacing:${label || sheetId.slice(0, 6)}] fetch start sheetId=${sheetId.slice(0, 10)}…`);
-  const [pacing, validation, googleCampaigns, metaCampaigns, bingCampaigns, twitterCampaigns] = await Promise.all([
+  const [pacing, validation, googleCampaigns, metaCampaigns, bingCampaigns, twitterCampaigns, metaLocations] = await Promise.all([
     fetchPacingTab(sheetId, label).catch((err) => {
       console.error(`[pacing:${label}] PACING fetch failed: ${err?.message}`);
       return { error: err?.message || 'PACING fetch failed' };
@@ -362,6 +436,7 @@ export async function fetchClientSheet(sheetId, label = '') {
     readBudgetTabCampaigns(sheetId, 'Meta Budget',   label),
     readBudgetTabCampaigns(sheetId, 'Bing Budget',   label),
     readBudgetTabCampaigns(sheetId, 'Twitter Budget', label),
+    fetchMetaLocationTab(sheetId, label),
   ]);
 
   // Attach vertical-specific campaign budget to each platform line.
@@ -388,5 +463,5 @@ export async function fetchClientSheet(sheetId, label = '') {
   }
 
   console.log(`[pacing:${label || sheetId.slice(0, 6)}] fetch done`);
-  return { pacing, validation };
+  return { pacing, validation, metaLocations };
 }

@@ -188,6 +188,50 @@ function renderGeoBar(geos) {
     </div>`;
 }
 
+// ── Meta spend by location ────────────────────────────────────────────────────
+// Only rendered for clients whose sheet carries a "META Spends by Location" tab.
+
+export function renderMetaLocationBlock(meta) {
+  if (!meta?.locations?.length) return '';
+  const cell = (extra = '') => `padding:6px 10px;border-bottom:1px solid ${PALETTE.borderLight};font-size:12px;${extra}`;
+  const head = (align) => `text-align:${align};padding:6px 10px;background:${PALETTE.rowTotal};border-bottom:2px solid ${PALETTE.borderMed};color:${PALETTE.textSecondary};font-weight:bold;font-size:12px;`;
+
+  const rows = meta.locations.map((l) => `
+        <tr>
+          <td style="${cell(`color:${PALETTE.textPrimary};`)}">${escapeHtml(l.name)}</td>
+          <td style="${cell(`color:${PALETTE.textPrimary};text-align:right;`)}">${l.leads}</td>
+          <td style="${cell(`color:${PALETTE.textSecondary};text-align:right;`)}">${fmtPct(l.sharePct)}</td>
+          <td style="${cell(`color:${PALETTE.textPrimary};text-align:right;`)}">${fmtCurrency(l.spend)}</td>
+        </tr>`).join('');
+
+  return `
+    <div style="margin-top:12px;">
+      <div style="font-size:12px;font-weight:bold;color:${PALETTE.textPrimary};margin-bottom:6px;">
+        Meta Spend by Location
+        <span style="font-weight:normal;color:${PALETTE.textMuted};">&nbsp;·&nbsp; lead-weighted estimate</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="${head('left')}">Location</th>
+            <th style="${head('right')}">Leads</th>
+            <th style="${head('right')}">Share</th>
+            <th style="${head('right')}">Est. Spend</th>
+          </tr>
+        </thead>
+        <tbody>${rows}
+        <tr>
+          <td style="padding:7px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;font-size:12px;border-top:2px solid ${PALETTE.borderMed};">TOTAL</td>
+          <td style="padding:7px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;font-size:12px;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${meta.totalLeads}</td>
+          <td style="padding:7px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textSecondary};font-size:12px;text-align:right;border-top:2px solid ${PALETTE.borderMed};">100.0%</td>
+          <td style="padding:7px 10px;background:${PALETTE.rowTotal};color:${PALETTE.textPrimary};font-weight:bold;font-size:12px;text-align:right;border-top:2px solid ${PALETTE.borderMed};">${fmtCurrency(meta.totalSpend)}</td>
+        </tr>
+        </tbody>
+      </table>
+      <div style="font-size:11px;color:${PALETTE.textMuted};margin-top:6px;">Meta spend split across markets by share of platform leads. Source: "META Spends by Location" tab.</div>
+    </div>`;
+}
+
 // ── Client section ────────────────────────────────────────────────────────────
 
 function computeClientTotals(lines) {
@@ -240,6 +284,7 @@ function renderClientSection(client) {
       <tbody>${tableBody}</tbody>
     </table>
     ${renderGeoBar(pacing?.geos)}
+    ${renderMetaLocationBlock(client.metaLocations)}
   </div>
   <hr style="border:none;border-top:2px solid ${PALETTE.borderMed};margin:0 32px;">`;
 }
@@ -431,6 +476,7 @@ ${header}${sections}${actionsBlock}${footer}
         totalSpend: totals.spendMtd,
         totalEomPacing: totals.eomPacing,
         lineCount: lines.length,
+        metaLocationSpend: c.metaLocations?.totalSpend ?? null,
         namingFlags: (c.validation?.platforms || []).reduce((s, v) => s + (v.incorrectCount || 0), 0),
         dollarDiffFlags: (c.validation?.platforms || []).filter((v) => Math.abs(v.differencesUsd || 0) >= 0.01).length,
       };
