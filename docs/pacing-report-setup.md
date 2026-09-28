@@ -74,7 +74,7 @@ Vercel Cron only runs in UTC, so the local send time shifts by 1 hour between da
 A second daily email fed by the shared **Targeted Streaming Spends** sheet
 (`1oD3I5rxg0BRylFm-JzGJlyE477foZ3shgBnjncqCDvU`). Same service account, same Resend sender, same `CRON_SECRET`.
 
-- Cron: `/api/cron/streaming-pacing-report` at `5 12 * * 1-5` UTC (five minutes after Paid Search).
+- Cron: `/api/cron/streaming-pacing-report` at `0 13 * * 1-5` UTC (9:00 AM EDT / 8:00 AM EST; Vercel Cron is UTC-only, so the ET time shifts with DST).
 - Config: Mongo `tokensApi.StreamingPacingConfig` (`_id: 'singleton'`), seeded on first load of **/dashboard/streaming-pacing**. Holds one shared `sheetId`, the client list (`SMP`, `BBT`), recipients, subject prefix, from address.
 - History: `tokensApi.StreamingPacingReports`.
 - Tabs read: `Client Information`, `Budget`, and `<KEY> Pacing` for each enabled client. Nothing else.

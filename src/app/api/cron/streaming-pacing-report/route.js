@@ -1,5 +1,5 @@
 // src/app/api/cron/streaming-pacing-report/route.js
-// Invoked by Vercel Cron at 5 12 * * 1-5 UTC (five minutes after the Paid Search report).
+// Invoked by Vercel Cron at 0 13 * * 1-5 UTC (9:00 AM EDT / 8:00 AM EST — Vercel Cron is UTC-only, so ET drifts with DST).
 
 import { NextResponse } from 'next/server';
 import { runStreamingPacingReport } from '../../../../lib/streamingPacingPipeline';
