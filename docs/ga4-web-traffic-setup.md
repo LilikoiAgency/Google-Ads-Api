@@ -21,6 +21,7 @@ Add the env var `GA4_SA_KEY` = the raw service account JSON, pasted as-is with n
 
 - **Users = GA4 `activeUsers`**, which is what the "Users" column shows in GA's Traffic acquisition report (Session primary channel group). Totals per view come from a GA request filtered to that view's channels; channel rows are never summed, since users overlap across channels.
 - **Unassigned** sessions are counted only under **Everything**, not in Organic, All non-paid or Paid. Any channel GA returns that is not in the bucket table is shown under its own name and also counted only in Everything.
+- **Choosing what goes in a download:** the Download report menu has a checkbox per view. It starts with only the view on screen ticked. Views left unticked are not in the file at all (not just hidden), so an "Organic search only" report carries no paid numbers. With one view the file has no toggle and its name/title say which view it is; with several, the client can switch between just those.
 - The **untagged-paid warning** (traffic that looks paid by source/medium but isn't in a Paid channel) is internal. It is shown on the page only and is never included in client downloads.
 
 ## Parity check (Oct 1-31, 2026)

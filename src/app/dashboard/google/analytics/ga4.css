@@ -223,3 +223,20 @@
   .ga4-cell-main { max-width: 200px; }
   .ga4-notice { padding: 16px; }
 }
+
+/* ── Download menu (choose which views go in the report) ─────────────────── */
+.ga4-dl { position: relative; z-index: 40; }
+.ga4-dl-caret { font-size: 10px; opacity: 0.85; margin-left: -2px; }
+.ga4-dl-pop { position: absolute; top: calc(100% + 6px); right: 0; width: 300px; max-width: calc(100vw - 32px); background: var(--ga4-pop-bg); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 14px; box-sizing: border-box; color: var(--text-primary); text-align: left; }
+.ga4-dl-title { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.ga4-dl-options { display: flex; flex-direction: column; gap: 4px; }
+.ga4-dl-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; font-size: 13.5px; cursor: pointer; user-select: none; }
+.ga4-dl-option:hover { background: var(--ga4-accent-soft); }
+.ga4-dl-option.is-on { border-color: var(--ga4-accent); background: var(--ga4-accent-soft); font-weight: 600; }
+.ga4-dl-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--ga4-accent); cursor: pointer; flex-shrink: 0; }
+.ga4-dl-option input:focus-visible { outline: 2px solid var(--ga4-accent); outline-offset: 2px; }
+.ga4-dl-tag { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ga4-dl-hint { margin: 10px 2px 0; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+.ga4-dl-paid { margin: 6px 2px 0; font-size: 12px; font-weight: 600; color: var(--ga4-warn-text); }
+.ga4-dl-go { width: 100%; margin-top: 12px; }
+.ga4-mobile-bar { position: relative; z-index: 6; }

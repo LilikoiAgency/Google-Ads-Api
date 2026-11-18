@@ -21,7 +21,7 @@ function dataOf(html) {
 
 describe('ga4ReportHtml', () => {
   it('includes title, all views and opens on the chosen view', () => {
-    const html = generateTrafficReportHtml(report, { view: 'nonPaid' });
+    const html = generateTrafficReportHtml(report, { view: 'nonPaid', views: ['organic', 'nonPaid', 'paid', 'all'] });
     expect(html).toContain('Semper Solaris - GA4: Web Traffic, Oct 2026');
     for (const l of ['Organic search', 'All non-paid', 'Paid', 'Everything']) expect(html).toContain(l);
     expect(html).toMatch(/let mode\s*=\s*'nonPaid'/);
@@ -54,7 +54,7 @@ describe('ga4ReportHtml', () => {
   it('inlines data for all 4 views with < escaped', () => {
     const r = JSON.parse(JSON.stringify(report));
     r.landingPages.unshift({ page: '/x</script><img src=x>', channel: 'Direct', bucket: 'otherNonPaid', sessions: 1e9, users: 1, keyEvents: 0 });
-    const html = generateTrafficReportHtml(r, { view: 'all' });
+    const html = generateTrafficReportHtml(r, { view: 'all', views: ['organic', 'nonPaid', 'paid', 'all'] });
     expect(html).not.toContain('</script><img');
     const D = dataOf(html);
     expect(Object.keys(D.views)).toEqual(['organic', 'nonPaid', 'paid', 'all']);
@@ -160,5 +160,54 @@ describe('ga4ReportHtml', () => {
 
   it('rejects an unknown view', () => {
     expect(() => generateTrafficReportHtml(report, { view: 'nope' })).toThrow();
+  });
+
+  describe('choosing which views go in the file', () => {
+    it('defaults to only the chosen view, with no toggle', () => {
+      const html = generateTrafficReportHtml(report, { view: 'nonPaid' });
+      expect(Object.keys(dataOf(html).views)).toEqual(['nonPaid']);
+      expect(html).not.toContain('class="toggle"');
+      expect(html).not.toContain('data-v="paid"');
+    });
+
+    it('a single non-paid view carries no paid numbers at all', () => {
+      const paidChannels = report.channels.filter((c) => c.bucket === 'paid').map((c) => c.channel);
+      expect(paidChannels.length).toBeGreaterThan(0);
+      const D = dataOf(generateTrafficReportHtml(report, { view: 'organic', views: ['organic'] }));
+      const json = JSON.stringify(D);
+      for (const ch of paidChannels) expect(json).not.toContain(ch);
+      expect(D.views.all).toBeUndefined();
+    });
+
+    it('includes only the chosen subset, in standard order, with a toggle', () => {
+      const html = generateTrafficReportHtml(report, { view: 'nonPaid', views: ['nonPaid', 'organic'] });
+      expect(Object.keys(dataOf(html).views)).toEqual(['organic', 'nonPaid']);
+      expect(html).toContain('class="toggle"');
+      expect(html).toContain('data-v="organic"');
+      expect(html).not.toContain('data-v="paid"');
+      expect(html).not.toContain('data-v="all"');
+      expect(html).toMatch(/let mode\s*=\s*'nonPaid'/);
+    });
+
+    it('always includes the view it opens on', () => {
+      const D = dataOf(generateTrafficReportHtml(report, { view: 'paid', views: ['organic'] }));
+      expect(Object.keys(D.views)).toEqual(['organic', 'paid']);
+    });
+
+    it('rejects unknown view keys in the list', () => {
+      expect(() => generateTrafficReportHtml(report, { view: 'all', views: ['all', 'nope'] })).toThrow();
+    });
+
+    it('names a single-view file after its view', () => {
+      expect(reportFilename(report, { views: ['organic'] })).toBe('Semper Solaris - GA4 Web Traffic (Organic search) - Oct 2026.html');
+      expect(reportFilename(report, { views: ['paid'] })).toBe('Semper Solaris - GA4 Web Traffic (Paid) - Oct 2026.html');
+      expect(reportFilename(report, { views: ['all'] })).toBe('Semper Solaris - GA4 Web Traffic - Oct 2026.html');
+      expect(reportFilename(report, { views: ['organic', 'paid'] })).toBe('Semper Solaris - GA4 Web Traffic - Oct 2026.html');
+    });
+
+    it('puts a single view in the page title', () => {
+      expect(generateTrafficReportHtml(report, { view: 'organic' }))
+        .toContain('<title>Semper Solaris - GA4: Web Traffic (Organic search), Oct 2026</title>');
+    });
   });
 });

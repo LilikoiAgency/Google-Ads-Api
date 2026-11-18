@@ -19,6 +19,7 @@ import TrafficChart from "./components/TrafficChart";
 import ChannelTable from "./components/ChannelTable";
 import SourcesAndPages, { SOURCES_ANCHOR } from "./components/SourcesAndPages";
 import ChannelDefinitions from "./components/ChannelDefinitions";
+import DownloadMenu from "./components/DownloadMenu";
 import { localToday, parseParams, buildQuery, resolveProperty, isUrlPropertyMissing } from "./urlState";
 import { useTrafficReport, makeReportKey, fetchJson } from "./useTrafficReport";
 import "../../../globals.css";
@@ -55,17 +56,6 @@ function errorText(err) {
 }
 
 // ─── small presentational pieces ─────────────────────────────────────────────
-
-function DownloadButton({ disabled, onClick, compact = false }) {
-  return (
-    <button type="button" className={`ga4-btn ga4-btn-primary${compact ? " ga4-btn-sm" : ""}`} disabled={disabled} onClick={onClick}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      {compact ? "Download" : "Download report"}
-    </button>
-  );
-}
 
 function Notice({ tone = "neutral", children, actions }) {
   return (
@@ -212,10 +202,10 @@ function WebTrafficPage() {
 
   const onGranularityChange = (g) => setGranOverride(g === autoGran ? null : g);
 
-  const onDownload = () => {
+  const onDownload = ({ view: openOn, views }) => {
     if (!report) return;
     try {
-      downloadTrafficReport(report, { view });
+      downloadTrafficReport(report, { view: openOn, views });
     } catch (err) {
       console.error("[ga4] download failed", err);
       window.alert("Couldn't build the report file. Please try again.");
@@ -255,7 +245,7 @@ function WebTrafficPage() {
       <DashboardToolHeader icon={<AnalyticsIcon />} title="Web Traffic (GA4)" subtitle="Google Analytics traffic by channel">
         {hasProperties && (
           <div className="desktop-only">
-            <DownloadButton disabled={downloadDisabled} onClick={onDownload} />
+            <DownloadMenu currentView={view} disabled={downloadDisabled} onDownload={onDownload} />
           </div>
         )}
       </DashboardToolHeader>
@@ -284,7 +274,7 @@ function WebTrafficPage() {
               <span className="ga4-mobile-prop">{currentProperty?.name}</span>
               <span className="ga4-mobile-range">{rangeText}</span>
             </span>
-            <DownloadButton compact disabled={downloadDisabled} onClick={onDownload} />
+            <DownloadMenu compact currentView={view} disabled={downloadDisabled} onDownload={onDownload} />
           </div>
           <MobileFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} onApply={() => setFilterOpen(false)}>
             {/* The sheet is always dark: resolve theme variables as dark inside it. */}

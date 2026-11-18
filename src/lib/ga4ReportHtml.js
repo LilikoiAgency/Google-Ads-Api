@@ -122,18 +122,37 @@ function buildViewData(report, viewKey, { hasCompare, compareLabel, range, showK
   };
 }
 
-export function reportFilename(report) {
-  const name = `${report.property.name} Web Traffic - ${rangeLabel(report.range)}.html`;
+// The views that go into the file: the requested list (defaults to just `view`),
+// always including `view` itself, in the standard VIEWS order. Views left out are
+// not in the file at all — their numbers are never inlined.
+export function resolveReportViews(view, views) {
+  const known = new Set(VIEWS.map((v) => v.key));
+  if (!known.has(view)) throw new Error(`Unknown view: ${view}`);
+  const wanted = new Set(views && views.length ? views : [view]);
+  for (const k of wanted) if (!known.has(k)) throw new Error(`Unknown view: ${k}`);
+  wanted.add(view);
+  return VIEWS.filter((v) => wanted.has(v.key)).map((v) => v.key);
+}
+
+// "(Organic search)" for a file holding one view other than Everything; '' otherwise.
+function viewSuffix(views) {
+  if (!views || views.length !== 1 || views[0] === 'all') return '';
+  const v = VIEWS.find((x) => x.key === views[0]);
+  return v ? ` (${v.label})` : '';
+}
+
+export function reportFilename(report, { views } = {}) {
+  const name = `${report.property.name} Web Traffic${viewSuffix(views)} - ${rangeLabel(report.range)}.html`;
   return name.replace(/[\\/:*?"<>|]/g, '').replace(/\s{2,}/g, ' ').trim();
 }
 
-export function generateTrafficReportHtml(report, { view } = {}) {
-  if (!VIEWS.some((v) => v.key === view)) throw new Error(`Unknown view: ${view}`);
+export function generateTrafficReportHtml(report, { view, views } = {}) {
+  const included = resolveReportViews(view, views);
 
   const range = rangeLabel(report.range);
   const hasCompare = !!(report.compareRange && report.totalsByViewCompare);
   const compareLabel = hasCompare ? rangeLabel(report.compareRange) : null;
-  const title = `${report.property.name}: Web Traffic, ${range}`;
+  const title = `${report.property.name}: Web Traffic${viewSuffix(included)}, ${range}`;
   const unit = { day: 'day', week: 'week', month: 'month' }[report.granularity] || 'day';
   // Same rule as the page: key events column only when the whole property had any.
   const showKeyEvents = (report.totalsByView?.all?.keyEvents || 0) > 0
@@ -142,7 +161,7 @@ export function generateTrafficReportHtml(report, { view } = {}) {
   const data = {
     labels: report.series.labels,
     compareLabel,
-    views: Object.fromEntries(VIEWS.map((v) => [v.key, buildViewData(report, v.key, { hasCompare, compareLabel, range, showKeyEvents })])),
+    views: Object.fromEntries(included.map((k) => [k, buildViewData(report, k, { hasCompare, compareLabel, range, showKeyEvents })])),
   };
   // U+2028/2029 are legal in JS string literals since ES2019; only '<' needs escaping.
   const json = JSON.stringify(data).replace(/</g, '\\' + 'u003c');
@@ -156,8 +175,11 @@ export function generateTrafficReportHtml(report, { view } = {}) {
       ? ' Google Analytics sampled or grouped some of this data, so small numbers may be approximate.'
       : '');
 
-  const buttons = VIEWS.map((v) =>
-    `<button type="button" data-v="${v.key}" aria-pressed="${v.key === view}">${esc(v.label)}</button>`).join('');
+  // The view toggle only appears when the file holds more than one view.
+  const toggle = included.length > 1
+    ? `<div class="toggle" role="group" aria-label="Channels shown">${VIEWS.filter((v) => included.includes(v.key)).map((v) =>
+      `<button type="button" data-v="${v.key}" aria-pressed="${v.key === view}">${esc(v.label)}</button>`).join('')}</div>`
+    : '';
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -222,7 +244,7 @@ main{padding:28px 16px 44px}
 <h1>${esc(title)}</h1>
 <p class="sub" id="sub"></p>
 <div class="kpi" id="kpi"></div>
-<div class="toggle" role="group" aria-label="Channels shown">${buttons}</div>
+${toggle}
 <div class="chart" id="cbox"><canvas id="c" role="img" aria-label="Users per ${unit} by channel"></canvas><p class="empty" id="cempty" hidden>No visits from these channels in this period.</p></div>
 <div class="tw first"><table id="tbl"></table></div>
 <h2>Top sources</h2>
@@ -285,13 +307,13 @@ render();build();
 </script></body></html>`;
 }
 
-export function downloadTrafficReport(report, { view } = {}) {
-  const html = generateTrafficReportHtml(report, { view });
+export function downloadTrafficReport(report, { view, views } = {}) {
+  const html = generateTrafficReportHtml(report, { view, views });
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = reportFilename(report);
+  a.download = reportFilename(report, { views: resolveReportViews(view, views) });
   document.body.appendChild(a);
   a.click();
   a.remove();
