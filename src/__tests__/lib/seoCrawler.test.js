@@ -166,6 +166,25 @@ describe('parsePage', () => {
     expect(rec.images).toMatchObject({ count: 200, missing_alt: 100 });
     expect(rec.images.examples_missing_alt.length).toBeLessThanOrEqual(5);
   });
+
+  it('content_text and word_count exclude script, style and other non-content elements', () => {
+    const html = `<html><body>
+      <h1>Turf Install</h1>
+      <script>var tracking = "gtag secret";</script>
+      <style>.hero { color: red; }</style>
+      <noscript>Enable JS</noscript>
+      <svg><text>icon</text></svg>
+      <template><p>hidden tpl</p></template>
+      <iframe>frame text</iframe>
+      <p>Real words here</p>
+      <script type="application/ld+json">{"@type":"LocalBusiness"}</script>
+    </body></html>`;
+    const rec = parsePage(html, 'https://example.com/');
+    expect(rec.content_text).toBe('Turf Install Real words here');
+    expect(rec.word_count).toBe(5);
+    expect(rec.content_snippet).toBe('Turf Install Real words here');
+    expect(rec.schema_markup[0].raw_json['@type']).toBe('LocalBusiness');
+  });
 });
 
 describe('crawlSite', () => {

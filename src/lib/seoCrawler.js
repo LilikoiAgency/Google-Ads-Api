@@ -275,8 +275,11 @@ export function parsePage(html, url) {
     og_image: $('meta[property="og:image"]').attr("content") || "",
   };
 
-  // Body text for word count + content snippet
-  const bodyText = $("body").text().replace(/\s+/g, " ").trim();
+  // Body text for word count + content snippet. Read from a copy with
+  // non-content elements removed, so code and CSS don't count as page text.
+  const $body = $("body").clone();
+  $body.find("script, style, noscript, svg, template, iframe").remove();
+  const bodyText = $body.text().replace(/\s+/g, " ").trim();
   const wordCount = bodyText.split(/\s+/).filter((w) => w.length > 0).length;
   const contentText = bodyText.substring(0, 8000);
   const contentSnippet = contentText.substring(0, 2000); // kept for the v1 audit

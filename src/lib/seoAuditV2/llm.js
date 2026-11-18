@@ -67,9 +67,10 @@ export async function runStructured({ system, sharedContext, input, schema, effo
   const body = {
     model: AUDIT_MODEL,
     max_tokens: MAX_TOKENS,
+    // Shared context first so the cached prefix is the same for every pass and the synthesis.
     system: [
-      { type: 'text', text: system },
       { type: 'text', text: sharedContext, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: system },
     ],
     messages: [{ role: 'user', content: typeof input === 'string' ? input : JSON.stringify(input) }],
     output_config: { effort, format: { type: 'json_schema', schema } },

@@ -63,8 +63,8 @@ describe('runStructured', () => {
     expect(body).not.toHaveProperty('thinking');
     expect(body).not.toHaveProperty('tool_choice');
     expect(body.system).toEqual([
-      { type: 'text', text: 'SYS' },
       { type: 'text', text: 'CTX', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: 'SYS' },
     ]);
     expect(body.messages).toEqual([{ role: 'user', content: '{"a":1}' }]);
     expect(lastOpts().signal).toBeInstanceOf(AbortSignal);
