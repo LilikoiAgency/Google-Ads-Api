@@ -45,7 +45,7 @@ function isStale(step, now) {
 
 function available(step, now) {
   if (step.status === 'pending') return true;
-  return step.status === 'running' && isStale(step, now);
+  return step.status === 'running' && isStale(step, now) && step.attempts < MAX_ATTEMPTS;
 }
 
 export function runnableSteps(job, now) {
@@ -70,40 +70,53 @@ function withStep(job, key, patch, now) {
 }
 
 export function markRunning(job, key, now) {
-  const prev = find(job, key);
-  const next = withStep(job, key, { status: 'running', startedAt: iso(now), finishedAt: null }, now);
-  return { ...next, status: job.status === 'queued' || prev ? 'running' : job.status };
+  const step = find(job, key);
+  const next = withStep(job, key, {
+    status: 'running', startedAt: iso(now), finishedAt: null, attempts: step.attempts + 1,
+  }, now);
+  return { ...next, status: 'running' };
 }
 
+function settle(job) {
+  const status = (k) => find(job, k).status;
+  if (['crawl', 'gather', 'synthesize'].some((k) => status(k) === 'failed_final')) job.status = 'failed';
+  else if (status('synthesize') === 'done') job.status = 'done';
+  else job.status = 'running';
+  return job;
+}
+
+function failFinal(job, key, error, now) {
+  const next = withStep(job, key, { status: 'failed_final', finishedAt: iso(now), error }, now);
+  if (PASS_AREA[key]) {
+    next.gaps = [...(job.gaps || []), `${PASS_AREA[key]} analysis didn't complete — rerun to include it`];
+  }
+  return next;
+}
+
+// Attempts are counted at start (markRunning), so a step killed mid-run still uses one.
 export function applyStepResult(job, key, { ok, error } = {}, now) {
   const step = find(job, key);
   let next;
   if (ok) {
     next = withStep(job, key, { status: 'done', finishedAt: iso(now), error: null }, now);
   } else {
-    const attempts = step.attempts + 1;
-    const final = attempts >= MAX_ATTEMPTS;
-    next = withStep(job, key, {
-      attempts,
-      status: final ? 'failed_final' : 'pending',
-      finishedAt: final ? iso(now) : null,
-      startedAt: final ? step.startedAt : null,
-      error: error == null ? null : String(error),
-    }, now);
-    if (final && PASS_AREA[key]) {
-      next.gaps = [...(job.gaps || []), `${PASS_AREA[key]} analysis didn't complete — rerun to include it`];
+    const err = error == null ? null : String(error);
+    next = step.attempts >= MAX_ATTEMPTS
+      ? failFinal(job, key, err, now)
+      : withStep(job, key, { status: 'pending', startedAt: null, finishedAt: null, error: err }, now);
+  }
+  return settle(next);
+}
+
+// Turns stale running steps that have used all attempts into failed_final.
+export function expireStale(job, now) {
+  let next = job;
+  for (const s of job.steps) {
+    if (s.status === 'running' && isStale(s, now) && s.attempts >= MAX_ATTEMPTS) {
+      next = failFinal(next, s.key, 'timed out', now);
     }
   }
-
-  const status = (k) => find(next, k).status;
-  if (['crawl', 'gather', 'synthesize'].some((k) => status(k) === 'failed_final')) {
-    next.status = 'failed';
-  } else if (status('synthesize') === 'done') {
-    next.status = 'done';
-  } else {
-    next.status = 'running';
-  }
-  return next;
+  return next === job ? job : settle(next);
 }
 
 export function effortForAttempt(baseEffort, attempts) {

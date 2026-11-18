@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  STEP_KEYS, newJob, runnableSteps, applyStepResult, markRunning, effortForAttempt, shouldRefund,
+  STEP_KEYS, newJob, runnableSteps, applyStepResult, markRunning, expireStale, effortForAttempt, shouldRefund,
 } from '@/lib/seoAuditV2/jobs';
 
 const T0 = 1_000_000;
@@ -123,5 +123,44 @@ describe('effortForAttempt', () => {
     expect(effortForAttempt('high', 2)).toBe('low');
     expect(effortForAttempt('medium', 1)).toBe('low');
     expect(effortForAttempt('medium', 5)).toBe('low');
+  });
+});
+
+describe('stale expiry', () => {
+  const stale = (job, key) => {
+    for (let i = 0; i < 3; i++) job = markRunning(job, key, T0 + i * 7 * MIN);
+    return job;
+  };
+  const later = T0 + 30 * MIN;
+
+  it('stale step re-claimed counts an attempt', () => {
+    let job = markRunning(mk(), 'crawl', T0);
+    job = markRunning(job, 'crawl', T0 + 7 * MIN);
+    expect(step(job, 'crawl').attempts).toBe(2);
+  });
+
+  it('third stale expiry becomes failed_final and is not runnable', () => {
+    const job = stale(mk(), 'crawl');
+    expect(runnableSteps(job, later)).toEqual([]);
+    expect(step(expireStale(job, later), 'crawl').status).toBe('failed_final');
+  });
+
+  it('a pass expiring adds the gap', () => {
+    const job = stale(finish(finish(mk(), 'crawl'), 'gather'), 'pass:content');
+    const out = expireStale(job, later);
+    expect(step(out, 'pass:content').status).toBe('failed_final');
+    expect(out.gaps).toEqual(["Content & keywords analysis didn't complete — rerun to include it"]);
+    expect(out.status).toBe('running');
+  });
+
+  it('crawl expiring fails the job', () => {
+    const out = expireStale(stale(mk(), 'crawl'), later);
+    expect(out.status).toBe('failed');
+    expect(shouldRefund(out)).toBe(true);
+  });
+
+  it('leaves fresh running steps alone', () => {
+    const job = stale(mk(), 'crawl');
+    expect(expireStale(job, T0 + 14 * MIN + 1000)).toBe(job);
   });
 });
