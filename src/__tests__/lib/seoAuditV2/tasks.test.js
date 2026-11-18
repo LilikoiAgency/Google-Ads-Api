@@ -74,6 +74,11 @@ describe('tasksToCsv', () => {
     expect(head).toBe('Priority,Task,Page,Category,Impact,Effort,Confidence,Change,Evidence');
     expect(row).toContain('a | b');
   });
+  it('uses rank (1 = first) in the Priority column', () => {
+    const rows = tasksToCsv([t({ title: 'one' }), t({ title: 'two' })]).split('\n');
+    expect(rows[1].startsWith('1,one,')).toBe(true);
+    expect(rows[2].startsWith('2,two,')).toBe(true);
+  });
   it('escapes quotes, commas and newlines per RFC 4180', () => {
     const csv = tasksToCsv([t({ title: 'Say "hi", ok', change: 'line1\nline2' })]);
     expect(csv).toContain('"Say ""hi"", ok"');
