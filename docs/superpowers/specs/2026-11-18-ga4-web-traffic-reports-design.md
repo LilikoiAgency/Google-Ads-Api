@@ -1,11 +1,11 @@
 # GA4 Web Traffic Reports — Design
 
 Date: 2026-11-18
-Status: Draft for approval
+Status: Approved by Frank, 2026-11-18
 
 ## Intent and why
 
-Frank needs to answer "how much traffic did client X's website get, and from where?" quickly, for any client, for any time frame, without logging into Google Analytics. Today it takes a manual GA4 export plus a hand-built page. The page he made for Big Bully Turf (`C:\Users\frank\Downloads\BBT Web Traffic - OCT 2026.html`, outside the repo) is the target look for a finished report. Copy it into `docs/superpowers/specs/assets/bbt-web-traffic-oct-2026-example.html` as part of the build so it stays with the spec. Two uses, both in scope:
+Frank needs to answer "how much traffic did client X's website get, and from where?" quickly, for any client, for any time frame, without logging into Google Analytics. Today it takes a manual GA4 export plus a hand-built page. The page he made for Big Bully Turf (copied to `docs/superpowers/specs/assets/bbt-web-traffic-oct-2026-example.html`) is the target look for a finished report. Two uses, both in scope:
 
 1. **Exploring:** look around a client's traffic (organic and paid, any date range, compared against an earlier period) inside the dashboard.
 2. **Handing off:** produce a polished standalone report like the BBT page to send to a client.
