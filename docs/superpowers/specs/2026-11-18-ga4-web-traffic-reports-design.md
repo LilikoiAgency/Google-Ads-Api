@@ -55,7 +55,7 @@ Frank's bar: "this needs to work amazingly."
 
 - **A. Live report page with a Download button.** *(chosen by Frank)* One tool covers both exploring and client hand-offs; it's the most work.
 - **B. Report generator only.** A form that outputs a BBT-style file. Faster, but you can't explore, and every question means re-generating.
-- **C. On-demand via Claude.** No UI; Claude runs pulls and writes files. Cheapest, but needs a Claude session every time.
+- **C. On-demand by hand.** No UI; someone runs the pulls and builds the files each time. Cheapest to build, but manual every time.
 
 ## Users metric
 
@@ -184,7 +184,7 @@ It mirrors the BBT example: the same structure, a light/dark theme with CSS vari
 - Approach A: a live page plus a downloadable standalone report.
 - Use the `lilikoi-reporting` service account and connect other clients' GA accounts to it.
 
-## Calls made by Claude (open to correction)
+## Defaults chosen during design (open to correction)
 
 - Page location and name: `/dashboard/google/analytics`, "Web Traffic (GA4)", under Organic & Reports.
 - Unassigned isn't counted as non-paid.

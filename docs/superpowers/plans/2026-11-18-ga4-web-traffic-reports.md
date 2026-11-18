@@ -1,6 +1,5 @@
 # GA4 Web Traffic Reports Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A dashboard page, Web Traffic (GA4), for exploring any connected client's GA4 traffic by channel, date range, comparison and view, with a Download button that saves a standalone BBT-style report.
 
@@ -397,7 +396,7 @@ Page behavior (see the spec's page sketch and Behavior list):
 **Files:**
 - Create: `docs/ga4-web-traffic-setup.md`
 
-- [ ] **Step 1: Parity check.** For Semper Solaris - GA4 and Ranger Electric, Oct 1–31 2026, compare the page's channel table (Everything view) with GA4's Traffic acquisition report (Session primary channel group) for **Users and Sessions per channel**. They must match exactly. A script against `/api/ga4/report` output is fine for our side. Frank, or a browser session, reads GA's side. If something doesn't match, stop and debug (superpowers:systematic-debugging) before continuing.
+- [ ] **Step 1: Parity check.** For Semper Solaris - GA4 and Ranger Electric, Oct 1–31 2026, compare the page's channel table (Everything view) with GA4's Traffic acquisition report (Session primary channel group) for **Users and Sessions per channel**. They must match exactly. A script against `/api/ga4/report` output is fine for our side. Frank, or a browser session, reads GA's side. If something doesn't match, stop and debug before continuing.
 - [ ] **Step 2: Write `docs/ga4-web-traffic-setup.md`** (short): what the page does; the service account email; how to connect a new client (the GA admin adds it as Viewer at the account level, Notify unticked, then click Refresh list); the `GA4_SA_KEY` Vercel env var (paste the raw JSON with no wrapping quotes, Production + Preview, then redeploy); why Users is `activeUsers`; and Unassigned handling.
 - [ ] **Step 3: Commit.** `docs: GA4 web traffic setup`
 - [ ] **Step 4: Remind Frank** to add `GA4_SA_KEY` in Vercel before pushing, and to delete `C:\Users\frank\Downloads\lilikoi-ads-analytics-888265baa904.json`.
