@@ -46,6 +46,7 @@ function getDomain(url) {
 async function fetchHtml(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const started = Date.now();
 
   try {
     const res = await fetch(url, {
@@ -53,20 +54,157 @@ async function fetchHtml(url) {
       headers: { "User-Agent": USER_AGENT },
       redirect: "follow",
     });
-    clearTimeout(timer);
     const status = res.status;
     const finalUrl = res.url || url; // actual URL after redirects
     const html = await res.text();
-    return { html, status, finalUrl, error: null };
+    clearTimeout(timer);
+    return { html, status, finalUrl, error: null, responseMs: Date.now() - started };
   } catch (err) {
     clearTimeout(timer);
-    return { html: null, status: 0, finalUrl: url, error: err.message };
+    return { html: null, status: 0, finalUrl: url, error: err.message, responseMs: null };
   }
+}
+
+// Body text only for 2xx responses; anything else (404 page, network error) is null.
+async function fetchOkText(url) {
+  const { html, status, error } = await fetchHtml(url);
+  if (error || !html || status < 200 || status >= 300) return null;
+  return html;
+}
+
+// ── Sitemaps ─────────────────────────────────────────────────────────────────
+
+const MAX_CHILD_SITEMAPS = 50;
+const MAX_SITEMAP_URLS = 5_000;
+const MAX_SITEMAP_DEPTH = 3;
+
+/**
+ * Parse sitemap XML. Pure.
+ * @returns {{ type: 'index'|'urlset'|'unknown', locs: string[] }}
+ */
+export function parseSitemapXml(xml) {
+  if (!xml || typeof xml !== "string") return { type: "unknown", locs: [] };
+  let $;
+  try {
+    $ = cheerio.load(xml, { xmlMode: true });
+  } catch {
+    return { type: "unknown", locs: [] };
+  }
+  const readLocs = (selector) =>
+    $(selector)
+      .map((_, el) => $(el).text().trim())
+      .get()
+      .filter(Boolean);
+
+  if ($("sitemapindex").length || $("sitemap > loc").length) {
+    return { type: "index", locs: readLocs("sitemap > loc") };
+  }
+  if ($("urlset").length || $("url > loc").length) {
+    return { type: "urlset", locs: readLocs("url > loc") };
+  }
+  return { type: "unknown", locs: [] };
+}
+
+/**
+ * Collect page URLs from every sitemap a site exposes.
+ * Order of discovery: robots.txt `Sitemap:` lines, then /sitemap_index.xml,
+ * then /sitemap.xml. Reads every child of an index, recursing into nested
+ * indexes up to depth 3. Caps: 50 child sitemaps, 5,000 URLs.
+ * `.xml.gz` children are not fetched; they are listed with count null.
+ *
+ * @param {string} domain
+ * @param {(url: string) => Promise<string|null>} fetchText
+ */
+export async function collectSitemapUrls(domain, fetchText) {
+  const baseUrl = `https://${domain}`;
+  const siteDomain = getDomain(baseUrl);
+
+  const candidates = []; // [{ roots: string[], source }]
+  const robotsTxt = await fetchText(`${baseUrl}/robots.txt`);
+  if (robotsTxt) {
+    const roots = [];
+    for (const m of robotsTxt.matchAll(/^\s*sitemap\s*:\s*(\S+)/gim)) {
+      try {
+        const u = new URL(m[1], baseUrl).href;
+        if (!roots.includes(u)) roots.push(u);
+      } catch { /* skip malformed */ }
+    }
+    if (roots.length) candidates.push({ roots, source: "robots" });
+  }
+  candidates.push({ roots: [`${baseUrl}/sitemap_index.xml`], source: "sitemap_index.xml" });
+  candidates.push({ roots: [`${baseUrl}/sitemap.xml`], source: "sitemap.xml" });
+
+  for (const { roots, source } of candidates) {
+    const urls = new Set();
+    const sitemaps = [];
+    const visited = new Set();
+    let childCount = 0;
+    let foundAny = false;
+
+    const addUrls = (locs) => {
+      let count = 0;
+      for (const loc of locs) {
+        if (urls.size >= MAX_SITEMAP_URLS) break;
+        if (getDomain(loc) !== siteDomain) continue;
+        count++;
+        urls.add(loc);
+      }
+      return count;
+    };
+
+    const walk = async (url, depth, isRoot) => {
+      if (visited.has(url) || urls.size >= MAX_SITEMAP_URLS) return;
+      if (!isRoot) {
+        if (childCount >= MAX_CHILD_SITEMAPS) return;
+        childCount++;
+      }
+      visited.add(url);
+
+      if (/\.gz(\?|#|$)/i.test(url)) {
+        sitemaps.push({ url, count: null });
+        foundAny = true;
+        return;
+      }
+
+      const parsed = parseSitemapXml(await fetchText(url));
+      if (parsed.type === "unknown") return;
+      foundAny = true;
+
+      if (parsed.type === "urlset") {
+        sitemaps.push({ url, count: addUrls(parsed.locs) });
+        return;
+      }
+      if (depth >= MAX_SITEMAP_DEPTH) return;
+      for (const child of parsed.locs) {
+        if (childCount >= MAX_CHILD_SITEMAPS || urls.size >= MAX_SITEMAP_URLS) break;
+        await walk(child, depth + 1, false);
+      }
+    };
+
+    for (const root of roots) await walk(root, 1, true);
+
+    if (foundAny) return { urls: [...urls], sitemaps, source };
+  }
+
+  return { urls: [], sitemaps: [], source: null };
+}
+
+// ── Images ───────────────────────────────────────────────────────────────────
+
+/** Summarize a page's images. Pure. */
+export function summarizeImages(images) {
+  const list = Array.isArray(images) ? images : [];
+  const missing = list.filter((img) => !(img?.alt || "").trim());
+  return {
+    count: list.length,
+    missing_alt: missing.length,
+    examples_missing_alt: missing.slice(0, 5).map((img) => img?.src || ""),
+  };
 }
 
 // ── Parse a single page HTML ─────────────────────────────────────────────────
 
-function parsePage(html, url) {
+export function parsePage(html, url) {
   const $ = cheerio.load(html);
   const domain = getDomain(url);
 
@@ -110,8 +248,7 @@ function parsePage(html, url) {
       alt: $(el).attr("alt") || "",
       has_alt: !!($(el).attr("alt") || "").trim(),
     }))
-    .get()
-    .slice(0, 50); // cap to avoid bloat
+    .get();
 
   // JSON-LD Schema markup
   const schemaMarkup = [];
@@ -141,7 +278,8 @@ function parsePage(html, url) {
   // Body text for word count + content snippet
   const bodyText = $("body").text().replace(/\s+/g, " ").trim();
   const wordCount = bodyText.split(/\s+/).filter((w) => w.length > 0).length;
-  const contentSnippet = bodyText.substring(0, 2000);
+  const contentText = bodyText.substring(0, 8000);
+  const contentSnippet = contentText.substring(0, 2000); // kept for the v1 audit
 
   // Links
   const allLinks = $("a[href]")
@@ -170,12 +308,13 @@ function parsePage(html, url) {
     h1_tags: h1Tags,
     h2_tags: h2Tags,
     h3_tags: h3Tags,
-    images,
+    images: summarizeImages(images),
     schema_markup: schemaMarkup,
     open_graph: openGraph,
     word_count: wordCount,
     internal_links_count: internalLinksCount,
     external_links_count: externalLinksCount,
+    content_text: contentText,
     content_snippet: contentSnippet,
   };
 }
@@ -218,43 +357,12 @@ async function discoverPages(domain) {
     });
   }
 
-  // ── Step 2: Sitemap as fallback — only if nav gave us too few pages ────
-  let sitemapUrlCount = 0;
-  let sitemapAccessible = false;
-
-  const sitemapUrl = `${baseUrl}/sitemap.xml`;
-  const { html: sitemapXml } = await fetchHtml(sitemapUrl);
-
-  if (sitemapXml) {
-    sitemapAccessible = true;
-    const $ = cheerio.load(sitemapXml, { xmlMode: true });
-
-    // Handle sitemap index (nested sitemaps)
-    const sitemapLocs = $("sitemap > loc")
-      .map((_, el) => $(el).text().trim())
-      .get();
-
-    if (sitemapLocs.length > 0) {
-      const { html: childXml } = await fetchHtml(sitemapLocs[0]);
-      if (childXml) {
-        const $child = cheerio.load(childXml, { xmlMode: true });
-        $child("url > loc").each((_, el) => {
-          const loc = $child(el).text().trim();
-          if (loc && getDomain(loc) === domain) {
-            sitemapUrls.add(loc);
-            sitemapUrlCount++;
-          }
-        });
-      }
-    } else {
-      $("url > loc").each((_, el) => {
-        const loc = $(el).text().trim();
-        if (loc && getDomain(loc) === domain) {
-          sitemapUrls.add(loc);
-          sitemapUrlCount++;
-        }
-      });
-    }
+  // ── Step 2: Sitemap pages fill the gaps after nav ──────────────────────
+  // Reads every child sitemap (robots.txt, sitemap_index.xml, sitemap.xml).
+  const sitemap = await collectSitemapUrls(domain, fetchOkText);
+  for (const loc of sitemap.urls) {
+    const resolved = normalizeUrl(loc, baseUrl);
+    if (resolved) sitemapUrls.add(resolved);
   }
 
   // ── Combine: nav links first (primary), then sitemap fills gaps ────────
@@ -267,26 +375,20 @@ async function discoverPages(domain) {
   return {
     urls: combined,
     navUrlCount: navUrls.size,
-    sitemapAccessible,
-    sitemapUrlCount,
+    sitemapAccessible: sitemap.source !== null,
+    sitemapUrlCount: sitemap.urls.length,
+    sitemaps: sitemap.sitemaps,
+    sitemapSource: sitemap.source,
   };
 }
 
 // ── Extract site-wide data ───────────────────────────────────────────────────
 
-async function extractSiteWide(domain, homepageData) {
+async function extractSiteWide(domain, homepageData, discovery) {
   const baseUrl = `https://${domain}`;
 
   // Robots.txt
-  const { html: robotsTxt } = await fetchHtml(`${baseUrl}/robots.txt`);
-
-  // Sitemap info (already partially known from discovery)
-  const { html: sitemapXml } = await fetchHtml(`${baseUrl}/sitemap.xml`);
-  let sitemapUrlCount = 0;
-  if (sitemapXml) {
-    const $ = cheerio.load(sitemapXml, { xmlMode: true });
-    sitemapUrlCount = $("url > loc").length || $("sitemap > loc").length;
-  }
+  const robotsTxt = await fetchOkText(`${baseUrl}/robots.txt`);
 
   // Parse nav/footer/social from homepage crawl data
   const $ = homepageData?._$ || null;
@@ -355,8 +457,10 @@ async function extractSiteWide(domain, homepageData) {
   return {
     robots_txt_accessible: !!robotsTxt,
     robots_txt_content: robotsTxt?.substring(0, 1000) || "",
-    sitemap_accessible: !!sitemapXml,
-    sitemap_url_count: sitemapUrlCount,
+    // Sitemap facts come from discovery, which reads every child sitemap.
+    sitemap_accessible: discovery.sitemapAccessible,
+    sitemap_url_count: discovery.sitemapUrlCount,
+    sitemap_source: discovery.sitemapSource,
     ssl_valid: true, // We always fetch via HTTPS
     navigation_links: navigationLinks,
     footer_links: footerLinks,
@@ -413,8 +517,24 @@ export function prioritizePages(urls, domain, maxPages) {
 
 // ── Main crawl function ──────────────────────────────────────────────────────
 
-export async function crawlSite(domain, auditType = "full", customUrls = null) {
+function isHomepageUrl(url) {
+  try {
+    return new URL(url).pathname.replace(/\/+$/, "") === "";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {string} domain
+ * @param {'full'|'quick'} auditType
+ * @param {string[]|null} customUrls  explicit page list (overrides discovery)
+ * @param {{ seedUrls?: string[] }} options  seedUrls (e.g. top Search Console
+ *   pages) are crawled first, deduped; nav/sitemap priority fills up to the cap.
+ */
+export async function crawlSite(domain, auditType = "full", customUrls = null, { seedUrls } = {}) {
   const maxPages = auditType === "quick" ? MAX_PAGES_QUICK : MAX_PAGES_FULL;
+  const baseUrl = `https://${domain}`;
 
   // Discover pages
   const discovery = await discoverPages(domain);
@@ -427,7 +547,21 @@ export async function crawlSite(domain, auditType = "full", customUrls = null) {
       page_type: "custom",
     }));
   } else {
-    pagesToCrawl = prioritizePages(discovery.urls, domain, maxPages);
+    const seeds = [];
+    const seen = new Set();
+    for (const raw of Array.isArray(seedUrls) ? seedUrls : []) {
+      const url = normalizeUrl(raw, baseUrl);
+      if (!url || seen.has(url) || getDomain(url) !== getDomain(baseUrl)) continue;
+      seen.add(url);
+      seeds.push({ url, page_type: isHomepageUrl(url) ? "homepage" : "search_console" });
+      if (seeds.length >= maxPages) break;
+    }
+    const rest = prioritizePages(
+      discovery.urls.filter((u) => !seen.has(u)),
+      domain,
+      maxPages - seeds.length
+    );
+    pagesToCrawl = [...seeds, ...rest];
     if (discovery.urls.length > maxPages) {
       console.warn(
         `[seoCrawler] Discovered ${discovery.urls.length} pages for ${domain} — truncated to ${maxPages}`
@@ -446,7 +580,7 @@ export async function crawlSite(domain, auditType = "full", customUrls = null) {
 
     if (i > 0) await sleep(DELAY_BETWEEN_PAGES_MS);
 
-    const { html, status, finalUrl, error } = await fetchHtml(url);
+    const { html, status, finalUrl, error, responseMs } = await fetchHtml(url);
 
     if (error || !html) {
       crawlErrors.push({ url, error: error || "Empty response", status });
@@ -460,12 +594,15 @@ export async function crawlSite(domain, auditType = "full", customUrls = null) {
 
     try {
       const parsed = parsePage(html, resolvedUrl);
-      parsed.http_status = status;
+      parsed.http_status = status; // v1 name
+      parsed.status_code = status;
+      parsed.final_url = finalUrl;
+      parsed.response_ms = responseMs;
       parsed.page_type = page_type;
       pagesCrawled.push(parsed);
 
       // Keep homepage cheerio instance for site-wide extraction
-      if (page_type === "homepage" || i === 0) {
+      if (page_type === "homepage" || (i === 0 && !homepageCheerio)) {
         homepageCheerio = { _$: cheerio.load(html) };
       }
     } catch (err) {
@@ -474,7 +611,7 @@ export async function crawlSite(domain, auditType = "full", customUrls = null) {
   }
 
   // Extract site-wide data
-  const siteWide = await extractSiteWide(domain, homepageCheerio);
+  const siteWide = await extractSiteWide(domain, homepageCheerio, discovery);
 
   return {
     domain,
@@ -486,5 +623,7 @@ export async function crawlSite(domain, auditType = "full", customUrls = null) {
     discovered_pages: discovery.urls.slice(0, 50),
     sitemap_accessible: discovery.sitemapAccessible,
     sitemap_url_count: discovery.sitemapUrlCount,
+    sitemaps: discovery.sitemaps,
+    sitemap_source: discovery.sitemapSource,
   };
 }
