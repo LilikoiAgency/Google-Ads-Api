@@ -730,7 +730,7 @@ export default function SEOAuditPage() {
               {/* Audit type toggle */}
               <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
                 {[
-                  { value: "full", label: "Full Audit", desc: "Up to 10 pages", icon: "9+" },
+                  { value: "full", label: "Full Audit", desc: "Up to 50 pages", icon: "50" },
                   { value: "quick", label: "Quick Audit", desc: "Up to 5 pages", icon: "5" },
                 ].map((opt) => {
                   const active = auditType === opt.value;
