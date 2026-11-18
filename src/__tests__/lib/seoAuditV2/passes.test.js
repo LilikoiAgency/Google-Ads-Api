@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  PASSES, PASS_SYSTEM, SYNTH_SYSTEM, buildPassInput, buildSharedContext, passSchema, synthSchema,
+  PASSES, PASS_SYSTEM, SYNTH_SYSTEM, CONTENT_CHUNK_SIZE, buildPassInput, buildSharedContext, passSchema, synthSchema,
+  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves,
 } from '@/lib/seoAuditV2/passes';
 
 const page = (i, extra = {}) => ({
@@ -67,12 +68,14 @@ describe('buildPassInput', () => {
     expect(input.pagespeed).toEqual(fullData.pagespeed);
   });
 
-  it('content chunks 20 pages into 3 chunks of at most 8', () => {
-    const chunks = buildPassInput('content', { crawl: crawl(20), data: fullData });
+  it('content chunks 10 pages into 3 chunks of at most 4', () => {
+    expect(CONTENT_CHUNK_SIZE).toBe(4);
+    const chunks = buildPassInput('content', { crawl: crawl(10), data: fullData });
     expect(Array.isArray(chunks)).toBe(true);
     expect(chunks).toHaveLength(3);
-    expect(chunks.map((c) => c.pages.length)).toEqual([8, 8, 4]);
-    for (const c of chunks) expect(c.pages.length).toBeLessThanOrEqual(8);
+    expect(chunks.map((c) => c.pages.length)).toEqual([4, 4, 2]);
+    expect(chunks.map((c) => [c.chunk, c.of])).toEqual([[1, 3], [2, 3], [3, 3]]);
+    expect(chunks[1].note).toMatch(/^This is chunk 2 of 3; other chunks cover other pages\./);
     const p = chunks[0].pages[0];
     expect(p).toMatchObject({ title_tag: 'Title 0', meta_description: 'Meta 0', h1_tags: ['H1 0'] });
     expect(p.content_text).toContain('Body text 0');
@@ -122,7 +125,30 @@ describe('buildPassInput', () => {
     const c = crawl(1);
     c.pages_crawled[0].schema_markup = [{ raw_json: big }];
     const local = buildPassInput('local', { crawl: c, data: emptyData });
-    expect(JSON.stringify(local.pages[0]).length).toBeLessThan(6000);
+    expect(JSON.stringify(local).length).toBeLessThan(6000);
+    expect(local.schema_blocks[0].schema_excerpt).toMatch(/\[truncated\]$/);
+  });
+
+  it('local sends each identical schema block once with the pages carrying it', () => {
+    const c = crawl(3);
+    const extra = { '@type': 'FAQPage', mainEntity: [] };
+    c.pages_crawled[2].schema_markup = [...c.pages_crawled[2].schema_markup, { raw_json: extra }];
+    const local = buildPassInput('local', { crawl: c, data: emptyData });
+    expect(local.schema_blocks).toEqual([
+      { pages: ['https://x.com/p0', 'https://x.com/p1', 'https://x.com/p2'], schema: { '@type': 'LocalBusiness', name: 'X' } },
+      { pages: ['https://x.com/p2'], schema: extra },
+    ]);
+    for (const p of local.pages) {
+      expect(p).not.toHaveProperty('schema');
+      expect(p).not.toHaveProperty('schema_excerpt');
+    }
+    expect(local.pages[2].schema_types).toEqual(['LocalBusiness', 'FAQPage']);
+  });
+
+  it('local omits schema_blocks when no page has schema', () => {
+    const c = crawl(2);
+    for (const p of c.pages_crawled) p.schema_markup = [];
+    expect(buildPassInput('local', { crawl: c, data: emptyData })).not.toHaveProperty('schema_blocks');
   });
 
   it('throws on an unknown pass', () => {
@@ -131,14 +157,41 @@ describe('buildPassInput', () => {
 });
 
 describe('prompts', () => {
-  it('every PASS_SYSTEM mentions evidence, data gaps and bans generic tasks', () => {
+  const ctx = buildSharedContext({ domain: 'x.com', profile: 'full', homepage: null, gaps: [] });
+
+  it('the shared (cached) block carries the rules: evidence, data gaps, no generic tasks', () => {
+    expect(ctx).toMatch(/evidence/i);
+    expect(ctx).toMatch(/data gaps/i);
+    expect(ctx).toMatch(/generic/i);
+    // Static rules come before anything audit-specific so the cached prefix is shared.
+    expect(ctx.indexOf('Rules')).toBeLessThan(ctx.indexOf('Domain: x.com'));
     for (const key of PASSES) {
-      const s = PASS_SYSTEM[key];
-      expect(s).toMatch(/evidence/i);
-      expect(s).toMatch(/data gaps/i);
-      expect(s).toMatch(/generic/i);
+      expect(PASS_SYSTEM[key]).toMatch(/evidence/i);
+      expect(PASS_SYSTEM[key]).toContain("Only write tasks in this pass's area; leave others to their own pass.");
     }
-    expect(SYNTH_SYSTEM).toMatch(/evidence/i);
+  });
+
+  it('no prompt hints at automation and the ambiguous tools line is gone', () => {
+    const line = 'Never say or imply the analysis was automated or AI-generated, and never name any AI model or vendor. Naming data sources (Search Console, Google Analytics, PageSpeed Insights) is fine.';
+    expect(ctx).toContain(line);
+    for (const s of [ctx, ...Object.values(PASS_SYSTEM), SYNTH_SYSTEM]) expect(s).not.toMatch(/tools behind it/i);
+  });
+
+  it('synthesis prompt bans new figures and jargon in client text', () => {
+    expect(SYNTH_SYSTEM).toContain('Use only numbers that appear in the input exactly as written. Do not add, average, or convert them into new figures (no new percentages or totals).');
+    expect(SYNTH_SYSTEM).toContain('avoid terms like meta description, canonical, schema, CTR, SERP, indexing, LCP');
+    expect(SYNTH_SYSTEM).toContain('Never include [confirm: …] placeholders in client text');
+    expect(SYNTH_SYSTEM).toContain('drop_task_ids');
+  });
+
+  it('content prompt scopes chunks and keeps fixes out of tasks', () => {
+    expect(PASS_SYSTEM.content).toContain('other chunks cover other pages');
+    expect(PASS_SYSTEM.content).toContain("copied exactly from the page's queries or the site-level lists");
+    expect(PASS_SYSTEM.content).toMatch(/must not repeat a fix verbatim/i);
+  });
+
+  it('conversion prompt makes lead tracking the first task when no key events', () => {
+    expect(PASS_SYSTEM.conversion).toContain('If key_events_configured is false (no key events were recorded in either period), the first task is to check whether lead tracking is set up and, if missing, set it up');
   });
 
   it('content prompt requires exact title and meta text and named sections', () => {
@@ -195,10 +248,97 @@ describe('schemas', () => {
     expect(passSchema('technical').properties).not.toHaveProperty('pages');
   });
 
-  it('synth schema matches the spec output', () => {
+  it('synth schema returns decisions, not rewritten tasks', () => {
     checkSchema(synthSchema);
-    expect(Object.keys(synthSchema.properties).sort()).toEqual(['action_plan', 'client_summary', 'data_gaps', 'scores', 'top_moves']);
+    expect(Object.keys(synthSchema.properties).sort()).toEqual(['client_summary', 'data_gaps', 'drop_task_ids', 'scores', 'top_moves']);
+    expect(Object.keys(synthSchema.properties.top_moves.items.properties).sort()).toEqual(['headline', 'task_id']);
+    expect(synthSchema.properties.drop_task_ids).toEqual({ type: 'array', items: { type: 'string' } });
     expect(Object.keys(synthSchema.properties.scores.properties).sort()).toEqual(['aeo', 'geo', 'seo']);
     expect(synthSchema.properties.scores.properties.seo.properties.score.enum).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+});
+
+// ── task ids, synthesis input, action plan ───────────────────────────────────
+
+const task = (id, over = {}) => ({
+  id, title: `Task ${id}`, category: 'content', page: `/${id.toLowerCase()}`, evidence: [`ev ${id}`, 'ev 2'],
+  change: `change ${id}`, why: 'why', impact: 3, effort: 2, confidence: 'high', ...over,
+});
+
+describe('normalizeTaskIds', () => {
+  it('prefixes ids by pass, and by chunk for content', () => {
+    const ts = [task('X'), task('Y')];
+    expect(normalizeTaskIds('technical', null, ts).map((t) => t.id)).toEqual(['TECH-1', 'TECH-2']);
+    expect(normalizeTaskIds('content', 2, ts).map((t) => t.id)).toEqual(['CONT-2-1', 'CONT-2-2']);
+    expect(normalizeTaskIds('local', null, ts).map((t) => t.id)).toEqual(['LOCAL-1', 'LOCAL-2']);
+    expect(normalizeTaskIds('conversion', undefined, ts).map((t) => t.id)).toEqual(['CONV-1', 'CONV-2']);
+    expect(ts[0].id).toBe('X');
+  });
+
+  it('handles a missing task list and unknown passes', () => {
+    expect(normalizeTaskIds('technical', null, undefined)).toEqual([]);
+    expect(() => normalizeTaskIds('nope', null, [])).toThrow();
+  });
+});
+
+describe('buildSynthInput', () => {
+  it('sends every pass task compactly plus findings', () => {
+    const outputs = {
+      technical: { findings: [{ title: 'F', detail: 'D', evidence: ['e'] }], tasks: [task('TECH-1')] },
+      content: [{ findings: [], tasks: [task('CONT-1-1')], pages: [{ page: '/', fixes: [] }] }, { findings: [], tasks: [task('CONT-2-1')] }],
+      local: null,
+    };
+    const input = buildSynthInput(outputs, { passes_not_completed: ['local'] });
+    expect(input.passes_not_completed).toEqual(['local']);
+    expect(input.findings).toEqual([{ pass: 'technical', title: 'F', detail: 'D', evidence: ['e'] }]);
+    expect(input.tasks.map((t) => t.id)).toEqual(['TECH-1', 'CONT-1-1', 'CONT-2-1']);
+    expect(input.tasks[0]).toEqual({
+      id: 'TECH-1', title: 'Task TECH-1', page: '/tech-1', category: 'content', impact: 3, effort: 2, confidence: 'high', evidence: 'ev TECH-1',
+    });
+  });
+});
+
+describe('buildActionPlan', () => {
+  it('merges the pass tasks that the synthesis did not drop', () => {
+    const passTasks = [task('TECH-1', { impact: 1 }), task('CONT-1-1', { impact: 5 }), task('LOCAL-1')];
+    const plan = buildActionPlan(passTasks, { drop_task_ids: ['LOCAL-1'] });
+    expect(plan.map((t) => t.title)).toEqual(['Task CONT-1-1', 'Task TECH-1']);
+    expect(plan.map((t) => t.id)).toEqual(['T1', 'T2']);
+    expect(plan[0].source_ids).toEqual(['CONT-1-1']);
+  });
+
+  it('records every pass id merged into one task', () => {
+    const a = task('CONT-1-1', { title: 'Rewrite the title', page: '/' });
+    const b = task('LOCAL-1', { title: 'Rewrite the title!', page: '/', impact: 5 });
+    const plan = buildActionPlan([[a], [b]], {});
+    expect(plan).toHaveLength(1);
+    expect([...plan[0].source_ids].sort()).toEqual(['CONT-1-1', 'LOCAL-1']);
+  });
+
+  it('keeps everything when synthesis output is missing', () => {
+    expect(buildActionPlan([task('A'), task('B')], null)).toHaveLength(2);
+  });
+});
+
+describe('resolveTopMoves', () => {
+  const plan = buildActionPlan([task('A', { impact: 5 }), task('B', { impact: 4 }), task('C', { impact: 3 }), task('D', { impact: 2 })], {});
+
+  it('maps pass task ids to merged plan tasks with the headline', () => {
+    const moves = resolveTopMoves(plan, { top_moves: [{ task_id: 'C', headline: 'h1' }, { task_id: 'A', headline: 'h2' }, { task_id: 'D', headline: 'h3' }] });
+    expect(moves.map((mv) => [mv.headline, mv.task.source_ids[0]])).toEqual([['h1', 'C'], ['h2', 'A'], ['h3', 'D']]);
+  });
+
+  it('falls back to the plan order for missing or dropped ids and caps at 3', () => {
+    const moves = resolveTopMoves(plan, { top_moves: [{ task_id: 'ZZZ', headline: 'x' }, { task_id: 'C', headline: 'hc' }, { task_id: 'C', headline: 'dup' }] });
+    expect(moves.map((mv) => mv.task.source_ids[0])).toEqual(['C', 'A', 'B']);
+    expect(moves[0].headline).toBe('hc');
+    expect(moves[1].headline).toBe(plan[0].title);
+    expect(resolveTopMoves(plan, { top_moves: ['A', 'B', 'C', 'D'].map((id) => ({ task_id: id, headline: id })) })).toHaveLength(3);
+    expect(resolveTopMoves(plan, null).map((mv) => mv.task.id)).toEqual(['T1', 'T2', 'T3']);
+    expect(resolveTopMoves([], { top_moves: [{ task_id: 'A', headline: 'a' }] })).toEqual([]);
+  });
+
+  it('can also resolve a merged plan id', () => {
+    expect(resolveTopMoves(plan, { top_moves: [{ task_id: 'T4', headline: 'h' }] })[0].task.id).toBe('T4');
   });
 });

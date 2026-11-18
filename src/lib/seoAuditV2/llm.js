@@ -10,8 +10,8 @@ export const AUDIT_MODEL = 'claude-opus-5-5';
 export const MAX_TOKENS = 32000;
 export const CALL_TIMEOUT_MS = 240000;
 
-// USD per million tokens for AUDIT_MODEL. Cache writes bill at 1.25x input, reads at 0.1x.
-const RATES = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.4 };
+// USD per million tokens for AUDIT_MODEL. Cache writes bill at 1.25x input.
+const RATES = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 };
 
 // Server-side refusal fallback: on a policy decline the same request is re-run
 // on a fallback model inside the same call.
@@ -60,6 +60,9 @@ const isAbort = (err, signal) => signal?.aborted
   || /aborted|timed? ?out/i.test(err?.message || '');
 
 export async function runStructured({ system, sharedContext, input, schema, effort = 'high', label, email } = {}) {
+  if (typeof sharedContext !== 'string' || !sharedContext.trim()) {
+    throw new Error('runStructured: sharedContext is required (build it with buildSharedContext)');
+  }
   const apiKey = await resolveApiKey();
   if (!apiKey) throw new PassError('api', 'API key not configured');
   const client = new Anthropic({ apiKey });
@@ -67,10 +70,12 @@ export async function runStructured({ system, sharedContext, input, schema, effo
   const body = {
     model: AUDIT_MODEL,
     max_tokens: MAX_TOKENS,
-    // Shared context first so the cached prefix is the same for every pass and the synthesis.
+    // Shared context (rules + audit context) first so the cached prefix is the same for
+    // every pass and the synthesis; the second breakpoint also caches the pass prompt,
+    // which repeats across content chunks.
     system: [
       { type: 'text', text: sharedContext, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: system },
+      { type: 'text', text: system, cache_control: { type: 'ephemeral' } },
     ],
     messages: [{ role: 'user', content: typeof input === 'string' ? input : JSON.stringify(input) }],
     output_config: { effort, format: { type: 'json_schema', schema } },

@@ -64,10 +64,23 @@ describe('runStructured', () => {
     expect(body).not.toHaveProperty('tool_choice');
     expect(body.system).toEqual([
       { type: 'text', text: 'CTX', cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: 'SYS' },
+      { type: 'text', text: 'SYS', cache_control: { type: 'ephemeral' } },
     ]);
     expect(body.messages).toEqual([{ role: 'user', content: '{"a":1}' }]);
     expect(lastOpts().signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('throws a clear error on an empty sharedContext before calling the API', async () => {
+    await expect(runStructured({ ...args, sharedContext: '' })).rejects.toThrow(/sharedContext/);
+    await expect(runStructured({ ...args, sharedContext: '   ' })).rejects.toThrow(/sharedContext/);
+    expect(m.betaStream).not.toHaveBeenCalled();
+    expect(m.stream).not.toHaveBeenCalled();
+  });
+
+  it('prices cache reads at 0.2 per million tokens', async () => {
+    m.finalMessage.mockResolvedValue(msg({ usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 1_000_000, cache_creation_input_tokens: 0 } }));
+    await runStructured(args);
+    expect(m.logApiUsage.mock.calls.at(-1)[0].estimatedCostUsd).toBeCloseTo(0.2);
   });
 
   it('stringifies an object input', async () => {

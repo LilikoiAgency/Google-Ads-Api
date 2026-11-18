@@ -37,11 +37,16 @@ function titleKey(title) {
     .join(' ');
 }
 
+// Tasks with the same key are merged into one by mergeTasks.
+export function mergeKey(task) {
+  return `${task.page}|${titleKey(task.title)}`;
+}
+
 export function mergeTasks(taskLists) {
   const byKey = new Map();
   for (const task of (taskLists || []).flat()) {
     if (!task) continue;
-    const key = `${task.page}|${titleKey(task.title)}`;
+    const key = mergeKey(task);
     const prev = byKey.get(key);
     if (!prev) {
       byKey.set(key, { ...task, evidence: [...new Set(task.evidence || [])] });
