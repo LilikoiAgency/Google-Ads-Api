@@ -7,10 +7,10 @@ import { crawlSite } from '../seoCrawler';
 import { seedPages, gatherAll, describeGaps, AUDIT_PROFILES } from './gather';
 import {
   PASSES, PASS_SYSTEM, SYNTH_SYSTEM, buildPassInput, buildSharedContext, passSchema, synthSchema,
-  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves,
+  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves, resolveContentChunk,
 } from './passes';
 import { runStructured } from './llm';
-import { isGenericTask } from './tasks';
+import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
 
 const SOURCES = {
@@ -47,10 +47,13 @@ async function runCrawl(job) {
     return { ok: false, error: `No pages could be crawled on ${job.domain}` };
   }
   const res = { ok: true, patch: { 'data.crawl': crawl } };
+  const gaps = [];
   if (crawl.crawl_truncated) {
     const n = crawl.pages_crawled.length;
-    res.gaps = [`Crawl stopped early after ${n} page${n === 1 ? '' : 's'} because the site responded slowly.`];
+    gaps.push(`Crawl stopped early after ${n} page${n === 1 ? '' : 's'} because the site responded slowly.`);
   }
+  if (crawl.sitemap_partial) gaps.push('Reading the sitemaps stopped early because they were slow to load, so the sitemap check is incomplete.');
+  if (gaps.length) res.gaps = gaps;
   return res;
 }
 
@@ -77,26 +80,51 @@ async function runPass(job, key) {
   });
 
   let out;
+  const gaps = [];
   if (input == null) {
     // Source the pass depends on (GA4 for conversion) is unavailable; the gap is already listed.
     out = { skipped: true, findings: [], tasks: [] };
   } else if (pass === 'content') {
+    // A chunk that errors, leaves a page without a fix list, or returns a task
+    // without a change or reason counts as failed. The pass succeeds when at
+    // least one chunk does; pages from failed chunks become a job gap.
     const settled = await Promise.allSettled(input.map((chunk) => call(chunk)));
-    const failed = settled.find((s) => s.status === 'rejected');
-    if (failed) return { ok: false, error: errText(failed.reason) };
     out = { findings: [], tasks: [], pages: [] };
+    const missed = [];
+    const errors = []; // call errors first: they carry a PassError code
+    let okCount = 0;
     settled.forEach((s, i) => {
-      const o = s.value.output || {};
-      out.findings.push(...(o.findings || []));
-      out.tasks.push(...normalizeTaskIds(pass, input[i].chunk ?? i + 1, o.tasks));
-      out.pages.push(...(o.pages || []));
+      const chunkPages = (input[i].pages || []).map((p) => pathKey(p.url));
+      if (s.status === 'rejected') {
+        errors.unshift(errText(s.reason));
+        missed.push(...chunkPages);
+        return;
+      }
+      const r = resolveContentChunk(input[i], s.value?.output);
+      if (!r.ok) {
+        errors.push(`Content chunk ${input[i].chunk ?? i + 1} was incomplete${r.uncovered.length ? ` (no fixes for ${r.uncovered.join(', ')})` : ''}`);
+        missed.push(...chunkPages);
+        return;
+      }
+      okCount += 1;
+      out.findings.push(...r.findings);
+      out.tasks.push(...normalizeTaskIds(pass, input[i].chunk ?? i + 1, r.tasks));
+      out.pages.push(...r.pages);
     });
+    if (input.length && !okCount) return { ok: false, error: errors[0] };
+    if (missed.length) {
+      gaps.push(`${PASS_AREA.content} analysis didn't cover ${[...new Set(missed)].join(', ')} — rerun to include them`);
+    }
   } else {
     const { output } = await call(input);
     out = { ...output, tasks: normalizeTaskIds(pass, null, output?.tasks) };
   }
-  out.tasks = (out.tasks || []).filter((t) => !isGenericTask(t));
-  return { ok: true, patch: { [`passes.${pass}`]: out } };
+  out.tasks = (out.tasks || [])
+    .map((t) => ({ ...t, page: pathKey(t.page) }))
+    .filter((t) => !isGenericTask(t) && !isEmptyTask(t));
+  const res = { ok: true, patch: { [`passes.${pass}`]: out } };
+  if (gaps.length) res.gaps = gaps;
+  return res;
 }
 
 function dataSources(job) {
@@ -110,21 +138,11 @@ function dataSources(job) {
   return out;
 }
 
-// "https://acme.com/a/?x=1", "/a" and "a" all key to "/a"; the home page keys to "/".
-function pathKey(page) {
-  let path;
-  try {
-    path = new URL(String(page), 'https://placeholder.invalid').pathname;
-  } catch {
-    path = String(page).split(/[?#]/)[0];
-  }
-  return path.length > 1 ? path.replace(/\/+$/, '') : '/';
-}
-
 const byPath = (list) => new Map((list || []).filter((x) => x?.url || x?.page).map((x) => [pathKey(x.url || x.page), x]));
 
 // Content-pass pages plus any page that was inspected or measured, each with its
 // index status, speed and top Search Console queries (null / [] when unavailable).
+// Every page is keyed and labelled by its path ("/services/turf"), as tasks are.
 function buildPages(job) {
   const sources = job.data?.sources || {};
   const inspection = byPath((sources.inspection || []).filter((r) => !r.error));
@@ -134,10 +152,10 @@ function buildPages(job) {
   const entries = new Map();
   for (const p of job.passes?.content?.pages || []) {
     const k = pathKey(p.page);
-    if (!entries.has(k)) entries.set(k, { ...p, fixes: p.fixes || [] });
+    if (!entries.has(k)) entries.set(k, { ...p, page: k, fixes: p.fixes || [] });
   }
-  for (const [k, r] of [...inspection, ...speed]) {
-    if (!entries.has(k)) entries.set(k, { page: r.url, fixes: [] });
+  for (const k of [...inspection.keys(), ...speed.keys()]) {
+    if (!entries.has(k)) entries.set(k, { page: k, fixes: [] });
   }
 
   return [...entries.entries()].map(([k, p]) => {
@@ -174,11 +192,8 @@ async function runSynthesize(job) {
   });
 
   const plan = buildActionPlan(done.map((p) => job.passes[p].tasks || []), synth);
-  const dataGaps = [...new Set([
-    ...describeGaps(job.data?.gaps),
-    ...(job.gaps || []),
-    ...(synth.data_gaps || []),
-  ])];
+  // One deterministic list: source gaps plus job gaps (incomplete passes, crawl cut short).
+  const dataGaps = [...new Set([...describeGaps(job.data?.gaps), ...(job.gaps || [])])];
   const result = {
     version: 2,
     domain: job.domain,

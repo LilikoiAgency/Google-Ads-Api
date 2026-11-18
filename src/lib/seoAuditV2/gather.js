@@ -51,16 +51,21 @@ const pageQueryRows = (auth, site, range) =>
     .query({ siteUrl: site, requestBody: { ...range, dimensions: ['page', 'query'], rowLimit: 5000 } })
     .then((r) => r.data.rows || []);
 
-// Top Search Console pages (query-free URLs) to seed the crawl, or [].
+export const SEED_TIMEOUT_MS = 30000;
+
+// Top Search Console pages (query-free URLs) to seed the crawl, or [] (also
+// when Search Console takes longer than SEED_TIMEOUT_MS).
 export async function seedPages(domain, profile = 'quick') {
   try {
-    const { status, site, auth } = await findGscSite(domain);
-    if (status !== 'ok') return [];
-    const rows = await pageQueryRows(auth, site, auditRanges(today()).current);
-    const n = profile === 'full' ? 25 : 5;
-    return joinPagesToQueries(rows, { topPages: n, perPage: 1 }).map((p) => p.page);
+    return await withTimeout((async () => {
+      const { status, site, auth } = await findGscSite(domain);
+      if (status !== 'ok') return [];
+      const rows = await pageQueryRows(auth, site, auditRanges(today()).current);
+      const n = profile === 'full' ? 25 : 5;
+      return joinPagesToQueries(rows, { topPages: n, perPage: 1 }).map((p) => p.page);
+    })(), SEED_TIMEOUT_MS);
   } catch (err) {
-    console.warn('[seo-audit-v2] seedPages failed:', errText(err));
+    console.warn('[seo-audit-v2] seedPages failed:', err === TIMEOUT ? 'timed out' : errText(err));
     return [];
   }
 }
@@ -178,19 +183,20 @@ export async function gatherAll({ domain, crawl, profile = 'quick' } = {}) {
 
 const SOURCE_LABEL = {
   search_console: 'Search Console data',
-  url_inspection: 'Index status (URL Inspection)',
-  sitemaps: 'Google sitemap report (Search Console)',
-  ga4: 'Google Analytics (GA4) data',
+  url_inspection: "Google's index status for each page",
+  sitemaps: "Google's sitemap report",
+  ga4: 'Google Analytics data',
   pagespeed: 'Page speed',
+  gather: 'Search and analytics data',
 };
 
 const REASON = {
   not_connected: 'this source is not connected.',
-  no_site: 'this domain is not a Search Console property we can access.',
-  no_property: 'no GA4 property matches this domain.',
+  no_site: 'this website is not in a Search Console account we can access.',
+  no_property: 'no Google Analytics property was found for this website.',
   no_data: 'no data was returned for the period.',
-  permission: 'our Search Console login lacks permission for this site.',
-  timeout: 'the request timed out.',
+  permission: "our Search Console access doesn't cover this website.",
+  timeout: 'the request took too long.',
 };
 
 export function describeGaps(gaps) {
@@ -201,13 +207,15 @@ export function describeGaps(gaps) {
         return 'Page speed is unavailable because the free PageSpeed quota ran out; adding a PAGESPEED_API_KEY fixes it.';
       }
     }
+    if (source === 'ga4' && status === 'no_property') return 'No Google Analytics property was found for this website.';
     const label = SOURCE_LABEL[source] || source;
     let reason = REASON[status];
     if (source === 'ga4' && status === 'not_connected') reason = 'Google Analytics is not connected.';
     if (source === 'search_console' && status === 'not_connected') reason = 'Search Console is not connected.';
     if (source === 'url_inspection' && status === 'no_data') reason = 'there were no pages to inspect.';
     if (source === 'sitemaps' && status === 'no_data') reason = 'no sitemaps are submitted in Search Console.';
-    if (!reason) reason = `an error occurred${detail ? ` (${detail})` : ''}.`;
+    // The raw error stays on the job (data.gaps); the sentence stays plain.
+    if (!reason) reason = 'it could not be loaded.';
     return `${label} unavailable: ${reason}`;
   });
 }

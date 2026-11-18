@@ -6,6 +6,7 @@ import {
   summarizeImages,
   parsePage,
   crawlSite,
+  SITEMAP_BUDGET_MS,
 } from '@/lib/seoCrawler.js';
 
 describe('prioritizePages', () => {
@@ -237,5 +238,47 @@ describe('crawlSite', () => {
     expect(r.crawl_truncated).toBe(true);
     const pageFetches = fetchMock.mock.calls.map((c) => c[0]).filter((u) => /example\.com\/[abc]$/.test(u));
     expect(pageFetches).toEqual([]);
+  });
+});
+
+describe('sitemap time budget and compressed sitemaps', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('stops reading child sitemaps once the deadline has passed and marks the result partial', async () => {
+    const children = Array.from({ length: 5 }, (_, i) => `https://example.com/s-${i}.xml`);
+    const map = { 'https://example.com/sitemap_index.xml': index(children) };
+    children.forEach((c, i) => { map[c] = urlset(pages(`c${i}`, 2)); });
+    let now = 1000;
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const fetchText = async (url) => {
+        if (url.includes('/s-1.xml')) now = 5000; // time runs out while reading the second child
+        return url in map ? map[url] : null;
+      };
+      const r = await collectSitemapUrls('example.com', fetchText, { deadline: 4000 });
+      expect(r.partial).toBe(true);
+      expect(r.sitemaps.map((s) => s.url)).toEqual(['https://example.com/s-0.xml', 'https://example.com/s-1.xml']);
+    } finally {
+      spy.mockRestore();
+    }
+    const full = await collectSitemapUrls('example.com', stub(map));
+    expect(full.partial).toBeUndefined();
+    expect(SITEMAP_BUDGET_MS).toBe(60_000);
+  });
+
+  it('a root .gz sitemap gives an unknown (null) count with a note, not 0', async () => {
+    const bodies = {
+      'https://example.com/': '<html><head><title>home</title></head><body>home</body></html>',
+      'https://example.com/robots.txt': 'Sitemap: https://example.com/sitemap.xml.gz',
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const body = bodies[url];
+      return { status: body ? 200 : 404, url, text: async () => body || 'not found' };
+    }));
+    const r = await crawlSite('example.com', 'quick');
+    expect(r.sitemaps).toEqual([{ url: 'https://example.com/sitemap.xml.gz', count: null }]);
+    expect(r.sitemap_url_count).toBeNull();
+    expect(r.sitemap_count_note).toBe('count unknown (compressed sitemaps not read)');
+    expect(r.site_wide.sitemap_url_count).toBeNull();
   });
 });

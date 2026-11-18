@@ -37,9 +37,23 @@ function titleKey(title) {
     .join(' ');
 }
 
+// "https://acme.com/a/?x=1", "/a/" and "a" all key to "/a"; the home page keys
+// to "/"; "site-wide" and an empty page stay as they are.
+export function pathKey(page) {
+  const s = String(page ?? '').trim();
+  if (!s || s === 'site-wide') return s;
+  let path;
+  try {
+    path = new URL(s, 'https://placeholder.invalid').pathname;
+  } catch {
+    path = s.split(/[?#]/)[0];
+  }
+  return path.length > 1 ? path.replace(/\/+$/, '') : '/';
+}
+
 // Tasks with the same key are merged into one by mergeTasks.
 export function mergeKey(task) {
-  return `${task.page}|${titleKey(task.title)}`;
+  return `${pathKey(task.page)}|${titleKey(task.title)}`;
 }
 
 export function mergeTasks(taskLists) {
@@ -74,16 +88,24 @@ export function isGenericTask(task) {
   return false;
 }
 
+// A task with no change or no reason can't be acted on.
+export function isEmptyTask(task) {
+  return !String(task?.change ?? '').trim() || !String(task?.why ?? '').trim();
+}
+
+// A cell starting with = + - @ (or tab / CR) would run as a formula in a
+// spreadsheet; a leading apostrophe keeps it plain text.
 function csvCell(value) {
-  const s = String(value ?? '');
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function tasksToCsv(tasks) {
-  const header = ['ID', 'Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Evidence'];
+  const header = ['ID', 'Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Why', 'Evidence'];
   const rows = (tasks || []).map((t, i) => [
     t.id, i + 1, t.title, t.page, t.category, t.impact, t.effort, t.confidence,
-    t.change, (t.evidence || []).join(' | '),
+    t.change, t.why, (t.evidence || []).join(' | '),
   ]);
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
 }

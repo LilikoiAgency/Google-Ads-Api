@@ -3,7 +3,7 @@
 // Pure: no server imports. A source that is unavailable is left out of the
 // input entirely, never sent as an empty list.
 
-import { TASK_JSON_SCHEMA, mergeKey, mergeTasks } from './tasks';
+import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask } from './tasks';
 
 export const PASSES = ['technical', 'content', 'local', 'conversion'];
 
@@ -93,13 +93,21 @@ const searchFor = (gscMap, page) => {
 // ── input slices ─────────────────────────────────────────────────────────────
 
 function technicalInput(crawl, data) {
+  // A compressed (.gz) sitemap is not read, so its URLs can't be counted: say
+  // the count is unknown rather than send a false zero.
+  const compressed = (crawl.sitemaps || []).some((s) => s && s.count == null);
+  const countUnknown = compressed || crawl.sitemap_url_count === null;
+  const notes = [countUnknown
+    ? 'url_count unknown (compressed sitemaps not read); do not judge the sitemap size or compare it with Google\'s count.'
+    : 'url_count is the total across every child sitemap of the index.'];
+  if (crawl.sitemap_partial) notes.push('Reading the sitemaps stopped early (time limit), so the list of child sitemaps and the count are incomplete.');
   const sitemap = {
     ours: compact({
-      url_count: crawl.sitemap_url_count ?? 0,
+      url_count: countUnknown ? 'unknown' : crawl.sitemap_url_count ?? 0,
       source: crawl.sitemap_source || null,
       accessible: crawl.sitemap_accessible ?? crawl.site_wide?.sitemap_accessible ?? null,
       child_sitemaps: crawl.sitemaps || null,
-      note: 'url_count is the total across every child sitemap of the index.',
+      note: notes.join(' '),
     }),
   };
   if (has(data.googleSitemaps)) sitemap.google = data.googleSitemaps;
@@ -297,7 +305,7 @@ For every page in the input, write a per-page fix list in "pages". The fixes hol
 - Each fix lists the queries it targets in targets_queries, copied exactly from the page's queries or the site-level lists; leave it empty when the page has no query data.
 - If the current title or meta is already strong, say so in a fix instead of rewriting it for its own sake.
 
-Then write "tasks" for the changes that matter most (a title and meta rewrite for a page is one task; a missing section is one task). Tasks must not repeat a fix verbatim: a task references the page's fix with a short title, its evidence, and a one or two sentence summary of the change in "change" (for example 'Rewrite the title and meta description around "turf installation las vegas"; exact text in the page fixes'). Each task's evidence must quote the page's current title or text and, when available, the query numbers that justify it. Quote the current text exactly. When Search Console data is a data gap, base tasks on the page text alone and set confidence no higher than medium.
+Give every fix an id F1, F2… unique in this reply. Then write "tasks" for the changes that matter most (a title and meta rewrite for a page is one task; a missing section is one task). Each task lists in fix_ids the fixes it covers, and "change" is a one-sentence summary (for example 'Rewrite the title and meta description around "turf installation las vegas".'). The exact text is attached from those fixes automatically, so do not write "see page fixes". Never point a task at a fix that only says to keep the current text. Every task needs a "why". Each task's evidence must quote the page's current title or text and, when available, the query numbers that justify it. Quote the current text exactly. When Search Console data is a data gap, base tasks on the page text alone and set confidence no higher than medium.
 
 ${OWN_AREA}
 ${RULES_REMINDER}`,
@@ -331,11 +339,12 @@ export const SYNTH_SYSTEM = `This is the final step. The writing rules in the au
 - top_moves: exactly three items, the three highest-value tasks that are not dropped: task_id (copied exactly from the input) and a one-sentence headline for the business owner on what it does for them.
 - client_summary: three to five plain sentences a business owner understands. State the most important opportunity and the biggest problem.
 - scores: SEO (search visibility and technical health), GEO (readiness for AI-powered search: clear entity facts, structured data, quotable content) and AEO (readiness for answer engines: direct answers to questions, question coverage), each an integer 0 to 10 with a one-line reason that cites the evidence. Base scores only on the input; where data gaps limit a score, say so in the reason.
-- data_gaps: each data gap restated for a client in one plain sentence (what is missing and what it means for the audit). Include passes that did not complete.
+
+The data gaps are listed for the client separately; do not restate them.
 
 Use only numbers that appear in the input exactly as written. Do not add, average, or convert them into new figures (no new percentages or totals).
 
-In client_summary, top_moves headlines and data_gaps, avoid terms like meta description, canonical, schema, CTR, SERP, indexing, LCP; say what it means for customers finding or contacting the business. Never include [confirm: …] placeholders in client text. ${NO_AUTOMATION}`;
+In client_summary and top_moves headlines, avoid terms like meta description, canonical, schema, CTR, SERP, indexing, LCP; say what it means for customers finding or contacting the business. Never include [confirm: …] placeholders in client text. ${NO_AUTOMATION}`;
 
 // ── schemas ──────────────────────────────────────────────────────────────────
 
@@ -346,13 +355,22 @@ const closed = (properties) => ({ type: 'object', properties, required: Object.k
 const FINDINGS = { type: 'array', items: closed({ title: str, detail: str, evidence: strList }) };
 const TASKS = { type: 'array', items: TASK_JSON_SCHEMA };
 
+// Content tasks name the page fixes they cover (fix_ids); the fixes' exact text
+// is attached to the task's change in code (resolveContentChunk).
+export const CONTENT_TASK_SCHEMA = {
+  ...TASK_JSON_SCHEMA,
+  properties: { ...TASK_JSON_SCHEMA.properties, fix_ids: strList },
+  required: [...TASK_JSON_SCHEMA.required, 'fix_ids'],
+};
+
 export function passSchema(passKey) {
   if (!PASSES.includes(passKey)) throw new Error(`Unknown pass: ${passKey}`);
   const props = { findings: FINDINGS, tasks: TASKS };
   if (passKey === 'content') {
+    props.tasks = { type: 'array', items: CONTENT_TASK_SCHEMA };
     props.pages = {
       type: 'array',
-      items: closed({ page: str, fixes: { type: 'array', items: closed({ change: str, targets_queries: strList }) } }),
+      items: closed({ page: str, fixes: { type: 'array', items: closed({ id: str, change: str, targets_queries: strList }) } }),
     };
   }
   if (passKey === 'conversion') props.key_events_configured = { type: 'boolean' };
@@ -367,7 +385,6 @@ export const synthSchema = closed({
   client_summary: str,
   top_moves: { type: 'array', items: closed({ task_id: str, headline: str }) },
   scores: closed({ seo: SCORE, geo: SCORE, aeo: SCORE }),
-  data_gaps: strList,
   drop_task_ids: strList,
 });
 
@@ -382,6 +399,42 @@ export function normalizeTaskIds(passKey, chunkIndex, tasks) {
   if (!prefix) throw new Error(`Unknown pass: ${passKey}`);
   const base = passKey === 'content' && has(chunkIndex) ? `${prefix}-${chunkIndex}` : prefix;
   return (tasks || []).map((t, i) => ({ ...t, id: `${base}-${i + 1}` }));
+}
+
+// ── content chunk results ────────────────────────────────────────────────────
+
+const KEEP_FIX = /^\s*(keep|leave)\b/i;
+const FIXES_POINTER = /\s*[;,]?\s*(?:the\s+)?(?:exact text|details|questions)\s+(?:is|are)\s+(?:listed\s+)?in the page fixes\.?/gi;
+
+// One content chunk's reply checked against its input and with each task's
+// exact text attached from the page fixes it names (fix_ids; when none match,
+// every fix on the task's page except "keep the current text" ones).
+// -> { ok, findings, tasks, pages, uncovered } where uncovered lists the input
+// pages (path keys) the reply has no fix list for. ok is false when a page is
+// uncovered or a task came back without a change or a reason.
+export function resolveContentChunk(chunkInput, output) {
+  const o = output || {};
+  const pages = (o.pages || []).map((p) => ({ ...p, page: pathKey(p.page), fixes: p.fixes || [] }));
+  const fixById = new Map();
+  for (const p of pages) for (const f of p.fixes) if (f?.id && !fixById.has(f.id)) fixById.set(f.id, f);
+
+  const covered = new Set(pages.map((p) => p.page));
+  const uncovered = (chunkInput?.pages || []).map((p) => pathKey(p.url)).filter((k) => !covered.has(k));
+  const rawTasks = o.tasks || [];
+  const ok = uncovered.length === 0 && !rawTasks.some(isEmptyTask);
+
+  const tasks = rawTasks.map(({ fix_ids: fixIds, ...t }) => {
+    const page = pathKey(t.page);
+    let fixes = (fixIds || []).map((id) => fixById.get(id)).filter((f) => f && !KEEP_FIX.test(f.change || ''));
+    if (!fixes.length) {
+      fixes = pages.filter((p) => p.page === page).flatMap((p) => p.fixes).filter((f) => !KEEP_FIX.test(f.change || ''));
+    }
+    const summary = String(t.change || '').replace(FIXES_POINTER, '').trim();
+    const change = [...new Set([summary, ...fixes.map((f) => String(f.change || '').trim())])].filter(Boolean).join('\n');
+    return { ...t, page, change };
+  }).filter((t) => !isEmptyTask(t));
+
+  return { ok, findings: o.findings || [], tasks, pages, uncovered };
 }
 
 const outputsOf = (v) => (Array.isArray(v) ? v : [v]).filter(Boolean);
@@ -416,7 +469,7 @@ export function buildSynthInput(passOutputs, extra = {}) {
 // source_ids: the pass task ids folded into each one.
 export function buildActionPlan(passTasks, synthOutput) {
   const drop = new Set(synthOutput?.drop_task_ids || []);
-  const kept = (passTasks || []).flat().filter((t) => t && !drop.has(t.id));
+  const kept = (passTasks || []).flat().filter((t) => t && !drop.has(t.id)).map((t) => ({ ...t, page: pathKey(t.page) }));
   const idsByKey = new Map();
   for (const t of kept) {
     const key = mergeKey(t);

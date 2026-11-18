@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PASSES, PASS_SYSTEM, SYNTH_SYSTEM, CONTENT_CHUNK_SIZE, buildPassInput, buildSharedContext, passSchema, synthSchema,
-  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves,
+  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves, resolveContentChunk,
 } from '@/lib/seoAuditV2/passes';
 
 const page = (i, extra = {}) => ({
@@ -187,7 +187,9 @@ describe('prompts', () => {
   it('content prompt scopes chunks and keeps fixes out of tasks', () => {
     expect(PASS_SYSTEM.content).toContain('other chunks cover other pages');
     expect(PASS_SYSTEM.content).toContain("copied exactly from the page's queries or the site-level lists");
-    expect(PASS_SYSTEM.content).toMatch(/must not repeat a fix verbatim/i);
+    expect(PASS_SYSTEM.content).toMatch(/fix_ids/);
+    expect(PASS_SYSTEM.content).toContain('do not write "see page fixes"');
+    expect(PASS_SYSTEM.content).toContain('Never point a task at a fix that only says to keep the current text');
   });
 
   it('conversion prompt makes lead tracking the first task when no key events', () => {
@@ -243,14 +245,17 @@ describe('schemas', () => {
       checkSchema(s);
     }
     expect(passSchema('content').properties).toHaveProperty('pages');
-    expect(passSchema('content').properties.pages.items.properties.fixes.items.required).toEqual(['change', 'targets_queries']);
+    expect(passSchema('content').properties.pages.items.properties.fixes.items.required).toEqual(['id', 'change', 'targets_queries']);
+    expect(passSchema('content').properties.tasks.items.required).toContain('fix_ids');
+    expect(passSchema('technical').properties.tasks.items.properties).not.toHaveProperty('fix_ids');
     expect(passSchema('conversion').properties).toHaveProperty('key_events_configured');
     expect(passSchema('technical').properties).not.toHaveProperty('pages');
   });
 
   it('synth schema returns decisions, not rewritten tasks', () => {
     checkSchema(synthSchema);
-    expect(Object.keys(synthSchema.properties).sort()).toEqual(['client_summary', 'data_gaps', 'drop_task_ids', 'scores', 'top_moves']);
+    expect(Object.keys(synthSchema.properties).sort()).toEqual(['client_summary', 'drop_task_ids', 'scores', 'top_moves']);
+    expect(SYNTH_SYSTEM).not.toMatch(/data_gaps:/);
     expect(Object.keys(synthSchema.properties.top_moves.items.properties).sort()).toEqual(['headline', 'task_id']);
     expect(synthSchema.properties.drop_task_ids).toEqual({ type: 'array', items: { type: 'string' } });
     expect(Object.keys(synthSchema.properties.scores.properties).sort()).toEqual(['aeo', 'geo', 'seo']);
@@ -340,5 +345,87 @@ describe('resolveTopMoves', () => {
 
   it('can also resolve a merged plan id', () => {
     expect(resolveTopMoves(plan, { top_moves: [{ task_id: 'T4', headline: 'h' }] })[0].task.id).toBe('T4');
+  });
+});
+
+describe('resolveContentChunk', () => {
+  const chunk = { chunk: 1, of: 1, pages: [{ url: 'https://x.com/' }, { url: 'https://x.com/turf/' }] };
+  const ctask = (over = {}) => ({
+    id: 'x', title: 'Rewrite the turf title', category: 'content', page: '/turf', evidence: ['Current title: "Turf"'],
+    change: 'Rewrite the title around "turf las vegas". Exact text is in the page fixes.', why: 'Low CTR at position 6.',
+    impact: 4, effort: 1, confidence: 'high', fix_ids: ['F2'], ...over,
+  });
+  const pages = [
+    { page: 'https://x.com/', fixes: [{ id: 'F1', change: 'Keep the current title "Home | X".', targets_queries: [] }] },
+    {
+      page: '/turf/',
+      fixes: [
+        { id: 'F2', change: 'Replace the title with: "Turf Installation in Las Vegas, NV | X"', targets_queries: ['turf las vegas'] },
+        { id: 'F3', change: 'Keep the existing FAQ section.', targets_queries: [] },
+        { id: 'F4', change: 'Add the H2 "Turf Rebates in Las Vegas" covering the SNWA rebate.', targets_queries: [] },
+      ],
+    },
+  ];
+
+  it('attaches the exact text of the fixes a task names', () => {
+    const r = resolveContentChunk(chunk, { findings: [], tasks: [ctask()], pages });
+    expect(r.ok).toBe(true);
+    expect(r.tasks[0].change).toBe('Rewrite the title around "turf las vegas".\nReplace the title with: "Turf Installation in Las Vegas, NV | X"');
+    expect(r.tasks[0]).not.toHaveProperty('fix_ids');
+    expect(r.tasks[0].page).toBe('/turf');
+    expect(r.pages.map((p) => p.page)).toEqual(['/', '/turf']);
+  });
+
+  it('unknown fix ids fall back to every fix on the page except "keep" fixes', () => {
+    const r = resolveContentChunk(chunk, { tasks: [ctask({ fix_ids: ['F99'] })], pages });
+    const lines = r.tasks[0].change.split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toContain('"Turf Installation in Las Vegas, NV | X"');
+    expect(lines[2]).toContain('Turf Rebates in Las Vegas');
+    expect(r.tasks[0].change).not.toMatch(/Keep the existing/);
+  });
+
+  it('a task pointing only at a keep fix gets the page fixes instead', () => {
+    const r = resolveContentChunk(chunk, { tasks: [ctask({ fix_ids: ['F3'] })], pages });
+    expect(r.tasks[0].change).not.toMatch(/Keep/);
+    expect(r.tasks[0].change).toMatch(/Turf Rebates/);
+  });
+
+  it('drops a task whose change ends up empty and marks the chunk incomplete', () => {
+    const empty = ctask({ page: '/', change: 'Exact text is in the page fixes.', fix_ids: [] });
+    const r = resolveContentChunk(chunk, { tasks: [empty, ctask({ why: '' })], pages });
+    expect(r.tasks).toEqual([]);
+    expect(r.ok).toBe(false);
+  });
+
+  it('a reply that leaves an input page without fixes is incomplete', () => {
+    const r = resolveContentChunk(chunk, { findings: [], tasks: [], pages: [pages[0]] });
+    expect(r.ok).toBe(false);
+    expect(r.uncovered).toEqual(['/turf']);
+    const none = resolveContentChunk(chunk, { findings: [], tasks: [ctask({ change: '', why: '' })], pages: [] });
+    expect(none.ok).toBe(false);
+    expect(none.uncovered).toEqual(['/', '/turf']);
+  });
+});
+
+describe('page keys and sitemap counts', () => {
+  it('the action plan uses path pages and merges "/a/" with a full URL', () => {
+    const a = task('CONT-1-1', { title: 'Rewrite the title', page: 'https://x.com/a/' });
+    const b = task('LOCAL-1', { title: 'Rewrite the title', page: '/a' });
+    const plan = buildActionPlan([[a], [b]], {});
+    expect(plan).toHaveLength(1);
+    expect(plan[0].page).toBe('/a');
+  });
+
+  it('a compressed sitemap makes the count unknown, never 0', () => {
+    const c = { ...crawl(2), sitemap_url_count: null, sitemaps: [{ url: 'https://x.com/sitemap.xml.gz', count: null }] };
+    const tech = buildPassInput('technical', { crawl: c, data: emptyData });
+    expect(tech.sitemap.ours.url_count).toBe('unknown');
+    expect(tech.sitemap.ours.note).toContain('count unknown (compressed sitemaps not read)');
+  });
+
+  it('a sitemap read cut short is stated', () => {
+    const tech = buildPassInput('technical', { crawl: { ...crawl(1), sitemap_partial: true }, data: emptyData });
+    expect(tech.sitemap.ours.note).toMatch(/stopped early/);
   });
 });

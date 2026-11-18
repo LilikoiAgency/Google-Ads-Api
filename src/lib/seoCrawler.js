@@ -77,6 +77,8 @@ async function fetchOkText(url) {
 const MAX_CHILD_SITEMAPS = 50;
 const MAX_SITEMAP_URLS = 5_000;
 const MAX_SITEMAP_DEPTH = 3;
+// Time budget for reading child sitemaps during discovery.
+export const SITEMAP_BUDGET_MS = 60_000;
 
 /**
  * Parse sitemap XML. Pure.
@@ -111,11 +113,16 @@ export function parseSitemapXml(xml) {
  * then /sitemap.xml. Reads every child of an index, recursing into nested
  * indexes up to depth 3. Caps: 50 child sitemaps, 5,000 URLs.
  * `.xml.gz` children are not fetched; they are listed with count null.
+ * Once `deadline` (epoch ms) has passed no further child sitemap is read and
+ * the result is marked `partial: true`.
  *
  * @param {string} domain
  * @param {(url: string) => Promise<string|null>} fetchText
+ * @param {{ deadline?: number }} [options]
  */
-export async function collectSitemapUrls(domain, fetchText) {
+export async function collectSitemapUrls(domain, fetchText, { deadline } = {}) {
+  const pastDeadline = () => Number.isFinite(deadline) && Date.now() >= deadline;
+  let partial = false;
   const baseUrl = `https://${domain}`;
   const siteDomain = getDomain(baseUrl);
 
@@ -156,6 +163,10 @@ export async function collectSitemapUrls(domain, fetchText) {
       if (visited.has(url) || urls.size >= MAX_SITEMAP_URLS) return;
       if (!isRoot) {
         if (childCount >= MAX_CHILD_SITEMAPS) return;
+        if (pastDeadline()) {
+          partial = true;
+          return;
+        }
         childCount++;
       }
       visited.add(url);
@@ -183,7 +194,7 @@ export async function collectSitemapUrls(domain, fetchText) {
 
     for (const root of roots) await walk(root, 1, true);
 
-    if (foundAny) return { urls: [...urls], sitemaps, source };
+    if (foundAny) return { urls: [...urls], sitemaps, source, ...(partial ? { partial: true } : {}) };
   }
 
   return { urls: [], sitemaps: [], source: null };
@@ -362,7 +373,7 @@ async function discoverPages(domain) {
 
   // ── Step 2: Sitemap pages fill the gaps after nav ──────────────────────
   // Reads every child sitemap (robots.txt, sitemap_index.xml, sitemap.xml).
-  const sitemap = await collectSitemapUrls(domain, fetchOkText);
+  const sitemap = await collectSitemapUrls(domain, fetchOkText, { deadline: Date.now() + SITEMAP_BUDGET_MS });
   for (const loc of sitemap.urls) {
     const resolved = normalizeUrl(loc, baseUrl);
     if (resolved) sitemapUrls.add(resolved);
@@ -379,7 +390,10 @@ async function discoverPages(domain) {
     urls: combined,
     navUrlCount: navUrls.size,
     sitemapAccessible: sitemap.source !== null,
-    sitemapUrlCount: sitemap.urls.length,
+    // Compressed (.gz) sitemaps are not read, so the total is unknown (null), not 0.
+    sitemapUrlCount: sitemap.sitemaps.some((s) => s.count === null) ? null : sitemap.urls.length,
+    sitemapCountNote: sitemap.sitemaps.some((s) => s.count === null) ? "count unknown (compressed sitemaps not read)" : null,
+    sitemapPartial: Boolean(sitemap.partial),
     sitemaps: sitemap.sitemaps,
     sitemapSource: sitemap.source,
   };
@@ -637,6 +651,8 @@ export async function crawlSite(domain, auditType = "full", customUrls = null, {
     discovered_pages: discovery.urls.slice(0, 50),
     sitemap_accessible: discovery.sitemapAccessible,
     sitemap_url_count: discovery.sitemapUrlCount,
+    ...(discovery.sitemapCountNote ? { sitemap_count_note: discovery.sitemapCountNote } : {}),
+    ...(discovery.sitemapPartial ? { sitemap_partial: true } : {}),
     sitemaps: discovery.sitemaps,
     sitemap_source: discovery.sitemapSource,
     ...(truncated ? { crawl_truncated: true } : {}),

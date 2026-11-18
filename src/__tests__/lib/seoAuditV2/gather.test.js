@@ -156,13 +156,14 @@ describe('describeGaps', () => {
       { source: 'sitemaps', status: 'error', detail: 'boom' },
       { source: 'pagespeed', status: 'timeout', detail: 'https://x.com/b' },
     ]);
-    expect(out[0]).toBe('Index status (URL Inspection) unavailable: our Search Console login lacks permission for this site.');
-    expect(out[1]).toMatch(/no GA4 property/);
+    expect(out[0]).toBe("Google's index status for each page unavailable: our Search Console access doesn't cover this website.");
+    expect(out[1]).toBe('No Google Analytics property was found for this website.');
+    expect(out[1]).not.toMatch(/not connected/);
     expect(out[2]).toMatch(/not connected/);
-    expect(out[3]).toMatch(/not a Search Console property/);
+    expect(out[3]).toMatch(/not in a Search Console account we can access/);
     expect(out[4]).toMatch(/no data/);
-    expect(out[5]).toMatch(/timed out/);
-    expect(out[6]).toMatch(/error occurred \(boom\)/);
+    expect(out[5]).toMatch(/took too long/);
+    expect(out[6]).toBe("Google's sitemap report unavailable: it could not be loaded.");
     expect(out[7]).toBe('Page speed timed out for https://x.com/b.');
   });
 });
@@ -176,5 +177,19 @@ describe('seedPages', () => {
     expect(m.joinPagesToQueries.mock.calls[0][1].topPages).toBe(5);
     m.findGscSite.mockRejectedValue(new Error('x'));
     expect(await seedPages('x.com', 'full')).toEqual([]);
+  });
+});
+
+describe('seedPages time budget', () => {
+  it('gives up after SEED_TIMEOUT_MS and returns []', async () => {
+    vi.useFakeTimers();
+    try {
+      m.findGscSite.mockReturnValue(new Promise(() => {}));
+      const p = seedPages('x.com', 'full');
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(await p).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

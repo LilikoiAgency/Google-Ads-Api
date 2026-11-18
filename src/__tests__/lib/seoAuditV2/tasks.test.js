@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TASK_JSON_SCHEMA, priorityScore, mergeTasks, isGenericTask, tasksToCsv } from '@/lib/seoAuditV2/tasks';
+import { TASK_JSON_SCHEMA, priorityScore, mergeTasks, isGenericTask, tasksToCsv, pathKey, mergeKey, isEmptyTask } from '@/lib/seoAuditV2/tasks';
 
 const t = (o = {}) => ({
   id: 'x', title: 'Rewrite title tag', category: 'content', page: '/a',
@@ -71,7 +71,7 @@ describe('tasksToCsv', () => {
   it('has the expected header and joins evidence', () => {
     const csv = tasksToCsv([t({ evidence: ['a', 'b'] })]);
     const [head, row] = csv.split('\n');
-    expect(head).toBe('ID,Priority,Task,Page,Category,Impact,Effort,Confidence,Change,Evidence');
+    expect(head).toBe('ID,Priority,Task,Page,Category,Impact,Effort,Confidence,Change,Why,Evidence');
     expect(row).toContain('a | b');
   });
   it('puts the task id first and the rank (1 = first, in received order) in Priority', () => {
@@ -83,5 +83,40 @@ describe('tasksToCsv', () => {
     const csv = tasksToCsv([t({ title: 'Say "hi", ok', change: 'line1\nline2' })]);
     expect(csv).toContain('"Say ""hi"", ok"');
     expect(csv).toContain('"line1\nline2"');
+  });
+});
+
+describe('CSV safety and content', () => {
+  it('prefixes an apostrophe to cells that would run as a spreadsheet formula', () => {
+    const csv = tasksToCsv([t({ title: '=HYPERLINK("http://evil")', change: '+1', why: '-2', evidence: ['@SUM(A1)'] })]);
+    const row = csv.split('\n')[1];
+    expect(row).toContain(`"'=HYPERLINK(""http://evil"")"`);
+    expect(row).toContain(",'+1,'-2,");
+    expect(row).toContain("'@SUM(A1)");
+    expect(tasksToCsv([t({ title: '\tx' })]).split('\n')[1]).toContain("'\tx");
+  });
+
+  it('carries the exact fix text and the reason', () => {
+    const change = 'Rewrite the title.\nReplace the title with: "Turf Installation in Las Vegas, NV | Big Bully Turf"';
+    const csv = tasksToCsv([t({ change, why: 'Low CTR.' })]);
+    expect(csv).toContain('Turf Installation in Las Vegas, NV | Big Bully Turf');
+    expect(csv).toContain('Low CTR.');
+  });
+});
+
+describe('page keys', () => {
+  it('normalizes URLs and paths to one key and keeps site-wide', () => {
+    expect(pathKey('https://acme.com/a/?x=1')).toBe('/a');
+    expect(pathKey('/a/')).toBe('/a');
+    expect(pathKey('a')).toBe('/a');
+    expect(pathKey('https://acme.com')).toBe('/');
+    expect(pathKey('site-wide')).toBe('site-wide');
+    expect(mergeKey(t({ page: 'https://acme.com/a/' }))).toBe(mergeKey(t({ page: '/a' })));
+  });
+
+  it('flags tasks with no change or no reason', () => {
+    expect(isEmptyTask(t({ change: ' ' }))).toBe(true);
+    expect(isEmptyTask(t({ why: '' }))).toBe(true);
+    expect(isEmptyTask(t({ why: 'w' }))).toBe(false);
   });
 });

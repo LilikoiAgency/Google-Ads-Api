@@ -21,7 +21,7 @@ const { newJob } = await import('@/lib/seoAuditV2/jobs');
 
 const page = (url, extra = {}) => ({ url, final_url: url, title_tag: 'T', content_text: 'text', ...extra });
 const task = (title, page = 'https://acme.com/', change = 'Change "x" to "y"') => ({
-  title, page, category: 'technical', impact: 4, effort: 2, confidence: 'high', evidence: ['e'], change,
+  title, page, category: 'technical', impact: 4, effort: 2, confidence: 'high', evidence: ['e'], change, why: 'w',
 });
 
 function job(statuses = {}, extra = {}) {
@@ -90,7 +90,7 @@ describe('runStep', () => {
         output: {
           findings: [{ title: `f${input.chunk}`, detail: '', evidence: [] }],
           tasks: [task(`Rewrite title ${input.chunk}`), task('Improve content quality')],
-          pages: [{ page: `p${input.chunk}`, fixes: [] }],
+          pages: input.pages.map((p) => ({ page: p.url, fixes: [] })),
         },
       };
     });
@@ -101,7 +101,9 @@ describe('runStep', () => {
     const out = res.patch['passes.content'];
     expect(out.tasks.map((t) => t.id)).toEqual(['CONT-1-1', 'CONT-2-1']);
     expect(out.findings).toHaveLength(2);
-    expect(out.pages.map((p) => p.page)).toEqual(['p1', 'p2']);
+    expect(out.pages.map((p) => p.page)).toEqual(['/', '/p0', '/p1', '/p2', '/p3', '/p4']);
+    expect(out.tasks[0].page).toBe('/');
+    expect(res.gaps).toBeUndefined();
   });
 
   it('a failed content chunk fails the pass for this attempt', async () => {
@@ -152,11 +154,11 @@ describe('runStep', () => {
     expect(r).toMatchObject({ version: 2, domain: 'acme.com', audit_type: 'full', client_summary: 'Summary' });
     expect(r.action_plan).toHaveLength(2);
     expect(r.top_moves[0].headline).toBe('Get found');
-    expect(r.pages).toEqual([{ page: 'p1', fixes: [], index: null, speed: null, top_queries: [] }]);
+    expect(r.pages).toEqual([{ page: '/p1', fixes: [], index: null, speed: null, top_queries: [] }]);
     expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: false });
     expect(r.findings.technical).toEqual([{ title: 'tf' }]);
     expect(r.findings.conversion).toEqual([]);
-    expect(r.data_gaps).toEqual(['ga4 unavailable', "Conversion analysis didn't complete — rerun to include it", 'GA4 is missing.']);
+    expect(r.data_gaps).toEqual(['ga4 unavailable', "Conversion analysis didn't complete — rerun to include it"]);
     expect(r.data_sources.search_console.status).toBe('ok');
     expect(r.data_sources.ga4.status).toBe('no_property');
   });
@@ -202,7 +204,7 @@ describe('runStep', () => {
     });
     const r = (await runStep(j, 'synthesize')).patch.result;
     expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: true });
-    expect(r.pages.map((p) => p.page)).toEqual(['https://acme.com/services/turf', 'https://acme.com/about', 'https://acme.com/']);
+    expect(r.pages.map((p) => p.page)).toEqual(['/services/turf', '/about', '/']);
     const [turf, about, home] = r.pages;
     expect(turf.fixes).toHaveLength(1);
     expect(turf.index).toEqual({
@@ -217,6 +219,95 @@ describe('runStep', () => {
     expect(home).toMatchObject({ fixes: [], index: null, top_queries: [] });
     expect(home.speed.score).toBe(90);
     expect(r.pages.find((p) => p.page.includes('broken'))).toBeUndefined();
+  });
+
+  const chunkReply = (input, extra = {}) => ({
+    output: { findings: [], tasks: [], pages: input.pages.map((p) => ({ page: p.url, fixes: [] })), ...extra },
+  });
+
+  it('content tasks get the exact text of the fixes they name', async () => {
+    m.runStructured.mockImplementation(async ({ input }) => {
+      if (input.chunk !== 1) return chunkReply(input);
+      const pages = input.pages.map((p) => ({ page: p.url, fixes: [] }));
+      pages[1].fixes = [
+        { id: 'F1', change: 'Keep the current meta description.', targets_queries: [] },
+        { id: 'F2', change: 'Replace the title with: "Turf Installation in Las Vegas, NV | Acme"', targets_queries: ['turf las vegas'] },
+      ];
+      return {
+        output: {
+          findings: [],
+          pages,
+          tasks: [{ ...task('Rewrite the p0 title', '/p0/', 'Rewrite the title. Exact text is in the page fixes.'), fix_ids: ['F2'] }],
+        },
+      };
+    });
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:content');
+    const [t] = res.patch['passes.content'].tasks;
+    expect(t.page).toBe('/p0');
+    expect(t.change).toBe('Rewrite the title.\nReplace the title with: "Turf Installation in Las Vegas, NV | Acme"');
+    expect(t).not.toHaveProperty('fix_ids');
+  });
+
+  it('a degenerate content chunk (no pages, empty task) is failed; the others still count', async () => {
+    m.runStructured.mockImplementation(async ({ input }) => (input.chunk === 2
+      ? { output: { findings: [], pages: [], tasks: [{ ...task('x'), change: '', why: '' }] } }
+      : chunkReply(input, { tasks: [task('Rewrite the home title')] })));
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:content');
+    expect(res.ok).toBe(true);
+    const out = res.patch['passes.content'];
+    expect(out.tasks.map((t) => t.id)).toEqual(['CONT-1-1']);
+    expect(out.pages.map((p) => p.page)).toEqual(['/', '/p0', '/p1', '/p2']);
+    expect(res.gaps).toEqual(["Content & keywords analysis didn't cover /p3, /p4 — rerun to include them"]);
+  });
+
+  it('a chunk that errors is listed as uncovered when another chunk succeeded', async () => {
+    m.runStructured.mockImplementation(async ({ input }) => {
+      if (input.chunk === 1) throw Object.assign(new Error('Declined'), { code: 'refusal' });
+      return chunkReply(input);
+    });
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:content');
+    expect(res.ok).toBe(true);
+    expect(res.gaps[0]).toBe("Content & keywords analysis didn't cover /, /p0, /p1, /p2 — rerun to include them");
+  });
+
+  it('every content chunk failing fails the step', async () => {
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [], pages: [] } });
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:content');
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/Content chunk 1 was incomplete/);
+  });
+
+  it('other passes get path pages and lose tasks without a change or reason', async () => {
+    m.runStructured.mockResolvedValue({
+      output: { findings: [], tasks: [task('Fix the canonical', 'https://acme.com/about/'), { ...task('Fix robots'), why: '' }] },
+    });
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:technical');
+    const tasks = res.patch['passes.technical'].tasks;
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].page).toBe('/about');
+  });
+
+  it('synthesis cannot add data gaps and the list has no duplicates', async () => {
+    m.runStructured.mockResolvedValue({
+      output: { client_summary: 'S', top_moves: [], scores: {}, data_gaps: ['Invented gap.'], drop_task_ids: [] },
+    });
+    const j = job({
+      'pass:technical': { status: 'done' }, 'pass:content': { status: 'done' }, 'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' }, synthesize: { status: 'running', attempts: 1 },
+    }, {
+      data: { crawl, sources: {}, gaps: [{ source: 'ga4', status: 'no_property' }], sharedContext: 'ctx' },
+      passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] } },
+      gaps: ['ga4 unavailable', 'Crawl stopped early after 6 pages because the site responded slowly.'],
+    });
+    const r = (await runStep(j, 'synthesize')).patch.result;
+    expect(r.data_gaps).toEqual(['ga4 unavailable', 'Crawl stopped early after 6 pages because the site responded slowly.']);
+  });
+
+  it('a sitemap read cut short becomes a job gap', async () => {
+    m.seedPages.mockResolvedValue([]);
+    m.crawlSite.mockResolvedValue({ ...crawl, sitemap_partial: true });
+    const res = await runStep(job(), 'crawl');
+    expect(res.gaps).toEqual(['Reading the sitemaps stopped early because they were slow to load, so the sitemap check is incomplete.']);
   });
 
   it('never throws', async () => {
