@@ -46,6 +46,20 @@ describe('joinPagesToQueries', () => {
     expect(a.queries.map((q) => q.query)).toEqual(['turf a', 'turf b']);
   });
 
+  it('strips query strings and fragments and merges the same page and query', () => {
+    const out = joinPagesToQueries([
+      row('https://x.com/a/?utm_source=gmb', 'turf', 4, 100, 2),
+      row('https://x.com/a/', 'turf', 6, 300, 6),
+      row('https://x.com/a/#reviews', 'other', 1, 100, 10),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ page: 'https://x.com/a/', clicks: 11, impressions: 500, ctr: 0.022, position: 6 });
+    expect(out[0].queries).toEqual([
+      { query: 'turf', clicks: 10, impressions: 400, ctr: 0.025, position: 5 }, // (2*100 + 6*300) / 400
+      { query: 'other', clicks: 1, impressions: 100, ctr: 0.01, position: 10 },
+    ]);
+  });
+
   it('caps the number of pages', () => {
     expect(joinPagesToQueries(rows, { topPages: 2 })).toHaveLength(2);
     expect(joinPagesToQueries([])).toEqual([]);
@@ -78,7 +92,6 @@ describe('mapInspection', () => {
       user_canonical: 'https://x.com/a-old/',
       canonical_mismatch: true,
       last_crawl: '2026-11-10T08:00:00Z',
-      mobile_verdict: 'VERDICT_UNSPECIFIED',
     });
   });
 
@@ -92,7 +105,7 @@ describe('mapInspection', () => {
   it('handles an empty result', () => {
     expect(mapInspection({}, 'https://x.com/z')).toEqual({
       url: 'https://x.com/z', verdict: null, coverage_state: null, google_canonical: null, user_canonical: null,
-      canonical_mismatch: false, last_crawl: null, mobile_verdict: null,
+      canonical_mismatch: false, last_crawl: null,
     });
   });
 });

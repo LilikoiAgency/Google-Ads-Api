@@ -12,32 +12,60 @@ const httpStatus = (err) => err?.code ?? err?.status ?? err?.response?.status;
 const isPermission = (err) => Number(httpStatus(err)) === 403;
 const errMessage = (err) => err?.message || String(err);
 
+// Search Console reports UTM variants (e.g. from Business Profile links) as
+// separate pages; keep scheme + host + path so they merge into one page.
+function stripQuery(page) {
+  try {
+    const u = new URL(page);
+    return `${u.protocol}//${u.host}${u.pathname}`;
+  } catch {
+    return String(page).split(/[?#]/)[0];
+  }
+}
+
+const addMetrics = (acc, r) => {
+  acc.clicks += r.clicks || 0;
+  acc.impressions += r.impressions || 0;
+  acc.posWeight += (r.position || 0) * (r.impressions || 0);
+};
+const finishMetrics = (a) => ({
+  clicks: a.clicks,
+  impressions: a.impressions,
+  ctr: a.impressions ? round(a.clicks / a.impressions, 4) : 0,
+  position: a.impressions ? round(a.posWeight / a.impressions, 1) : 0,
+});
+
 // Rows come from a ['page','query'] Search Console query (rowLimit 5000).
+// Pages are query-free; rows for the same page (and same query) are merged.
 export function joinPagesToQueries(pageQueryRows, { topPages = 25, perPage = 10 } = {}) {
   const pages = new Map();
   for (const r of pageQueryRows || []) {
-    const [page, query] = r.keys || [];
-    if (!page) continue;
+    const [rawPage, query] = r.keys || [];
+    if (!rawPage) continue;
+    const page = stripQuery(rawPage);
     let p = pages.get(page);
     if (!p) {
-      p = { page, clicks: 0, impressions: 0, posWeight: 0, queries: [] };
+      p = { page, clicks: 0, impressions: 0, posWeight: 0, queries: new Map() };
       pages.set(page, p);
     }
-    p.clicks += r.clicks || 0;
-    p.impressions += r.impressions || 0;
-    p.posWeight += (r.position || 0) * (r.impressions || 0);
-    p.queries.push({ query, clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: round(r.ctr, 4), position: round(r.position, 1) });
+    addMetrics(p, r);
+    let q = p.queries.get(query);
+    if (!q) {
+      q = { query, clicks: 0, impressions: 0, posWeight: 0 };
+      p.queries.set(query, q);
+    }
+    addMetrics(q, r);
   }
   return [...pages.values()]
     .sort(byClicksThenImpressions)
     .slice(0, topPages)
     .map((p) => ({
       page: p.page,
-      clicks: p.clicks,
-      impressions: p.impressions,
-      ctr: p.impressions ? round(p.clicks / p.impressions, 4) : 0,
-      position: p.impressions ? round(p.posWeight / p.impressions, 1) : 0,
-      queries: p.queries.sort(byClicksThenImpressions).slice(0, perPage),
+      ...finishMetrics(p),
+      queries: [...p.queries.values()]
+        .sort(byClicksThenImpressions)
+        .slice(0, perPage)
+        .map((q) => ({ query: q.query, ...finishMetrics(q) })),
     }));
 }
 
@@ -64,7 +92,6 @@ export function mapInspection(apiResult, url = apiResult?.url ?? null) {
     user_canonical,
     canonical_mismatch: !!(google_canonical && user_canonical && canonicalKey(google_canonical) !== canonicalKey(user_canonical)),
     last_crawl: idx.lastCrawlTime || null,
-    mobile_verdict: result.mobileUsabilityResult?.verdict || null,
   };
 }
 
