@@ -162,7 +162,7 @@ export async function POST(request) {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         return await client.messages.create({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 8000,
           system: SEO_AUDIT_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userPrompt }],
@@ -185,12 +185,12 @@ export async function POST(request) {
     logApiUsage({
       type: 'claude_tokens',
       email,
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       feature: 'seo_audit',
       inputTokens: message.usage?.input_tokens ?? 0,
       outputTokens: message.usage?.output_tokens ?? 0,
       totalTokens: (message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0),
-      estimatedCostUsd: estimateClaudeCost('claude-sonnet-4-20250514', message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0),
+      estimatedCostUsd: estimateClaudeCost('claude-sonnet-4-6', message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0),
     }).catch(() => {});
 
     const responseText = message.content
