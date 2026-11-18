@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  STEP_KEYS, newJob, runnableSteps, applyStepResult, markRunning, expireStale, effortForAttempt, shouldRefund,
+  STEP_KEYS, newJob, runnableSteps, applyStepResult, markRunning, expireStale, effortForAttempt, shouldRefund, resetFailed,
 } from '@/lib/seoAuditV2/jobs';
 
 const T0 = 1_000_000;
@@ -118,10 +118,12 @@ describe('failures', () => {
 
 describe('effortForAttempt', () => {
   it('steps down one level per retry', () => {
-    expect(effortForAttempt('high', 0)).toBe('high');
-    expect(effortForAttempt('high', 1)).toBe('medium');
-    expect(effortForAttempt('high', 2)).toBe('low');
-    expect(effortForAttempt('medium', 1)).toBe('low');
+    // attemptNumber is 1-based (step.attempts after markRunning)
+    expect(effortForAttempt('high', 1)).toBe('high');
+    expect(effortForAttempt('high', 2)).toBe('medium');
+    expect(effortForAttempt('high', 3)).toBe('low');
+    expect(effortForAttempt('medium', 1)).toBe('medium');
+    expect(effortForAttempt('medium', 2)).toBe('low');
     expect(effortForAttempt('medium', 5)).toBe('low');
   });
 });
@@ -162,5 +164,107 @@ describe('stale expiry', () => {
   it('leaves fresh running steps alone', () => {
     const job = stale(mk(), 'crawl');
     expect(expireStale(job, T0 + 14 * MIN + 1000)).toBe(job);
+  });
+});
+
+const failPass = (job, p) => {
+  for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, p, T0), p, fail, T0);
+  return job;
+};
+
+describe('late results are ignored', () => {
+  it('late failure on a done step is ignored', () => {
+    const job = finish(mk(), 'crawl');
+    expect(applyStepResult(job, 'crawl', fail, T0)).toBe(job);
+  });
+  it('repeat failure on failed_final adds no duplicate gap', () => {
+    const job = failPass(finish(finish(mk(), 'crawl'), 'gather'), 'pass:technical');
+    const again = applyStepResult(job, 'pass:technical', fail, T0);
+    expect(again.gaps).toHaveLength(1);
+    expect(again).toBe(job);
+  });
+  it('ok on failed_final does not flip it', () => {
+    const job = failPass(finish(finish(mk(), 'crawl'), 'gather'), 'pass:technical');
+    expect(step(applyStepResult(job, 'pass:technical', ok, T0), 'pass:technical').status).toBe('failed_final');
+  });
+  it('result for a pending step is ignored', () => {
+    const job = mk();
+    expect(applyStepResult(job, 'crawl', ok, T0)).toBe(job);
+  });
+});
+
+describe('markRunning guards', () => {
+  it('throws on unknown step', () => {
+    expect(() => markRunning(mk(), 'nope', T0)).toThrow('Unknown step: nope');
+    expect(() => applyStepResult(mk(), 'nope', ok, T0)).toThrow('Unknown step: nope');
+  });
+  it('throws on done, fresh running, and failed_final steps', () => {
+    const done = finish(mk(), 'crawl');
+    expect(() => markRunning(done, 'crawl', T0)).toThrow();
+    const running = markRunning(mk(), 'crawl', T0);
+    expect(() => markRunning(running, 'crawl', T0 + MIN)).toThrow();
+    const ff = failPass(finish(finish(mk(), 'crawl'), 'gather'), 'pass:local');
+    expect(() => markRunning(ff, 'pass:local', T0)).toThrow();
+  });
+  it('throws when the job is done or failed', () => {
+    expect(() => markRunning({ ...mk(), status: 'failed' }, 'crawl', T0)).toThrow();
+    expect(() => markRunning({ ...mk(), status: 'done' }, 'crawl', T0)).toThrow();
+  });
+});
+
+describe('job-level failure rules', () => {
+  it('all four passes failed_final fails the job and refunds', () => {
+    let job = finish(finish(mk(), 'crawl'), 'gather');
+    for (const p of PASSES) job = failPass(job, p);
+    expect(job.status).toBe('failed');
+    expect(runnableSteps(job, T0)).toEqual([]);
+    expect(shouldRefund(job)).toBe(true);
+  });
+  it('gather failed_final fails the job', () => {
+    let job = finish(mk(), 'crawl');
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'gather', T0), 'gather', fail, T0);
+    expect(job.status).toBe('failed');
+  });
+  it('synthesize failed_final fails the job', () => {
+    let job = finish(finish(mk(), 'crawl'), 'gather');
+    for (const p of PASSES) job = finish(job, p);
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'synthesize', T0), 'synthesize', fail, T0);
+    expect(job.status).toBe('failed');
+  });
+});
+
+describe('resetFailed', () => {
+  it('resets a failed crawl and resumes', () => {
+    let job = mk();
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'crawl', T0), 'crawl', fail, T0);
+    const out = resetFailed(job, T0 + MIN);
+    expect(step(out, 'crawl')).toMatchObject({ status: 'pending', attempts: 0, error: null });
+    expect(out.status).toBe('running');
+    expect(runnableSteps(out, T0 + MIN)).toEqual(['crawl']);
+    expect(job.status).toBe('failed');
+  });
+  it('resets synthesize but keeps done steps and gaps for a failed pass', () => {
+    let job = finish(finish(mk(), 'crawl'), 'gather');
+    job = failPass(job, 'pass:local');
+    for (const p of PASSES.filter((x) => x !== 'pass:local')) job = finish(job, p);
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'synthesize', T0), 'synthesize', fail, T0);
+    const out = resetFailed(job, T0);
+    expect(step(out, 'synthesize').status).toBe('pending');
+    expect(step(out, 'pass:local').status).toBe('failed_final');
+    expect(out.gaps).toHaveLength(1);
+    expect(step(out, 'crawl').status).toBe('done');
+  });
+  it('resets all passes and removes their gaps when all four failed', () => {
+    let job = finish(finish(mk(), 'crawl'), 'gather');
+    for (const p of PASSES) job = failPass(job, p);
+    const out = resetFailed(job, T0);
+    expect(PASSES.every((p) => step(out, p).status === 'pending' && step(out, p).attempts === 0)).toBe(true);
+    expect(out.gaps).toEqual([]);
+    expect(out.status).toBe('running');
+    expect(runnableSteps(out, T0)).toEqual(PASSES);
+  });
+  it('is a no-op for a job that is not failed', () => {
+    const job = mk();
+    expect(resetFailed(job, T0)).toBe(job);
   });
 });
