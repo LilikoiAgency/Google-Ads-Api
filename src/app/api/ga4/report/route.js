@@ -31,14 +31,21 @@ export async function GET(request) {
 
   try {
     let properties = await getCached(PROPS_KEY);
+    let fresh = false;
     if (!properties) {
       properties = await listProperties();
+      fresh = true;
       await setCached(PROPS_KEY, properties, PROPS_TTL);
     }
-    const match = properties.find((p) => p.id === property);
+    let match = properties.find((p) => p.id === property);
+    if (!match && !fresh) {
+      properties = await listProperties();
+      await setCached(PROPS_KEY, properties, PROPS_TTL);
+      match = properties.find((p) => p.id === property);
+    }
     if (!match) return fail(403, "no_access", "Property is not visible to the service account");
 
-    const key = `ga4:report:${property}:${startDate}:${endDate}:${compare}:${granularity}`;
+    const key = `ga4:v1:report:${property}:${startDate}:${endDate}:${compare}:${granularity}`;
     const cached = await getCached(key);
     if (cached) return NextResponse.json(cached);
 

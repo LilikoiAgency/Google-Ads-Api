@@ -7,7 +7,7 @@ vi.mock("@/lib/serverCache", () => ({ getCached: vi.fn(async () => null), setCac
 vi.mock("@/lib/ga4Client", () => ({ listProperties: vi.fn(), fetchTrafficReport: vi.fn() }));
 
 const { getServerSession } = await import("next-auth");
-const { setCached } = await import("@/lib/serverCache");
+const { getCached, setCached } = await import("@/lib/serverCache");
 const { listProperties, fetchTrafficReport } = await import("@/lib/ga4Client");
 const { GET: getReport } = await import("@/app/api/ga4/report/route.js");
 const { GET: getProps } = await import("@/app/api/ga4/properties/route.js");
@@ -64,7 +64,17 @@ describe("ga4 routes", () => {
       property: prop, startDate: "2026-10-01", endDate: "2026-10-31", compare: "prev", granularity: "day",
     });
     expect(setCached).toHaveBeenCalledWith(
-      "ga4:report:properties/1:2026-10-01:2026-10-31:prev:day", { ok: true }, 6 * 60 * 60 * 1000);
+      "ga4:v1:report:properties/1:2026-10-01:2026-10-31:prev:day", { ok: true }, 6 * 60 * 60 * 1000);
+  });
+
+  it("refetches properties fresh once when cached list lacks the property", async () => {
+    getCached.mockResolvedValueOnce([prop]).mockResolvedValueOnce(null);
+    listProperties.mockResolvedValue([prop, { id: "properties/2", name: "B", account: "B" }]);
+    fetchTrafficReport.mockResolvedValue({ ok: true });
+    const res = await getReport(url(base.replace("properties/1", "properties/2")));
+    expect(res.body).toEqual({ ok: true });
+    expect(listProperties).toHaveBeenCalledTimes(1);
+    expect(setCached).toHaveBeenCalledWith("ga4:properties", expect.any(Array), 60 * 60 * 1000);
   });
 
   it("429 maps GA quota error", async () => {
