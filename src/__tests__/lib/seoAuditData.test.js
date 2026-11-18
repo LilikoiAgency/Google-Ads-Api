@@ -3,11 +3,28 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/lib/serverCache', () => ({ getCached: vi.fn(), setCached: vi.fn() }));
 vi.mock('@/lib/gscClient', () => ({ createAuthedGscClient: vi.fn() }));
 vi.mock('@/lib/ga4Client', () => ({ listProperties: vi.fn(), listWebStreams: vi.fn(), fetchTrafficReport: vi.fn() }));
+const sitesList = vi.hoisted(() => vi.fn());
+vi.mock('googleapis', () => ({ google: { webmasters: () => ({ sites: { list: sitesList } }) } }));
 
 import {
   normalizeDomain, pickGscSite, streamMatchesDomain, isBrandedQuery,
-  auditRanges, summarizeGsc, summarizeGa4,
+  auditRanges, summarizeGsc, summarizeGa4, findGscSite,
 } from '@/lib/seoAuditData';
+import { createAuthedGscClient } from '@/lib/gscClient';
+
+describe('findGscSite', () => {
+  it('reports not_connected without a Search Console login', async () => {
+    createAuthedGscClient.mockResolvedValue(null);
+    expect(await findGscSite('x.com')).toEqual({ status: 'not_connected', site: null, auth: null });
+  });
+  it('returns the matched site with its auth client, or no_site', async () => {
+    const auth = { tag: 'auth' };
+    createAuthedGscClient.mockResolvedValue(auth);
+    sitesList.mockResolvedValue({ data: { siteEntry: [{ siteUrl: 'sc-domain:x.com' }] } });
+    expect(await findGscSite('www.x.com')).toEqual({ status: 'ok', site: 'sc-domain:x.com', auth });
+    expect(await findGscSite('y.com')).toEqual({ status: 'no_site', site: null, auth });
+  });
+});
 
 describe('normalizeDomain', () => {
   it('strips protocol, www, path and port', () => {

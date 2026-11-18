@@ -48,7 +48,7 @@ export function buildReportRequests({ startDate, endDate, compareRange, granular
     {
       dateRanges: current,
       dimensions: dims(['landingPage', CHANNEL_DIM]),
-      metrics: metrics(['sessions', 'activeUsers', 'keyEvents']),
+      metrics: metrics(['sessions', 'activeUsers', 'keyEvents', 'engagedSessions']),
       orderBys: bySessionsDesc,
       limit: 500,
     },
@@ -221,12 +221,15 @@ export function normalizeTrafficReport(reports, { property, range, compareRange,
 
   const landingPages = rowsOf(pagesReport).map((row) => {
     const [page, channel] = dimVals(row);
-    return {
+    const out = {
       page, channel, bucket: bucketFor(channel),
       sessions: num(row.metricValues?.[0]?.value),
       users: num(row.metricValues?.[1]?.value),
       keyEvents: num(row.metricValues?.[2]?.value),
     };
+    // Older cached reports and fixtures predate this metric.
+    if (row.metricValues?.[3] !== undefined) out.engagedSessions = num(row.metricValues[3].value);
+    return out;
   });
 
   const warnings = [];

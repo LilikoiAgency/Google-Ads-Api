@@ -144,11 +144,19 @@ async function gscSites(auth) {
   return (res.data.siteEntry || []).map((s) => s.siteUrl);
 }
 
-async function fetchGscSummary(domain, ranges) {
+// The Search Console site for a domain plus the authed client to query it with.
+// status: ok | not_connected | no_site. Throws only on an API failure.
+export async function findGscSite(domain) {
   const auth = await createAuthedGscClient();
-  if (!auth) return { status: 'not_connected' };
+  if (!auth) return { status: 'not_connected', site: null, auth: null };
   const site = pickGscSite(domain, await gscSites(auth));
-  if (!site) return { status: 'no_site' };
+  if (!site) return { status: 'no_site', site: null, auth };
+  return { status: 'ok', site, auth };
+}
+
+async function fetchGscSummary(domain, ranges) {
+  const { status, site, auth } = await findGscSite(domain);
+  if (status !== 'ok') return { status };
   const wm = google.webmasters({ version: 'v3', auth });
   const query = (range, dimensions, rowLimit) =>
     wm.searchanalytics.query({ siteUrl: site, requestBody: { ...range, dimensions, rowLimit } }).then((r) => r.data.rows || []);
