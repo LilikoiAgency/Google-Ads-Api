@@ -7,7 +7,7 @@ import { Tabs, SectionTitle } from "../ui";
 import ClientSummary from "./ClientSummary";
 import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
-import PassFindings from "./PassFindings";
+import PassFindings, { IncompleteNotice } from "./PassFindings";
 
 const SOURCES = [
   ["crawl", "Site crawl"],
@@ -65,14 +65,18 @@ export default function V2Results({ result, domain, actions }) {
   const tasks = result.action_plan || [];
   const findings = result.findings || {};
   const pagesCrawled = result.data_sources?.crawl?.pages;
+  // Older results have no passes_completed; treat every area as complete there.
+  const incomplete = (area) => result.passes_completed?.[area] === false;
+  const flagged = (area, count) => (incomplete(area) ? { count: "!", warn: true } : { count });
 
   const tabs = [
     { key: "plan", label: "Action Plan", count: tasks.length },
-    { key: "pages", label: "Pages", count: result.pages?.length || 0 },
-    { key: "technical", label: "Technical", count: findings.technical?.length || 0 },
-    { key: "local", label: "Local & AI search", count: findings.local?.length || 0 },
-    { key: "conversion", label: "Conversion", count: findings.conversion?.length || 0 },
+    { key: "pages", label: "Pages", ...flagged("content", result.pages?.length || 0) },
+    { key: "technical", label: "Technical", ...flagged("technical", findings.technical?.length || 0) },
+    { key: "local", label: "Local & AI search", ...flagged("local", findings.local?.length || 0) },
+    { key: "conversion", label: "Conversion", ...flagged("conversion", findings.conversion?.length || 0) },
   ];
+  const areaLabel = (key) => tabs.find((t) => t.key === key).label;
 
   return (
     <div>
@@ -96,7 +100,8 @@ export default function V2Results({ result, domain, actions }) {
         {tab === "plan" && <ActionPlan tasks={tasks} domain={result.domain || domain} auditDate={result.audit_date} />}
         {tab === "pages" && (
           <>
-            <PageCards pages={result.pages} tasks={tasks} />
+            {incomplete("content") && <IncompleteNotice area="Content" />}
+            {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={tasks} />}
             {findings.content?.length > 0 && (
               <>
                 <SectionTitle>Content findings</SectionTitle>
@@ -105,11 +110,12 @@ export default function V2Results({ result, domain, actions }) {
             )}
           </>
         )}
-        {tab === "technical" && <PassFindings findings={findings.technical} />}
-        {tab === "local" && <PassFindings findings={findings.local} />}
+        {tab === "technical" && <PassFindings findings={findings.technical} incomplete={incomplete("technical") ? areaLabel("technical") : undefined} />}
+        {tab === "local" && <PassFindings findings={findings.local} incomplete={incomplete("local") ? areaLabel("local") : undefined} />}
         {tab === "conversion" && (
           <PassFindings
             findings={findings.conversion}
+            incomplete={incomplete("conversion") ? areaLabel("conversion") : undefined}
             intro={result.data_sources?.ga4 && result.data_sources.ga4.status !== "ok" ? "Conversion analysis needs Google Analytics, which wasn't available for this site." : undefined}
           />
         )}

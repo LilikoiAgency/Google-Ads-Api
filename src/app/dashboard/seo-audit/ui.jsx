@@ -71,7 +71,14 @@ export function Tabs({ tabs, active, onSelect }) {
           }}
         >
           {t.label}
-          {t.count != null && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: active === t.key ? "#0f3460" : "#aaa" }}>{t.count}</span>}
+          {t.count != null && (
+            <span
+              title={t.warn ? "This analysis didn't complete" : undefined}
+              style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: t.warn ? "#b7791f" : active === t.key ? "#0f3460" : "#aaa" }}
+            >
+              {t.count}
+            </span>
+          )}
         </button>
       ))}
     </div>

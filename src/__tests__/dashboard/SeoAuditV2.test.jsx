@@ -3,6 +3,8 @@
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 
 vi.mock('@/lib/seoAuditV2/tasks', async (importOriginal) => {
   const actual = await importOriginal();
@@ -126,6 +128,35 @@ describe('ActionPlan', () => {
     expect(createObjectURL).toHaveBeenCalled();
     expect(downloadName).toBe('acme.com SEO action plan 2026-11-18.csv');
     clickSpy.mockRestore();
+  });
+
+  it('Copy change says Copied only when the copy worked, otherwise the failure', async () => {
+    const writeText = vi.fn().mockResolvedValue();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<ActionPlan tasks={TASKS} domain="acme.com" />);
+    fireEvent.click(screen.getByText('Add pricing section to turf page'));
+    fireEvent.click(screen.getByRole('button', { name: /copy change/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(TASKS[0].change));
+    expect(await screen.findByRole('button', { name: /^copied$/i })).toBeInTheDocument();
+
+    writeText.mockRejectedValue(new Error('denied'));
+    fireEvent.click(screen.getByText('Fix canonical pointing to staging'));
+    const buttons = screen.getAllByRole('button', { name: /copy change/i });
+    fireEvent.click(buttons[buttons.length - 1]);
+    expect(await screen.findByText(/couldn.t copy/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^copied$/i })).not.toBeInTheDocument();
+  });
+
+  it('each row has a real expand button with aria-expanded', () => {
+    render(<ActionPlan tasks={TASKS} domain="acme.com" />);
+    const btn = screen.getByRole('button', { name: 'Show details for T1' });
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('No price mentioned on page')).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('No price mentioned on page')).not.toBeInTheDocument();
   });
 
   it('shows an empty state when there are no tasks', () => {
@@ -264,6 +295,44 @@ describe('v2 results pieces', () => {
     expect(screen.getByText(/T1/)).toBeInTheDocument();
   });
 
+  it('PageCards shows index status, speed and top queries, and hides empty blocks', () => {
+    const pages = [
+      {
+        page: 'https://acme.com/services/turf', fixes: [],
+        index: { verdict: 'PASS', coverage_state: 'Submitted and indexed', canonical_mismatch: false, google_canonical: null, last_crawl: null },
+        speed: { score: 62, lcp_ms: 3100, inp_ms: 180, cls: 0.05, field: { lcp_ms: 2900, inp_ms: 150, cls: 0.04 } },
+        top_queries: [{ query: 'turf cost', clicks: 12, impressions: 900, position: 8.4 }],
+      },
+      {
+        page: 'https://acme.com/about', fixes: [],
+        index: { verdict: 'NEUTRAL', coverage_state: 'Crawled - currently not indexed', canonical_mismatch: false, google_canonical: null, last_crawl: null },
+        speed: { score: 80, lcp_ms: 2000, inp_ms: null, cls: 0.01, field: null },
+        top_queries: [],
+      },
+      {
+        page: 'https://acme.com/old', fixes: [{ change: 'Merge into /new', targets_queries: [] }],
+        index: { verdict: 'PASS', coverage_state: 'Indexed', canonical_mismatch: true, google_canonical: 'https://acme.com/new', last_crawl: null },
+        speed: null, top_queries: [],
+      },
+      { page: 'https://acme.com/plain', fixes: [{ change: 'Add an H1', targets_queries: [] }], index: null, speed: null, top_queries: [] },
+    ];
+    const { container } = render(<PageCards pages={pages} tasks={[]} />);
+    const cards = container.querySelectorAll('[data-page-card]');
+    expect(cards).toHaveLength(4);
+    expect(cards[0]).toHaveTextContent('Indexed');
+    expect(cards[0]).toHaveTextContent('Speed 62/100');
+    expect(cards[0]).toHaveTextContent(/real users/i);
+    expect(cards[0]).toHaveTextContent('LCP 2.9s');
+    expect(cards[0]).toHaveTextContent('turf cost');
+    expect(cards[1]).toHaveTextContent('Not indexed: Crawled - currently not indexed');
+    expect(cards[1]).toHaveTextContent(/lab test/i);
+    expect(cards[1]).toHaveTextContent('LCP 2.0s');
+    expect(cards[1]).not.toHaveTextContent(/top queries/i);
+    expect(cards[2]).toHaveTextContent('Google picked a different canonical: https://acme.com/new');
+    expect(cards[2]).not.toHaveTextContent(/speed/i);
+    expect(cards[3]).not.toHaveTextContent(/indexed|speed|top queries/i);
+  });
+
   it('PassFindings lists findings and shows an empty state', () => {
     const { rerender } = render(<PassFindings findings={V2_RESULT.findings.technical} />);
     expect(screen.getByText('Staging canonical')).toBeInTheDocument();
@@ -303,8 +372,47 @@ describe('ResultsView picks the view by version', () => {
     expect(screen.queryByRole('button', { name: 'SEO Analysis' })).not.toBeInTheDocument();
   });
 
+  it('shows a gap notice instead of an empty state for a pass that did not complete', () => {
+    const result = {
+      ...V2_RESULT,
+      passes_completed: { technical: true, content: false, local: false, conversion: true },
+    };
+    render(<ResultsView audit={result} domain="acme.com" />);
+    expect(screen.getByRole('button', { name: /^local & ai search\s*!/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^technical\s*1$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^local & ai search/i }));
+    expect(screen.getByText("Local & AI search analysis didn't complete — rerun to include it")).toBeInTheDocument();
+    expect(screen.queryByText(/no findings/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^pages/i }));
+    expect(screen.getByText("Content analysis didn't complete — rerun to include it")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^conversion/i }));
+    expect(screen.getByText(/no findings/i)).toBeInTheDocument();
+  });
+
   it('uses no automation or vendor wording in the v2 view', () => {
     const { container } = render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
     expect(container.textContent).not.toMatch(/\bAI[- ]?(generated|powered)|claude|anthropic|\bLLM\b|\bGPT\b/i);
+  });
+
+  it('the page and view sources use no automation or vendor wording', () => {
+    const dir = path.resolve(__dirname, '../../app/dashboard/seo-audit');
+    const files = [
+      ...fs.readdirSync(path.join(dir, 'v2')).filter((f) => /\.jsx?$/.test(f)).map((f) => path.join(dir, 'v2', f)),
+      ...['page.js', 'ui.jsx', 'ResultsView.jsx', 'V1Results.jsx'].map((f) => path.join(dir, f)),
+    ];
+    // Explicit exceptions: the "Local & AI search" area label, and a v1 section
+    // title kept verbatim so saved v1 audits render as before.
+    const ALLOWED = ['Local & AI search', 'Content for AI Synthesis'];
+    const BANNED = /\bAI\b|claude|anthropic|openai|\bLLM\b|\bGPT\b|gemini|chatbot|powered by|machine learning|language model/i;
+    expect(files.length).toBeGreaterThan(8);
+    const hits = [];
+    for (const file of files) {
+      let src = fs.readFileSync(file, 'utf8');
+      for (const ok of ALLOWED) src = src.split(ok).join('');
+      src.split('\n').forEach((line, i) => {
+        if (BANNED.test(line)) hits.push(`${path.basename(file)}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(hits).toEqual([]);
   });
 });

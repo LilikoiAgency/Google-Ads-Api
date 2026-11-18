@@ -1,12 +1,23 @@
 "use client";
 // One analysis area's findings: title, detail and the evidence behind it.
+// When the area's analysis didn't complete, a gap notice replaces the empty state.
 
-export default function PassFindings({ findings, intro }) {
+export function IncompleteNotice({ area }) {
+  return (
+    <p role="note" style={{ fontSize: 13, color: "#7d5a00", background: "#fef3cd", border: "1px solid #f5d77a", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+      {area} analysis didn&apos;t complete — rerun to include it
+    </p>
+  );
+}
+
+export default function PassFindings({ findings, intro, incomplete }) {
+  if (incomplete && !findings?.length) return <IncompleteNotice area={incomplete} />;
   if (!findings?.length) {
     return <p style={{ color: "#999", fontSize: 13 }}>No findings in this area.{intro ? ` ${intro}` : ""}</p>;
   }
   return (
     <div>
+      {incomplete && <IncompleteNotice area={incomplete} />}
       {intro && <p style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>{intro}</p>}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {findings.map((f, i) => (

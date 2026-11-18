@@ -66,6 +66,8 @@ const TD = { padding: "11px 12px", verticalAlign: "top" };
 const SELECT = { padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, color: "#333", background: "#fff", maxWidth: 260 };
 const BUTTON = { padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
 
+const COPY_FAILED = "Couldn't copy. Your browser blocked the clipboard.";
+
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -87,18 +89,22 @@ function downloadCsv(csv, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function ExpandedTask({ task, onCopy, copied }) {
+// copyNotice: { ok, text } after a "Copy change" click on this task, else null.
+function ExpandedTask({ task, onCopy, copyNotice }) {
   return (
     <div style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "4px 4px 8px" }}>
       <div style={{ flex: "1 1 320px", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#1a7a4a" }}>Exact change</p>
-          <button
-            onClick={(e) => { e.stopPropagation(); onCopy(); }}
-            style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #cde7d8", background: "#fff", color: "#1a7a4a" }}
-          >
-            {copied ? "Copied" : "Copy change"}
-          </button>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {copyNotice && !copyNotice.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{copyNotice.text}</span>}
+            <button
+              onClick={(e) => { e.stopPropagation(); onCopy(); }}
+              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #cde7d8", background: "#fff", color: "#1a7a4a" }}
+            >
+              {copyNotice?.ok ? "Copied" : "Copy change"}
+            </button>
+          </span>
         </div>
         <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#f0fdf4", border: "1px solid #cde7d8", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
           {task.change}
@@ -141,7 +147,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
   const [page, setPage] = useState("");
   const [quickOnly, setQuickOnly] = useState(false);
   const [open, setOpen] = useState(() => new Set());
-  const [notice, setNotice] = useState(null); // { key, text }
+  const [notice, setNotice] = useState(null); // { key, text, ok }
 
   const categories = useMemo(() => {
     const counts = new Map();
@@ -156,8 +162,8 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
   const filtered = Boolean(category || page || quickOnly);
   const quickCount = tasks.filter(isQuickWin).length;
 
-  const flash = (key, text) => {
-    setNotice({ key, text });
+  const flash = (key, text, ok = true) => {
+    setNotice({ key, text, ok });
     setTimeout(() => setNotice((n) => (n?.key === key ? null : n)), 2500);
   };
 
@@ -169,12 +175,12 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
 
   async function handleCopyChecklist() {
     const ok = await copyText(tasksToChecklist(visible));
-    flash("checklist", ok ? `Copied ${visible.length} task${visible.length !== 1 ? "s" : ""}` : "Couldn't copy. Your browser blocked the clipboard.");
+    flash("checklist", ok ? `Copied ${visible.length} task${visible.length !== 1 ? "s" : ""}` : COPY_FAILED, ok);
   }
 
   async function handleCopyChange(task) {
     const ok = await copyText(task.change);
-    flash(`change-${task.id}`, ok ? "Copied" : "Copy blocked");
+    flash(`change-${task.id}`, ok ? "Copied" : COPY_FAILED, ok);
   }
 
   function handleCsv() {
@@ -223,7 +229,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: "#1a7a4a" }}>{notice.text}</span>}
+          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "#1a7a4a" : "#c0392b" }}>{notice.text}</span>}
           <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid #0f3460", background: "#fff", color: "#0f3460" }}>
             Copy as checklist
           </button>
@@ -235,7 +241,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
 
       <p style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
         {filtered ? `Showing ${visible.length} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
-        {" · "}click a task for the evidence and the exact change
+        {" · "}open a task for the evidence and the exact change
       </p>
 
       <div style={{ overflowX: "auto" }}>
@@ -249,7 +255,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
               <th style={{ ...TH, textAlign: "center" }}>Impact</th>
               <th style={{ ...TH, textAlign: "center" }}>Effort</th>
               <th style={TH}>Confidence</th>
-              <th style={{ ...TH, width: 24 }} aria-label="Expand" />
+              <th style={{ ...TH, width: 24 }}><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Details</span></th>
             </tr>
           </thead>
           <tbody>
@@ -258,10 +264,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
               return [
                 <tr
                   key={t.id}
-                  tabIndex={0}
-                  aria-expanded={isOpen}
                   onClick={() => toggle(t.id)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(t.id); } }}
                   style={{ borderBottom: isOpen ? "none" : "1px solid #f0f0f0", cursor: "pointer", background: isOpen ? "#fafbff" : "transparent" }}
                 >
                   <td style={{ ...TD, fontWeight: 700, color: "#0f3460" }}>{t.id}</td>
@@ -276,15 +279,23 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
                   <td style={{ ...TD, textAlign: "center" }}><ScaleChip value={t.impact} kind="impact" /></td>
                   <td style={{ ...TD, textAlign: "center" }}><ScaleChip value={t.effort} kind="effort" /></td>
                   <td style={{ ...TD, color: CONFIDENCE_COLOR[t.confidence] || "#888", fontWeight: 600, textTransform: "capitalize" }}>{t.confidence}</td>
-                  <td style={{ ...TD, color: "#aaa", textAlign: "center" }} aria-hidden>
-                    <span style={{ display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>&#9656;</span>
+                  <td style={{ ...TD, textAlign: "center", padding: "6px 8px" }}>
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      aria-label={`Show details for ${t.id}`}
+                      onClick={(e) => { e.stopPropagation(); toggle(t.id); }}
+                      style={{ border: "none", background: "transparent", color: "#888", cursor: "pointer", padding: "4px 6px", borderRadius: 6, fontSize: 13 }}
+                    >
+                      <span aria-hidden style={{ display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>&#9656;</span>
+                    </button>
                   </td>
                 </tr>,
                 isOpen && (
                   <tr key={`${t.id}-detail`} style={{ borderBottom: "1px solid #f0f0f0", background: "#fafbff" }}>
                     <td />
                     <td colSpan={7} style={{ padding: "0 12px 14px" }}>
-                      <ExpandedTask task={t} copied={notice?.key === `change-${t.id}`} onCopy={() => handleCopyChange(t)} />
+                      <ExpandedTask task={t} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
                     </td>
                   </tr>
                 ),

@@ -80,9 +80,9 @@ function csvCell(value) {
 }
 
 export function tasksToCsv(tasks) {
-  const header = ['Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Evidence'];
+  const header = ['ID', 'Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Evidence'];
   const rows = (tasks || []).map((t, i) => [
-    i + 1, t.title, t.page, t.category, t.impact, t.effort, t.confidence,
+    t.id, i + 1, t.title, t.page, t.category, t.impact, t.effort, t.confidence,
     t.change, (t.evidence || []).join(' | '),
   ]);
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');

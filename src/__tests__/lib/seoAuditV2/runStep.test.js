@@ -152,12 +152,71 @@ describe('runStep', () => {
     expect(r).toMatchObject({ version: 2, domain: 'acme.com', audit_type: 'full', client_summary: 'Summary' });
     expect(r.action_plan).toHaveLength(2);
     expect(r.top_moves[0].headline).toBe('Get found');
-    expect(r.pages).toEqual([{ page: 'p1', fixes: [] }]);
+    expect(r.pages).toEqual([{ page: 'p1', fixes: [], index: null, speed: null, top_queries: [] }]);
+    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: false });
     expect(r.findings.technical).toEqual([{ title: 'tf' }]);
     expect(r.findings.conversion).toEqual([]);
     expect(r.data_gaps).toEqual(['ga4 unavailable', "Conversion analysis didn't complete — rerun to include it", 'GA4 is missing.']);
     expect(r.data_sources.search_console.status).toBe('ok');
     expect(r.data_sources.ga4.status).toBe('no_property');
+  });
+
+  it('synthesize joins index status, speed and top queries onto pages by path', async () => {
+    m.runStructured.mockResolvedValue({
+      output: { client_summary: 'S', top_moves: [], scores: {}, data_gaps: [], drop_task_ids: [] },
+    });
+    const inspection = [
+      {
+        url: 'https://acme.com/services/turf/', verdict: 'PASS', coverage_state: 'Submitted and indexed',
+        google_canonical: 'https://acme.com/services/turf', user_canonical: 'https://acme.com/services/turf',
+        canonical_mismatch: false, last_crawl: '2026-11-01T00:00:00Z',
+      },
+      {
+        url: 'https://acme.com/about', verdict: 'NEUTRAL', coverage_state: 'Crawled - currently not indexed',
+        google_canonical: null, user_canonical: null, canonical_mismatch: false, last_crawl: null,
+      },
+      { url: 'https://acme.com/broken', error: 'quota' },
+    ];
+    const pagespeed = [
+      { status: 'ok', url: 'https://acme.com/services/turf?utm=x', score: 62, lcp_ms: 3100, inp_ms: 180, cls: 0.05, field: { lcp_ms: 2900, inp_ms: 150, cls: 0.04, origin_fallback: false } },
+      { status: 'ok', url: 'https://acme.com/', score: 90, lcp_ms: 1500, inp_ms: null, cls: 0, field: null },
+    ];
+    const gscPages = [{
+      page: 'https://acme.com/services/turf', clicks: 30, impressions: 2000, ctr: 0.015, position: 9,
+      queries: Array.from({ length: 7 }, (_, i) => ({ query: `q${i}`, clicks: 7 - i, impressions: 100, ctr: 0.07, position: 5 + i })),
+    }];
+    const j = job({
+      'pass:technical': { status: 'done' },
+      'pass:content': { status: 'done' },
+      'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' },
+      synthesize: { status: 'running', attempts: 1 },
+    }, {
+      data: { crawl, sources: { inspection, pagespeed, gscPages }, gaps: [], sharedContext: 'ctx' },
+      passes: {
+        technical: { findings: [], tasks: [] },
+        content: { findings: [], tasks: [], pages: [{ page: 'https://acme.com/services/turf', fixes: [{ change: 'Add prices', targets_queries: ['q0'] }] }] },
+        local: { findings: [], tasks: [] },
+        conversion: { skipped: true, findings: [], tasks: [] },
+      },
+    });
+    const r = (await runStep(j, 'synthesize')).patch.result;
+    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: true });
+    expect(r.pages.map((p) => p.page)).toEqual(['https://acme.com/services/turf', 'https://acme.com/about', 'https://acme.com/']);
+    const [turf, about, home] = r.pages;
+    expect(turf.fixes).toHaveLength(1);
+    expect(turf.index).toEqual({
+      verdict: 'PASS', coverage_state: 'Submitted and indexed', canonical_mismatch: false,
+      google_canonical: 'https://acme.com/services/turf', last_crawl: '2026-11-01T00:00:00Z',
+    });
+    expect(turf.speed).toEqual({ score: 62, lcp_ms: 3100, inp_ms: 180, cls: 0.05, field: { lcp_ms: 2900, inp_ms: 150, cls: 0.04, origin_fallback: false } });
+    expect(turf.top_queries).toHaveLength(5);
+    expect(turf.top_queries[0]).toEqual({ query: 'q0', clicks: 7, impressions: 100, position: 5 });
+    expect(about).toMatchObject({ fixes: [], speed: null, top_queries: [] });
+    expect(about.index.coverage_state).toBe('Crawled - currently not indexed');
+    expect(home).toMatchObject({ fixes: [], index: null, top_queries: [] });
+    expect(home.speed.score).toBe(90);
+    expect(r.pages.find((p) => p.page.includes('broken'))).toBeUndefined();
   });
 
   it('never throws', async () => {

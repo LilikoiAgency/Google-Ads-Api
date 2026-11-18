@@ -110,6 +110,54 @@ function dataSources(job) {
   return out;
 }
 
+// "https://acme.com/a/?x=1", "/a" and "a" all key to "/a"; the home page keys to "/".
+function pathKey(page) {
+  let path;
+  try {
+    path = new URL(String(page), 'https://placeholder.invalid').pathname;
+  } catch {
+    path = String(page).split(/[?#]/)[0];
+  }
+  return path.length > 1 ? path.replace(/\/+$/, '') : '/';
+}
+
+const byPath = (list) => new Map((list || []).filter((x) => x?.url || x?.page).map((x) => [pathKey(x.url || x.page), x]));
+
+// Content-pass pages plus any page that was inspected or measured, each with its
+// index status, speed and top Search Console queries (null / [] when unavailable).
+function buildPages(job) {
+  const sources = job.data?.sources || {};
+  const inspection = byPath((sources.inspection || []).filter((r) => !r.error));
+  const speed = byPath(sources.pagespeed);
+  const gsc = byPath(sources.gscPages);
+
+  const entries = new Map();
+  for (const p of job.passes?.content?.pages || []) {
+    const k = pathKey(p.page);
+    if (!entries.has(k)) entries.set(k, { ...p, fixes: p.fixes || [] });
+  }
+  for (const [k, r] of [...inspection, ...speed]) {
+    if (!entries.has(k)) entries.set(k, { page: r.url, fixes: [] });
+  }
+
+  return [...entries.entries()].map(([k, p]) => {
+    const i = inspection.get(k);
+    const s = speed.get(k);
+    const g = gsc.get(k);
+    return {
+      ...p,
+      index: i ? {
+        verdict: i.verdict, coverage_state: i.coverage_state, canonical_mismatch: i.canonical_mismatch,
+        google_canonical: i.google_canonical, last_crawl: i.last_crawl,
+      } : null,
+      speed: s ? { score: s.score, lcp_ms: s.lcp_ms, inp_ms: s.inp_ms, cls: s.cls, field: s.field ?? null } : null,
+      top_queries: (g?.queries || []).slice(0, 5).map((q) => ({
+        query: q.query, clicks: q.clicks, impressions: q.impressions, position: q.position,
+      })),
+    };
+  });
+}
+
 async function runSynthesize(job) {
   const done = PASSES.filter((p) => stepOf(job, `pass:${p}`).status === 'done' && job.passes?.[p]);
   const notCompleted = PASSES.filter((p) => !done.includes(p)).map((p) => PASS_AREA[p]);
@@ -140,8 +188,9 @@ async function runSynthesize(job) {
     top_moves: resolveTopMoves(plan, synth),
     scores: synth.scores,
     action_plan: plan,
-    pages: job.passes?.content?.pages || [],
+    pages: buildPages(job),
     findings: Object.fromEntries(PASSES.map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []])),
+    passes_completed: Object.fromEntries(PASSES.map((p) => [p, done.includes(p)])),
     data_gaps: dataGaps,
     data_sources: dataSources(job),
   };
