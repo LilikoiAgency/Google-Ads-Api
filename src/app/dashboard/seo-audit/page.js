@@ -7,564 +7,26 @@ import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
 import DashboardLoader from "../components/DashboardLoader";
 import { SEOAuditIcon } from "../components/DashboardIcons";
+import ResultsView from "./ResultsView";
+import ProgressSteps from "./v2/ProgressSteps";
+import { useAuditJob, friendlyError } from "./v2/useAuditJob";
 import "../../globals.css";
-
-// ─── Formatters ──────────────────────────────────────────────────────────────
-
-function fmt$(n) {
-  if (n == null) return "\u2014";
-  return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtN(n) {
-  if (n == null) return "\u2014";
-  return Number(n).toLocaleString("en-US");
-}
-function fmtPct(n) {
-  if (n == null) return "\u2014";
-  return (Number(n) * 100).toFixed(1) + "%";
-}
-
-// ─── UI Components ───────────────────────────────────────────────────────────
-
-const SCORE_COLORS = {
-  Critical:     { bg: "#fde8e8", text: "#c0392b", ring: "#e74c3c" },
-  "Needs Work": { bg: "#fef3cd", text: "#7d5a00", ring: "#f39c12" },
-  "On Track":   { bg: "#e8f0fe", text: "#0c3473", ring: "#3498db" },
-  Strong:       { bg: "#e6f9f0", text: "#1a7a4a", ring: "#27ae60" },
-  Exemplary:    { bg: "#e6f9f0", text: "#0d6e3a", ring: "#16a085" },
-};
-
-function getScoreStatus(score) {
-  if (score <= 3) return "Critical";
-  if (score <= 5) return "Needs Work";
-  if (score <= 7) return "On Track";
-  if (score <= 9) return "Strong";
-  return "Exemplary";
-}
-
-function ScoreCard({ label, score, status, takeaway }) {
-  const colors = SCORE_COLORS[status] || SCORE_COLORS["On Track"];
-  return (
-    <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", textAlign: "center", flex: 1, minWidth: 180 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#888", marginBottom: 12 }}>{label}</p>
-      <div style={{ width: 72, height: 72, borderRadius: "50%", border: `4px solid ${colors.ring}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
-        <span style={{ fontSize: 28, fontWeight: 800, color: colors.text }}>{score}</span>
-      </div>
-      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: colors.bg, color: colors.text }}>{status}</span>
-      {takeaway && <p style={{ fontSize: 12, color: "#666", marginTop: 8, lineHeight: 1.4 }}>{takeaway}</p>}
-    </div>
-  );
-}
-
-const STATUS_CHIP = {
-  Good:             { bg: "#e6f9f0", color: "#1a7a4a" },
-  "Needs Attention": { bg: "#fef3cd", color: "#7d5a00" },
-  Missing:          { bg: "#fde8e8", color: "#c0392b" },
-};
-
-function StatusChip({ status }) {
-  const s = STATUS_CHIP[status] || STATUS_CHIP["Needs Attention"];
-  return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: s.bg, color: s.color }}>
-      {status}
-    </span>
-  );
-}
-
-const PRIORITY_CHIP = {
-  critical:  { bg: "#fde8e8", color: "#c0392b" },
-  high:      { bg: "#fef3cd", color: "#7d5a00" },
-  medium:    { bg: "#e8f0fe", color: "#0c3473" },
-  quick_win: { bg: "#e6f9f0", color: "#1a7a4a" },
-};
-
-function PriorityChip({ priority }) {
-  const s = PRIORITY_CHIP[priority] || PRIORITY_CHIP.medium;
-  const label = priority === "quick_win" ? "Quick Win" : priority.charAt(0).toUpperCase() + priority.slice(1);
-  return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: s.bg, color: s.color }}>
-      {label}
-    </span>
-  );
-}
-
-function SectionTitle({ children }) {
-  return <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e", marginBottom: 14, marginTop: 28, paddingBottom: 8, borderBottom: "2px solid #eee" }}>{children}</h3>;
-}
-
-function FindingsTable({ findings }) {
-  if (!findings || !findings.length) return <p style={{ color: "#999", fontSize: 13 }}>No findings in this section.</p>;
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: "#f8f9fb" }}>
-            <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Signal</th>
-            <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Finding</th>
-            <th style={{ textAlign: "center", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee", width: 120 }}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {findings.map((f, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-              <td style={{ padding: "10px 12px", fontWeight: 600, color: "#333", whiteSpace: "nowrap" }}>{f.signal}</td>
-              <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{f.finding}</td>
-              <td style={{ padding: "10px 12px", textAlign: "center" }}><StatusChip status={f.status} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── Tab system ──────────────────────────────────────────────────────────────
-
-function Tabs({ tabs, active, onSelect }) {
-  return (
-    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 20, borderBottom: "2px solid #eee", paddingBottom: 0 }}>
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onSelect(t.key)}
-          style={{
-            padding: "8px 16px",
-            fontSize: 13,
-            fontWeight: active === t.key ? 700 : 500,
-            color: active === t.key ? "#0f3460" : "#888",
-            background: active === t.key ? "#e8f0fe" : "transparent",
-            border: "none",
-            borderBottom: active === t.key ? "2px solid #0f3460" : "2px solid transparent",
-            borderRadius: "8px 8px 0 0",
-            cursor: "pointer",
-            transition: "all 0.15s",
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─── Crawl progress ──────────────────────────────────────────────────────────
-
-function CrawlProgress({ pages, errors }) {
-  return (
-    <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
-      <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", marginBottom: 12 }}>
-        Crawled {pages.length} page{pages.length !== 1 ? "s" : ""}
-        {errors.length > 0 && <span style={{ color: "#e74c3c" }}> ({errors.length} failed)</span>}
-      </p>
-      {pages.map((p, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13 }}>
-          <span style={{ color: "#27ae60" }}>&#10003;</span>
-          <span style={{ color: "#333" }}>{p.url}</span>
-          <span style={{ color: "#999", fontSize: 11 }}>({p.page_type})</span>
-        </div>
-      ))}
-      {errors.map((e, i) => (
-        <div key={`err-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13 }}>
-          <span style={{ color: "#e74c3c" }}>&#10007;</span>
-          <span style={{ color: "#999" }}>{e.url}</span>
-          <span style={{ color: "#e74c3c", fontSize: 11 }}>({e.error})</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Results sections ────────────────────────────────────────────────────────
-
-function SEOSection({ data }) {
-  if (!data) return null;
-  return (
-    <div>
-      <SectionTitle>Technical On-Page</SectionTitle>
-      <FindingsTable findings={data.technical_on_page} />
-      <SectionTitle>Content Quality</SectionTitle>
-      <FindingsTable findings={data.content_quality} />
-      <SectionTitle>Structured Data</SectionTitle>
-      <FindingsTable findings={data.structured_data} />
-    </div>
-  );
-}
-
-function GEOSection({ data }) {
-  if (!data) return null;
-  return (
-    <div>
-      <SectionTitle>E-E-A-T Assessment</SectionTitle>
-      <FindingsTable findings={data.eeat_assessment} />
-      <SectionTitle>Content for AI Synthesis</SectionTitle>
-      <FindingsTable findings={data.content_for_ai} />
-      <SectionTitle>Technical GEO</SectionTitle>
-      <FindingsTable findings={data.technical_geo} />
-    </div>
-  );
-}
-
-function AEOSection({ data }) {
-  if (!data) return null;
-  return (
-    <div>
-      <SectionTitle>Featured Snippet Eligibility</SectionTitle>
-      <FindingsTable findings={data.snippet_eligibility} />
-      <SectionTitle>Structured Answer Formats</SectionTitle>
-      <FindingsTable findings={data.structured_answers} />
-      <SectionTitle>Voice Search Readiness</SectionTitle>
-      <FindingsTable findings={data.voice_search} />
-    </div>
-  );
-}
-
-function GSCSection({ data }) {
-  if (!data) return <p style={{ color: "#999", fontSize: 13 }}>No Google Search Console data included in this audit.</p>;
-  return (
-    <div>
-      <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{data.summary}</p>
-      {data.branded_vs_nonbranded && (
-        <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 200 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Branded Clicks</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: "#0f3460" }}>{fmtPct(data.branded_vs_nonbranded.branded_click_share)}</p>
-          </div>
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 200 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Non-Branded Clicks</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: "#27ae60" }}>{fmtPct(data.branded_vs_nonbranded.nonbranded_click_share)}</p>
-          </div>
-        </div>
-      )}
-      {data.top_opportunities?.length > 0 && (
-        <>
-          <SectionTitle>Top Opportunities</SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f8f9fb" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Type</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Query / Page</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Current</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Recommendation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.top_opportunities.map((o, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.type?.replace(/_/g, " ")}</td>
-                    <td style={{ padding: "10px 12px", color: "#333", maxWidth: 240, wordBreak: "break-all" }}>{o.query_or_page}</td>
-                    <td style={{ padding: "10px 12px", color: "#666" }}>{o.current_metric}</td>
-                    <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{o.recommendation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function fmtChange(n) {
-  if (n == null) return "—";
-  return `${n > 0 ? "▲" : n < 0 ? "▼" : ""} ${Math.abs(n)}%`.trim();
-}
-
-function AnalyticsSection({ data }) {
-  if (!data) return <p style={{ color: "#999", fontSize: 13 }}>No Google Analytics data included in this audit.</p>;
-  const trend = data.organic_trend || {};
-  const stat = (label, value, color = "#0f3460") => (
-    <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 160 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>{label}</p>
-      <p style={{ fontSize: 20, fontWeight: 800, color }}>{value}</p>
-    </div>
-  );
-  const changeColor = (n) => (n == null ? "#0f3460" : n >= 0 ? "#27ae60" : "#c0392b");
-  return (
-    <div>
-      <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{data.summary}</p>
-      <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-        {stat("Organic share of visits", fmtPct(data.organic_share_of_sessions))}
-        {stat("Organic visits vs prior 90 days", fmtChange(trend.sessions_change_pct), changeColor(trend.sessions_change_pct))}
-        {data.key_events_configured
-          ? stat("Organic key events vs prior", fmtChange(trend.key_events_change_pct), changeColor(trend.key_events_change_pct))
-          : stat("Lead tracking", "Not set up", "#c0392b")}
-      </div>
-      {trend.assessment && <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{trend.assessment}</p>}
-      {data.page_insights?.length > 0 && (
-        <>
-          <SectionTitle>Page Insights</SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f8f9fb" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Page</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Finding</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Recommendation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.page_insights.map((p, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                    <td style={{ padding: "10px 12px", color: "#333", maxWidth: 220, wordBreak: "break-all", fontWeight: 600 }}>{p.page}</td>
-                    <td style={{ padding: "10px 12px", color: "#666", lineHeight: 1.5 }}>{p.finding}</td>
-                    <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{p.recommendation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-      {data.channel_insight && (
-        <>
-          <SectionTitle>Organic vs Other Channels</SectionTitle>
-          <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>{data.channel_insight}</p>
-        </>
-      )}
-    </div>
-  );
-}
-
-const SOURCE_STATUS = {
-  ok: null,
-  not_connected: "not connected",
-  no_site: "this site isn't in Search Console for our login",
-  no_property: "no GA4 property found for this site",
-  no_data: "no data yet",
-  error: "couldn't load",
-};
-
-// "Data: Site crawl · Search Console (sc-domain:x) · GA4 (BBT)" with reasons for anything missing.
-function DataSourcesLine({ sources }) {
-  if (!sources) return null;
-  const part = (label, s, detail) => {
-    if (!s) return null;
-    const ok = s.status === "ok";
-    return (
-      <span key={label} style={{ color: ok ? "#5eead4" : "#888" }}>
-        {ok ? "✓" : "–"} {label}{ok && detail ? ` (${detail})` : ""}{!ok ? ` — ${SOURCE_STATUS[s.status] || s.status}` : ""}
-      </span>
-    );
-  };
-  return (
-    <p style={{ fontSize: 12, marginTop: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
-      <span style={{ color: "#5eead4" }}>{"✓"} Site crawl</span>
-      {part("Search Console", sources.search_console, sources.search_console?.site)}
-      {part("Google Analytics", sources.ga4, sources.ga4?.property)}
-      {sources.range && <span style={{ color: "#888" }}>{sources.range.startDate} to {sources.range.endDate}</span>}
-    </p>
-  );
-}
-
-function AdsSection({ data }) {
-  if (!data) return <p style={{ color: "#999", fontSize: 13 }}>No Google Ads data included in this audit.</p>;
-  return (
-    <div>
-      <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{data.summary}</p>
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        {data.total_spend != null && (
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 140 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Total Spend</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: "#0f3460" }}>{fmt$(data.total_spend)}</p>
-          </div>
-        )}
-        {data.total_conversions != null && (
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 140 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Conversions</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: "#27ae60" }}>{fmtN(data.total_conversions)}</p>
-          </div>
-        )}
-        {data.blended_cpa != null && (
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 140 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Blended CPA</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: "#e67e22" }}>{fmt$(data.blended_cpa)}</p>
-          </div>
-        )}
-        {data.blended_roas != null && (
-          <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 140 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Blended ROAS</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: "#8e44ad" }}>{data.blended_roas.toFixed(2)}x</p>
-          </div>
-        )}
-      </div>
-      {data.top_performers?.length > 0 && (
-        <>
-          <SectionTitle>Top Performers</SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f8f9fb" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Campaign</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Spend</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Conv</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>CPA</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Assessment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.top_performers.map((c, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#333" }}>{c.campaign}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmt$(c.spend)}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{c.conversions}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmt$(c.cpa)}</td>
-                    <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{c.assessment}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-      {data.underperformers?.length > 0 && (
-        <>
-          <SectionTitle>Underperformers</SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f8f9fb" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Campaign</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Spend</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Conv</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>CPA</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Assessment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.underperformers.map((c, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#333" }}>{c.campaign}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmt$(c.spend)}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{c.conversions}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmt$(c.cpa)}</td>
-                    <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{c.assessment}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-      {data.paid_vs_organic_overlap?.length > 0 && (
-        <>
-          <SectionTitle>Paid vs Organic Overlap</SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f8f9fb" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Keyword</th>
-                  <th style={{ textAlign: "center", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Organic Pos</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Ad Spend</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Recommendation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.paid_vs_organic_overlap.map((o, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.keyword}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{o.organic_position}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmt$(o.ad_spend_on_keyword)}</td>
-                    <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{o.recommendation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function TechnicalSection({ data }) {
-  if (!data) return null;
-  return (
-    <div>
-      <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{data.summary}</p>
-      <p style={{ fontSize: 13, fontWeight: 700, color: "#555", marginBottom: 8 }}>{data.health_score_assessment}</p>
-      {data.critical_errors?.length > 0 && (
-        <>
-          <SectionTitle>Critical Errors</SectionTitle>
-          {data.critical_errors.map((e, i) => (
-            <div key={i} style={{ background: "#fde8e8", borderRadius: 10, padding: "12px 16px", marginBottom: 10 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#c0392b" }}>{e.issue} ({e.count})</p>
-              <p style={{ fontSize: 12, color: "#7b1c1c", marginTop: 4 }}>{e.impact}</p>
-              <p style={{ fontSize: 12, color: "#333", marginTop: 4 }}>{e.action}</p>
-            </div>
-          ))}
-        </>
-      )}
-      {data.warnings?.length > 0 && (
-        <>
-          <SectionTitle>Warnings</SectionTitle>
-          {data.warnings.map((w, i) => (
-            <div key={i} style={{ background: "#fef3cd", borderRadius: 10, padding: "12px 16px", marginBottom: 10 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#7d5a00" }}>{w.issue} ({w.count})</p>
-              <p style={{ fontSize: 12, color: "#6d4c00", marginTop: 4 }}>{w.impact}</p>
-              <p style={{ fontSize: 12, color: "#333", marginTop: 4 }}>{w.action}</p>
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-function RecommendationsSection({ data }) {
-  if (!data?.length) return <p style={{ color: "#999", fontSize: 13 }}>No recommendations.</p>;
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: "#f8f9fb" }}>
-            <th style={{ textAlign: "center", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee", width: 90 }}>Priority</th>
-            <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Issue</th>
-            <th style={{ textAlign: "center", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee", width: 80 }}>Dimension</th>
-            <th style={{ textAlign: "center", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee", width: 70 }}>Effort</th>
-            <th style={{ textAlign: "center", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee", width: 70 }}>Impact</th>
-            <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((r, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-              <td style={{ padding: "10px 12px", textAlign: "center" }}><PriorityChip priority={r.priority} /></td>
-              <td style={{ padding: "10px 12px", fontWeight: 600, color: "#333" }}>{r.issue}</td>
-              <td style={{ padding: "10px 12px", textAlign: "center", color: "#666" }}>{r.dimension}</td>
-              <td style={{ padding: "10px 12px", textAlign: "center", color: "#666", textTransform: "capitalize" }}>{r.effort}</td>
-              <td style={{ padding: "10px 12px", textAlign: "center", color: "#666", textTransform: "capitalize" }}>{r.impact?.replace(/_/g, " ")}</td>
-              <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{r.action}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function StrengthsSection({ data }) {
-  if (!data?.length) return null;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {data.map((s, i) => (
-        <div key={i} style={{ background: "#e6f9f0", borderRadius: 10, padding: "14px 18px", borderLeft: "4px solid #27ae60" }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: "#1a7a4a", marginBottom: 4 }}>{s.strength}</p>
-          <p style={{ fontSize: 12, color: "#333", lineHeight: 1.5 }}>{s.evidence}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-const STEPS = { CONFIGURE: 0, CRAWLING: 1, ANALYZING: 2, RESULTS: 3 };
+const STEPS = { CONFIGURE: 0, PROGRESS: 1, RESULTS: 2 };
+
+// History items that are v2 jobs still open (not saved as a finished audit yet).
+const isOpenJob = (a) => Boolean(a.status) && a.status !== "done";
+const JOB_BADGE = {
+  queued:  { label: "Running", bg: "rgba(59,130,246,0.2)", color: "#93c5fd" },
+  running: { label: "Running", bg: "rgba(59,130,246,0.2)", color: "#93c5fd" },
+  failed:  { label: "Failed",  bg: "rgba(239,68,68,0.2)",  color: "#fca5a5" },
+};
 
 export default function SEOAuditPage() {
   const router = useRouter();
-  const { data: session, status: authStatus } = useSession();
+  const { status: authStatus } = useSession();
 
   // Form state
   const [domain, setDomain] = useState("");
@@ -573,19 +35,20 @@ export default function SEOAuditPage() {
   // Flow state
   const [step, setStep] = useState(STEPS.CONFIGURE);
   const [error, setError] = useState(null);
+  const [starting, setStarting] = useState(false);
 
   // Data
   const [crawlData, setCrawlData] = useState(null);
   const [auditResult, setAuditResult] = useState(null);
-  const [remainingToday, setRemainingToday] = useState(null);
+  const [jobId, setJobId] = useState(null);
 
   // History
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [loadingAuditId, setLoadingAuditId] = useState(null);
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState("seo");
+  // v2 job: advances while the progress view is open.
+  const job = useAuditJob(step === STEPS.PROGRESS ? jobId : null);
 
   useEffect(() => {
     if (authStatus === "unauthenticated") {
@@ -593,65 +56,57 @@ export default function SEOAuditPage() {
     }
   }, [authStatus, router]);
 
+  function refreshHistory() {
+    return fetch("/api/seo-audit/history")
+      .then((res) => res.json())
+      .then((data) => setHistory(data.audits || []))
+      .catch(() => {});
+  }
+
   // ── Fetch audit history on mount ───────────────────────────────────────
   useEffect(() => {
     if (authStatus !== "authenticated") return;
-    fetch("/api/seo-audit/history")
-      .then((res) => res.json())
-      .then((data) => setHistory(data.audits || []))
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false));
+    refreshHistory().finally(() => setHistoryLoading(false));
   }, [authStatus]);
 
-  // ── Run crawl ──────────────────────────────────────────────────────────────
+  // ── Job finished: show its results ─────────────────────────────────────
+  useEffect(() => {
+    if (step !== STEPS.PROGRESS || !job.result) return;
+    setCrawlData(null);
+    setAuditResult(job.result);
+    setStep(STEPS.RESULTS);
+    refreshHistory();
+  }, [step, job.result]);
+
+  // ── Start (or reuse) a v2 audit job ────────────────────────────────────
   async function handleRunAudit(forceRerun = false) {
+    const target = (domain || auditResult?.domain || "").trim();
+    if (!target || starting) return;
     setError(null);
-    setStep(STEPS.CRAWLING);
-
+    setStarting(true);
     try {
-      // Step 1: Crawl
-      const crawlRes = await fetch("/api/seo-audit/crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain, auditType, forceRerun }),
-      });
-
-      if (!crawlRes.ok) {
-        const err = await crawlRes.json().catch(() => ({}));
-        throw new Error(err.error || `Crawl failed (${crawlRes.status})`);
+      let res;
+      try {
+        res = await fetch("/api/seo-audit/v2/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain: target, auditType, forceRerun }),
+        });
+      } catch {
+        throw new Error("Couldn't reach the server. Check your connection and try again.");
       }
-
-      const crawlJson = await crawlRes.json();
-      const crawl = crawlJson.data ?? crawlJson; // unwrap { data: ... } envelope
-      setCrawlData(crawl);
-
-      // Step 2: Analyze
-      setStep(STEPS.ANALYZING);
-
-      const analyzeRes = await fetch("/api/seo-audit/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ crawlData: crawl, forceRerun }),
-      });
-
-      if (!analyzeRes.ok) {
-        const err = await analyzeRes.json().catch(() => ({}));
-        throw new Error(err.error || `Analysis failed (${analyzeRes.status})`);
-      }
-
-      const result = await analyzeRes.json();
-      setAuditResult(result.data?.audit);
-      setRemainingToday(result.data?.remainingToday);
-      setStep(STEPS.RESULTS);
-
-      // Refresh history list so the new audit appears
-      fetch("/api/seo-audit/history")
-        .then((r) => r.json())
-        .then((d) => setHistory(d.audits || []))
-        .catch(() => {});
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(friendlyError(res.status, body));
+      setAuditResult(null);
+      setCrawlData(null);
+      setJobId(body.jobId);
+      setStep(STEPS.PROGRESS);
+      refreshHistory();
     } catch (err) {
       setError(err.message);
       setStep(STEPS.CONFIGURE);
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -659,21 +114,38 @@ export default function SEOAuditPage() {
     setStep(STEPS.CONFIGURE);
     setCrawlData(null);
     setAuditResult(null);
+    setJobId(null);
     setError(null);
     setDomain("");
   }
 
-  // ── Load a past audit from history ─────────────────────────────────────
-  async function handleLoadAudit(auditId) {
+  function handleBackFromProgress() {
+    setStep(STEPS.CONFIGURE);
+    setJobId(null);
+    refreshHistory();
+  }
+
+  // ── Load a past audit (or resume an open job) from history ─────────────
+  async function handleLoadAudit(item) {
     setError(null);
+    if (isOpenJob(item)) {
+      setDomain(item.domain || "");
+      setAuditType(item.auditType || "full");
+      setJobId(item.jobId || item._id);
+      setStep(STEPS.PROGRESS);
+      return;
+    }
+    const auditId = item._id;
     setLoadingAuditId(auditId);
     try {
       const res = await fetch(`/api/seo-audit/history?id=${auditId}`);
-      if (!res.ok) throw new Error("Failed to load audit");
+      if (!res.ok) throw new Error("Couldn't load that audit. Try again.");
       const doc = await res.json();
       setCrawlData(doc.crawlData || null);
-      setAuditResult(doc.auditResult);
+      const result = doc.auditResult;
+      setAuditResult(doc.version === 2 && result && !result.version ? { ...result, version: 2 } : result);
       setDomain(doc.domain || "");
+      setAuditType(doc.auditType || "full");
       setStep(STEPS.RESULTS);
     } catch (err) {
       setError(err.message);
@@ -698,27 +170,30 @@ export default function SEOAuditPage() {
     return <DashboardLoader label="Loading..." />;
   }
 
-  // ── Build tab list based on available data ─────────────────────────────────
-  const audit = auditResult;
-
-  const tabList = [
-    { key: "seo", label: "SEO Analysis" },
-    { key: "geo", label: "GEO Analysis" },
-    { key: "aeo", label: "AEO Analysis" },
-  ];
-  if (audit?.search_console_analysis) tabList.push({ key: "gsc", label: "Search Console" });
-  if (audit?.site_analytics_analysis) tabList.push({ key: "ga4", label: "Site Analytics" });
-  if (audit?.google_ads_analysis) tabList.push({ key: "ads", label: "Google Ads" });
-  if (audit?.technical_health) tabList.push({ key: "tech", label: "Technical Health" });
-  tabList.push({ key: "recs", label: "Recommendations" });
-  if (audit?.strengths?.length) tabList.push({ key: "strengths", label: "Strengths" });
+  const resultActions = (
+    <div style={{ display: "flex", gap: 10 }}>
+      <button
+        onClick={() => handleRunAudit(true)}
+        disabled={starting}
+        style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(13,148,136,0.15)", border: "1px solid rgba(13,148,136,0.3)", color: "#5eead4", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1 }}
+      >
+        {starting ? "Starting..." : "Re-run Audit"}
+      </button>
+      <button
+        onClick={handleReset}
+        style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#ccc", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+      >
+        New Audit
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col flex-1">
       <DashboardToolHeader
         icon={<SEOAuditIcon />}
         title="SEO / GEO / AEO Audit"
-        subtitle="AI-powered site analysis"
+        subtitle="Site audit with a prioritized action plan"
       />
 
       <div className="mx-auto max-w-5xl px-6 py-10">
@@ -753,7 +228,7 @@ export default function SEOAuditPage() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: 24, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>SEO Audit</h2>
-                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>SEO + GEO + AEO analysis powered by AI</p>
+                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>SEO + GEO + AEO analysis with a ranked action plan</p>
                 </div>
               </div>
 
@@ -864,7 +339,7 @@ export default function SEOAuditPage() {
               {/* Submit button */}
               <button
                 onClick={() => handleRunAudit()}
-                disabled={!domain.trim()}
+                disabled={!domain.trim() || starting}
                 style={{
                   width: "100%",
                   padding: "14px",
@@ -888,7 +363,7 @@ export default function SEOAuditPage() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
-                Run Audit
+                {starting ? "Starting..." : "Run Audit"}
               </button>
             </div>
 
@@ -905,6 +380,8 @@ export default function SEOAuditPage() {
                   {history.map((a) => {
                     const isToday = a.createdAt && new Date(a.createdAt).toDateString() === new Date().toDateString();
                     const combined = (a.scores?.seo || 0) + (a.scores?.geo || 0) + (a.scores?.aeo || 0);
+                    const open = isOpenJob(a);
+                    const badge = open ? JOB_BADGE[a.status] || JOB_BADGE.running : null;
                     return (
                       <div
                         key={a._id}
@@ -921,16 +398,16 @@ export default function SEOAuditPage() {
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
-                        onClick={() => handleLoadAudit(a._id)}
+                        onClick={() => handleLoadAudit(a)}
                       >
                         {/* Score circle */}
                         <div style={{
                           width: 44, height: 44, borderRadius: "50%",
-                          border: `2px solid ${combined >= 20 ? "#0d9488" : combined >= 12 ? "#f59e0b" : "#ef4444"}`,
+                          border: `2px solid ${open ? "rgba(255,255,255,0.2)" : combined >= 20 ? "#0d9488" : combined >= 12 ? "#f59e0b" : "#ef4444"}`,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           flexShrink: 0, marginRight: 16,
                         }}>
-                          <span style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{combined}</span>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: open ? "rgba(255,255,255,0.4)" : "#fff" }}>{open ? "…" : combined}</span>
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -938,25 +415,36 @@ export default function SEOAuditPage() {
                             <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               {a.domain}
                             </p>
+                            {badge && (
+                              <span style={{ fontSize: 10, fontWeight: 700, background: badge.bg, color: badge.color, padding: "2px 8px", borderRadius: 10 }}>{badge.label}</span>
+                            )}
                             {isToday && (
                               <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(13,148,136,0.2)", color: "#5eead4", padding: "2px 8px", borderRadius: 10 }}>Today</span>
                             )}
                           </div>
                           <div style={{ display: "flex", gap: 10, fontSize: 12, alignItems: "center" }}>
-                            <span style={{ color: "#5eead4" }}>SEO {a.scores?.seo ?? "—"}</span>
-                            <span style={{ color: "rgba(255,255,255,0.15)" }}>/</span>
-                            <span style={{ color: "#a78bfa" }}>GEO {a.scores?.geo ?? "—"}</span>
-                            <span style={{ color: "rgba(255,255,255,0.15)" }}>/</span>
-                            <span style={{ color: "#fbbf24" }}>AEO {a.scores?.aeo ?? "—"}</span>
+                            {open ? (
+                              <span style={{ color: "rgba(255,255,255,0.5)" }}>
+                                {a.status === "failed" ? "Stopped on a step. Open to retry." : "Not finished. Open to continue."}
+                              </span>
+                            ) : (
+                              <>
+                                <span style={{ color: "#5eead4" }}>SEO {a.scores?.seo ?? "—"}</span>
+                                <span style={{ color: "rgba(255,255,255,0.15)" }}>/</span>
+                                <span style={{ color: "#a78bfa" }}>GEO {a.scores?.geo ?? "—"}</span>
+                                <span style={{ color: "rgba(255,255,255,0.15)" }}>/</span>
+                                <span style={{ color: "#fbbf24" }}>AEO {a.scores?.aeo ?? "—"}</span>
+                              </>
+                            )}
                             <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: 4 }}>
-                              {a.auditType === "quick" ? "Quick" : "Full"} &middot; {a.pagesCrawled}p &middot; {new Date(a.createdAt).toLocaleDateString()}
+                              {a.auditType === "quick" ? "Quick" : "Full"}{!open && <> &middot; {a.pagesCrawled}p</>} &middot; {new Date(a.createdAt).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
 
                         <div style={{ display: "flex", gap: 6, marginLeft: 12, flexShrink: 0 }}>
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleLoadAudit(a._id); }}
+                            onClick={(e) => { e.stopPropagation(); handleLoadAudit(a); }}
                             disabled={loadingAuditId === a._id}
                             style={{
                               padding: "7px 16px",
@@ -971,9 +459,9 @@ export default function SEOAuditPage() {
                               transition: "background 0.15s",
                             }}
                           >
-                            {loadingAuditId === a._id ? "Loading..." : "View"}
+                            {loadingAuditId === a._id ? "Loading..." : open ? "Resume" : "View"}
                           </button>
-                          <button
+                          {!open && <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteAudit(a._id); }}
                             style={{
                               padding: "7px 10px",
@@ -988,7 +476,7 @@ export default function SEOAuditPage() {
                             }}
                           >
                             Delete
-                          </button>
+                          </button>}
                         </div>
                       </div>
                     );
@@ -1002,140 +490,20 @@ export default function SEOAuditPage() {
           </div>
         )}
 
-        {/* ── Step 1: Crawling ───────────────────────────────────────────── */}
-        {step === STEPS.CRAWLING && (
-          <DashboardLoader label="Crawling site..." />
+        {/* ── Step 1: v2 job progress ────────────────────────────────────── */}
+        {step === STEPS.PROGRESS && (
+          <ProgressSteps
+            key={jobId}
+            progress={job.progress?.jobId === jobId ? job.progress : { domain, auditType, steps: [], dataGaps: [] }}
+            error={job.error}
+            onRetry={job.retry}
+            onBack={handleBackFromProgress}
+          />
         )}
 
-        {/* ── Step 2: Analyzing ──────────────────────────────────────────── */}
-        {step === STEPS.ANALYZING && (
-          <div style={{ textAlign: "center" }}>
-            <DashboardLoader label="Analyzing with AI..." />
-            {crawlData && (
-              <div style={{ marginTop: 24 }}>
-                <CrawlProgress pages={crawlData.pages_crawled || []} errors={crawlData.crawl_errors || []} />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Step 3: Results ────────────────────────────────────────────── */}
-        {step === STEPS.RESULTS && audit && (
-          <div>
-            {/* Top bar */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <h2 style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>
-                  {audit.audit_summary?.domain || domain}
-                </h2>
-                <p style={{ fontSize: 13, color: "#aaa" }}>
-                  {audit.audit_summary?.audit_type === "full" ? "Full" : "Quick"} audit &middot; {audit.audit_summary?.pages_reviewed || crawlData?.pages_crawled?.length || 0} pages reviewed &middot; {audit.audit_summary?.audit_date}
-                </p>
-                <DataSourcesLine sources={audit.data_sources} />
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={() => handleRunAudit(true)}
-                  style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(13,148,136,0.15)", border: "1px solid rgba(13,148,136,0.3)", color: "#5eead4", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                >
-                  Re-run Audit
-                </button>
-                <button
-                  onClick={handleReset}
-                  style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#ccc", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                >
-                  New Audit
-                </button>
-              </div>
-            </div>
-
-            {remainingToday != null && (
-              <p style={{ fontSize: 11, color: "#888", marginBottom: 16 }}>
-                {remainingToday} audit{remainingToday !== 1 ? "s" : ""} remaining today
-              </p>
-            )}
-
-            {/* Score cards */}
-            {audit.audit_summary?.scores && (
-              <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-                <ScoreCard
-                  label="SEO"
-                  score={audit.audit_summary.scores.seo?.score}
-                  status={audit.audit_summary.scores.seo?.status || getScoreStatus(audit.audit_summary.scores.seo?.score)}
-                  takeaway={audit.audit_summary.scores.seo?.key_takeaway}
-                />
-                <ScoreCard
-                  label="GEO"
-                  score={audit.audit_summary.scores.geo?.score}
-                  status={audit.audit_summary.scores.geo?.status || getScoreStatus(audit.audit_summary.scores.geo?.score)}
-                  takeaway={audit.audit_summary.scores.geo?.key_takeaway}
-                />
-                <ScoreCard
-                  label="AEO"
-                  score={audit.audit_summary.scores.aeo?.score}
-                  status={audit.audit_summary.scores.aeo?.status || getScoreStatus(audit.audit_summary.scores.aeo?.score)}
-                  takeaway={audit.audit_summary.scores.aeo?.key_takeaway}
-                />
-                <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", textAlign: "center", flex: 1, minWidth: 180, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#888", marginBottom: 12 }}>Combined</p>
-                  <p style={{ fontSize: 36, fontWeight: 800, color: "#0f3460" }}>
-                    {audit.audit_summary.scores.combined?.score}
-                    <span style={{ fontSize: 16, color: "#aaa", fontWeight: 500 }}>/{audit.audit_summary.scores.combined?.max || 30}</span>
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Executive summary */}
-            {audit.audit_summary?.executive_summary && (
-              <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", marginBottom: 16 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 8 }}>Executive Summary</p>
-                <p style={{ fontSize: 14, color: "#333", lineHeight: 1.7 }}>{audit.audit_summary.executive_summary}</p>
-              </div>
-            )}
-
-            {/* Top 3 priorities */}
-            {audit.audit_summary?.top_3_priorities?.length > 0 && (
-              <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", marginBottom: 16 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 10 }}>Top 3 Priorities</p>
-                <ol style={{ margin: 0, paddingLeft: 20 }}>
-                  {audit.audit_summary.top_3_priorities.map((p, i) => (
-                    <li key={i} style={{ fontSize: 13, color: "#333", lineHeight: 1.7, marginBottom: 6 }}>{p}</li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            {/* Biggest strength */}
-            {audit.audit_summary?.biggest_strength && (
-              <div style={{ background: "#e6f9f0", borderRadius: 12, padding: "14px 20px", marginBottom: 24, borderLeft: "4px solid #27ae60" }}>
-                <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#1a7a4a", marginBottom: 4 }}>Biggest Strength</p>
-                <p style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{audit.audit_summary.biggest_strength}</p>
-              </div>
-            )}
-
-            {/* Crawl summary */}
-            {crawlData && (
-              <div style={{ marginBottom: 24 }}>
-                <CrawlProgress pages={crawlData.pages_crawled || []} errors={crawlData.crawl_errors || []} />
-              </div>
-            )}
-
-            {/* Tabbed analysis sections */}
-            <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
-              <Tabs tabs={tabList} active={activeTab} onSelect={setActiveTab} />
-
-              {activeTab === "seo" && <SEOSection data={audit.seo_analysis} />}
-              {activeTab === "geo" && <GEOSection data={audit.geo_analysis} />}
-              {activeTab === "aeo" && <AEOSection data={audit.aeo_analysis} />}
-              {activeTab === "gsc" && <GSCSection data={audit.search_console_analysis} />}
-              {activeTab === "ga4" && <AnalyticsSection data={audit.site_analytics_analysis} />}
-              {activeTab === "ads" && <AdsSection data={audit.google_ads_analysis} />}
-              {activeTab === "tech" && <TechnicalSection data={audit.technical_health} />}
-              {activeTab === "recs" && <RecommendationsSection data={audit.priority_recommendations} />}
-              {activeTab === "strengths" && <StrengthsSection data={audit.strengths} />}
-            </div>
-          </div>
+        {/* ── Step 2: Results (v2 or v1 view, by version) ────────────────── */}
+        {step === STEPS.RESULTS && auditResult && (
+          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} />
         )}
       </div>
     </div>
