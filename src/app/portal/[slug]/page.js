@@ -275,7 +275,7 @@ function ClientPortalInner() {
           {/* Co-branded logos */}
           <div className="flex items-center gap-4">
             <img
-              src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png"
+              src="/lilikoi-icon.svg"
               alt="Lilikoi Agency"
               className="h-8 w-8 rounded-full object-contain"
               onError={(e) => { e.target.style.display = "none"; }}

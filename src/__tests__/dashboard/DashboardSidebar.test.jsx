@@ -25,6 +25,7 @@ describe('DashboardSidebar', () => {
     expect(screen.getByTitle('Google Ads')).toBeTruthy();
     expect(screen.getByTitle('Meta Ads')).toBeTruthy();
     expect(screen.getByTitle('SEO Audit')).toBeTruthy();
+    expect(screen.getByTitle('Web Traffic (GA4)')).toBeTruthy();
   });
 
   it('shows Usage Analytics for admins', () => {

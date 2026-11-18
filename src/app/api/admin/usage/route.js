@@ -11,6 +11,7 @@ const TOOL_MAP = {
   "/dashboard":                "Dashboard Hub",
   "/dashboard/google/ads":     "Google Ads",
   "/dashboard/google/organic": "Search Console",
+  "/dashboard/google/analytics": "Web Traffic (GA4)",
   "/dashboard/bing":           "Bing Ads",
   "/dashboard/meta":           "Meta Ads",
   "/dashboard/seo-audit":      "SEO Audit",

@@ -24,7 +24,7 @@ export default async function HomePage({ searchParams }) {
             <img
               alt="Lilikoi Agency"
               className="h-12 w-12 rounded-2xl bg-white/10 p-2 ring-1 ring-white/15"
-              src="https://lilikoiagency.com/wp-content/uploads/2020/05/LIK-Logo-Icon-Favicon.png"
+              src="/lilikoi-icon.svg"
             />
             <div>
               <p className="text-xs uppercase tracking-[0.36em] text-white/45">

@@ -9,7 +9,7 @@ import { faHouse } from "@fortawesome/free-solid-svg-icons";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon,
-  AudienceLabIcon, StreamingIcon, UsageAnalyticsIcon,
+  AudienceLabIcon, StreamingIcon, UsageAnalyticsIcon, AnalyticsIcon,
 } from "./DashboardIcons";
 
 const MOBILE_NAV = [
@@ -20,6 +20,7 @@ const MOBILE_NAV = [
   ]},
   { label: "Organic & Reports", items: [
     { href: "/dashboard/google/organic", label: "Google Organic",  Icon: SearchConsoleIcon  },
+    { href: "/dashboard/google/analytics", label: "Web Traffic (GA4)", Icon: AnalyticsIcon },
     { href: "/dashboard/report",         label: "Paid vs Organic", Icon: ReportIcon         },
     { href: "/dashboard/seo-audit",      label: "SEO Audit",       Icon: SEOAuditIcon       },
     { href: "/dashboard/admin/clients",  label: "Client Portals",  Icon: ClientPortalsIcon  },

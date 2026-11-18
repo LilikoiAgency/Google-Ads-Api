@@ -1,0 +1,2837 @@
+{
+  "reports": [
+    {
+      "dimensionHeaders": [
+        {
+          "name": "sessionPrimaryChannelGroup"
+        },
+        {
+          "name": "dateRange"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "newUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagedSessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagementRate",
+          "type": "TYPE_FLOAT"
+        },
+        {
+          "name": "keyEvents",
+          "type": "TYPE_FLOAT"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Social"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "13364"
+            },
+            {
+              "value": "12986"
+            },
+            {
+              "value": "17366"
+            },
+            {
+              "value": "4426"
+            },
+            {
+              "value": "0.2548658297823333"
+            },
+            {
+              "value": "282"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Direct"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "12296"
+            },
+            {
+              "value": "12076"
+            },
+            {
+              "value": "14176"
+            },
+            {
+              "value": "5616"
+            },
+            {
+              "value": "0.39616252821670428"
+            },
+            {
+              "value": "597"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Direct"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "10050"
+            },
+            {
+              "value": "9903"
+            },
+            {
+              "value": "11657"
+            },
+            {
+              "value": "4389"
+            },
+            {
+              "value": "0.37651196705841983"
+            },
+            {
+              "value": "591"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Social"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "8861"
+            },
+            {
+              "value": "8645"
+            },
+            {
+              "value": "11149"
+            },
+            {
+              "value": "2812"
+            },
+            {
+              "value": "0.25221993003856846"
+            },
+            {
+              "value": "255"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Search"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "6338"
+            },
+            {
+              "value": "6191"
+            },
+            {
+              "value": "7555"
+            },
+            {
+              "value": "4480"
+            },
+            {
+              "value": "0.5929847782925215"
+            },
+            {
+              "value": "305"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Search"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "5942"
+            },
+            {
+              "value": "5752"
+            },
+            {
+              "value": "6801"
+            },
+            {
+              "value": "4021"
+            },
+            {
+              "value": "0.59123658285546243"
+            },
+            {
+              "value": "282"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Unassigned"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "3672"
+            },
+            {
+              "value": "3222"
+            },
+            {
+              "value": "3811"
+            },
+            {
+              "value": "912"
+            },
+            {
+              "value": "0.23930726843348202"
+            },
+            {
+              "value": "116"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Organic Search"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2926"
+            },
+            {
+              "value": "2668"
+            },
+            {
+              "value": "3950"
+            },
+            {
+              "value": "2430"
+            },
+            {
+              "value": "0.61518987341772147"
+            },
+            {
+              "value": "734"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Organic Search"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2791"
+            },
+            {
+              "value": "2527"
+            },
+            {
+              "value": "4156"
+            },
+            {
+              "value": "2625"
+            },
+            {
+              "value": "0.63161693936477381"
+            },
+            {
+              "value": "934"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Referral"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2064"
+            },
+            {
+              "value": "1945"
+            },
+            {
+              "value": "2516"
+            },
+            {
+              "value": "559"
+            },
+            {
+              "value": "0.22217806041335453"
+            },
+            {
+              "value": "88"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Referral"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1773"
+            },
+            {
+              "value": "1652"
+            },
+            {
+              "value": "2125"
+            },
+            {
+              "value": "507"
+            },
+            {
+              "value": "0.23858823529411766"
+            },
+            {
+              "value": "54"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Unassigned"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1542"
+            },
+            {
+              "value": "1183"
+            },
+            {
+              "value": "1774"
+            },
+            {
+              "value": "611"
+            },
+            {
+              "value": "0.34441939120631343"
+            },
+            {
+              "value": "155"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "AI Assistant"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "417"
+            },
+            {
+              "value": "413"
+            },
+            {
+              "value": "431"
+            },
+            {
+              "value": "142"
+            },
+            {
+              "value": "0.3294663573085847"
+            },
+            {
+              "value": "16"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Organic Social"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "360"
+            },
+            {
+              "value": "323"
+            },
+            {
+              "value": "418"
+            },
+            {
+              "value": "213"
+            },
+            {
+              "value": "0.50956937799043067"
+            },
+            {
+              "value": "25"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Organic Social"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "294"
+            },
+            {
+              "value": "254"
+            },
+            {
+              "value": "380"
+            },
+            {
+              "value": "204"
+            },
+            {
+              "value": "0.5368421052631579"
+            },
+            {
+              "value": "32"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Email"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "148"
+            },
+            {
+              "value": "140"
+            },
+            {
+              "value": "203"
+            },
+            {
+              "value": "71"
+            },
+            {
+              "value": "0.34975369458128081"
+            },
+            {
+              "value": "19"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Email"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "142"
+            },
+            {
+              "value": "134"
+            },
+            {
+              "value": "182"
+            },
+            {
+              "value": "96"
+            },
+            {
+              "value": "0.52747252747252749"
+            },
+            {
+              "value": "14"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Video"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "137"
+            },
+            {
+              "value": "136"
+            },
+            {
+              "value": "138"
+            },
+            {
+              "value": "24"
+            },
+            {
+              "value": "0.17391304347826086"
+            },
+            {
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "AI Assistant"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "115"
+            },
+            {
+              "value": "111"
+            },
+            {
+              "value": "120"
+            },
+            {
+              "value": "51"
+            },
+            {
+              "value": "0.425"
+            },
+            {
+              "value": "11"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Cross-network"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "85"
+            },
+            {
+              "value": "81"
+            },
+            {
+              "value": "97"
+            },
+            {
+              "value": "69"
+            },
+            {
+              "value": "0.711340206185567"
+            },
+            {
+              "value": "7"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Cross-network"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "70"
+            },
+            {
+              "value": "69"
+            },
+            {
+              "value": "72"
+            },
+            {
+              "value": "63"
+            },
+            {
+              "value": "0.875"
+            },
+            {
+              "value": "4"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Video"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "21"
+            },
+            {
+              "value": "20"
+            },
+            {
+              "value": "21"
+            },
+            {
+              "value": "4"
+            },
+            {
+              "value": "0.19047619047619047"
+            },
+            {
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Other"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "9"
+            },
+            {
+              "value": "8"
+            },
+            {
+              "value": "9"
+            },
+            {
+              "value": "3"
+            },
+            {
+              "value": "0.33333333333333331"
+            },
+            {
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Paid Other"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "4"
+            },
+            {
+              "value": "3"
+            },
+            {
+              "value": "4"
+            },
+            {
+              "value": "3"
+            },
+            {
+              "value": "0.75"
+            },
+            {
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Organic Video"
+            },
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1"
+            },
+            {
+              "value": "0"
+            },
+            {
+              "value": "2"
+            },
+            {
+              "value": "1"
+            },
+            {
+              "value": "0.5"
+            },
+            {
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Organic Video"
+            },
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "0"
+            },
+            {
+              "value": "0"
+            },
+            {
+              "value": "0"
+            },
+            {
+              "value": "0"
+            },
+            {
+              "value": "0"
+            },
+            {
+              "value": "0"
+            }
+          ]
+        }
+      ],
+      "rowCount": 13,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "dateRange"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "newUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagedSessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagementRate",
+          "type": "TYPE_FLOAT"
+        },
+        {
+          "name": "keyEvents",
+          "type": "TYPE_FLOAT"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2926"
+            },
+            {
+              "value": "2668"
+            },
+            {
+              "value": "3950"
+            },
+            {
+              "value": "2430"
+            },
+            {
+              "value": "0.61518987341772147"
+            },
+            {
+              "value": "734"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2791"
+            },
+            {
+              "value": "2527"
+            },
+            {
+              "value": "4156"
+            },
+            {
+              "value": "2625"
+            },
+            {
+              "value": "0.63161693936477381"
+            },
+            {
+              "value": "934"
+            }
+          ]
+        }
+      ],
+      "rowCount": 2,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "dateRange"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "newUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagedSessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagementRate",
+          "type": "TYPE_FLOAT"
+        },
+        {
+          "name": "keyEvents",
+          "type": "TYPE_FLOAT"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "17877"
+            },
+            {
+              "value": "17266"
+            },
+            {
+              "value": "21406"
+            },
+            {
+              "value": "8932"
+            },
+            {
+              "value": "0.41726618705035973"
+            },
+            {
+              "value": "1440"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "15378"
+            },
+            {
+              "value": "14880"
+            },
+            {
+              "value": "19054"
+            },
+            {
+              "value": "7802"
+            },
+            {
+              "value": "0.40946782827752704"
+            },
+            {
+              "value": "1675"
+            }
+          ]
+        }
+      ],
+      "rowCount": 2,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "dateRange"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "newUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagedSessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagementRate",
+          "type": "TYPE_FLOAT"
+        },
+        {
+          "name": "keyEvents",
+          "type": "TYPE_FLOAT"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "19781"
+            },
+            {
+              "value": "19281"
+            },
+            {
+              "value": "25211"
+            },
+            {
+              "value": "8913"
+            },
+            {
+              "value": "0.35353615485304035"
+            },
+            {
+              "value": "595"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "15096"
+            },
+            {
+              "value": "14610"
+            },
+            {
+              "value": "18345"
+            },
+            {
+              "value": "6855"
+            },
+            {
+              "value": "0.37367130008176613"
+            },
+            {
+              "value": "545"
+            }
+          ]
+        }
+      ],
+      "rowCount": 2,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "dateRange"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "newUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagedSessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "engagementRate",
+          "type": "TYPE_FLOAT"
+        },
+        {
+          "name": "keyEvents",
+          "type": "TYPE_FLOAT"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "current"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "36637"
+            },
+            {
+              "value": "35098"
+            },
+            {
+              "value": "44210"
+            },
+            {
+              "value": "16655"
+            },
+            {
+              "value": "0.376724722913368"
+            },
+            {
+              "value": "2101"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "compare"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "36574"
+            },
+            {
+              "value": "35344"
+            },
+            {
+              "value": "46880"
+            },
+            {
+              "value": "17391"
+            },
+            {
+              "value": "0.37096843003412971"
+            },
+            {
+              "value": "2425"
+            }
+          ]
+        }
+      ],
+      "rowCount": 2,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "date"
+        },
+        {
+          "name": "sessionPrimaryChannelGroup"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "394"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "382"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "365"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "326"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "319"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "319"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "302"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "278"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "274"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "254"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "249"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "248"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "229"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "220"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "209"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "147"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "140"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "125"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "121"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "110"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "108"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "89"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "86"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "84"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "84"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "75"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "72"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "63"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "58"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "54"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "AI Assistant"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "25"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Organic Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "23"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Organic Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "17"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "AI Assistant"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "16"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "AI Assistant"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "14"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Organic Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "13"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "AI Assistant"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "12"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Organic Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "12"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Email"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "11"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "AI Assistant"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "11"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Organic Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "8"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Cross-network"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "5"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Email"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "5"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Cross-network"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261001"
+            },
+            {
+              "value": "Cross-network"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Cross-network"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261004"
+            },
+            {
+              "value": "Email"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261002"
+            },
+            {
+              "value": "Cross-network"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Email"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261003"
+            },
+            {
+              "value": "Paid Video"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "20261005"
+            },
+            {
+              "value": "Paid Other"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "rowCount": 326,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "sessionSourceMedium"
+        },
+        {
+          "name": "sessionPrimaryChannelGroup"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "(direct) / (none)"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "14176"
+            },
+            {
+              "value": "12296"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "fb / paid-social"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "8676"
+            },
+            {
+              "value": "6941"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "google / cpc"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "6698"
+            },
+            {
+              "value": "5831"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "google / organic"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2998"
+            },
+            {
+              "value": "2121"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "(not set)"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2902"
+            },
+            {
+              "value": "2765"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "ig / paid-social"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2255"
+            },
+            {
+              "value": "1817"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "imasdk.googleapis.com / referral"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1170"
+            },
+            {
+              "value": "1170"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "chatgpt.com / ai-assistant"
+            },
+            {
+              "value": "AI Assistant"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "422"
+            },
+            {
+              "value": "411"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "bizidex / ads"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "381"
+            },
+            {
+              "value": "381"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "bing / organic"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "258"
+            },
+            {
+              "value": "191"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "GMB / gbp"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "239"
+            },
+            {
+              "value": "209"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "utilityapi.com / referral"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "227"
+            },
+            {
+              "value": "109"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "azfamily / ylaz-na"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "187"
+            },
+            {
+              "value": "188"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "facebook.com / referral"
+            },
+            {
+              "value": "Organic Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "182"
+            },
+            {
+              "value": "161"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "aocr.org / referral"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "160"
+            },
+            {
+              "value": "160"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "youtube / cpc"
+            },
+            {
+              "value": "Paid Video"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "138"
+            },
+            {
+              "value": "137"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "yext / citation"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "137"
+            },
+            {
+              "value": "137"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "GMB / San Diego"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "133"
+            },
+            {
+              "value": "134"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "Klaviyo / email"
+            },
+            {
+              "value": "Email"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "129"
+            },
+            {
+              "value": "97"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "duckduckgo / organic"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "109"
+            },
+            {
+              "value": "69"
+            }
+          ]
+        }
+      ],
+      "rowCount": 219,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    },
+    {
+      "dimensionHeaders": [
+        {
+          "name": "landingPage"
+        },
+        {
+          "name": "sessionPrimaryChannelGroup"
+        }
+      ],
+      "metricHeaders": [
+        {
+          "name": "sessions",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "activeUsers",
+          "type": "TYPE_INTEGER"
+        },
+        {
+          "name": "keyEvents",
+          "type": "TYPE_FLOAT"
+        }
+      ],
+      "rows": [
+        {
+          "dimensionValues": [
+            {
+              "value": "/solar-battery-wcbb-fb"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "6932"
+            },
+            {
+              "value": "5502"
+            },
+            {
+              "value": "122"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "5224"
+            },
+            {
+              "value": "4981"
+            },
+            {
+              "value": "171"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/refer-friend"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "3192"
+            },
+            {
+              "value": "2256"
+            },
+            {
+              "value": "34"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/solar-battery-tesla-powerwall-3-10kpw3-ga"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "2330"
+            },
+            {
+              "value": "2103"
+            },
+            {
+              "value": "37"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/solar-battery-tesla-powerwall-3-10kpw3-fb"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1976"
+            },
+            {
+              "value": "1644"
+            },
+            {
+              "value": "39"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1569"
+            },
+            {
+              "value": "1434"
+            },
+            {
+              "value": "29"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/GA-Roofing-Lowest-Price-FS-ALL"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1367"
+            },
+            {
+              "value": "1245"
+            },
+            {
+              "value": "44"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/solar-battery-wcbb-ga"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1312"
+            },
+            {
+              "value": "1166"
+            },
+            {
+              "value": "123"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1307"
+            },
+            {
+              "value": "1095"
+            },
+            {
+              "value": "312"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/FB-Roofing-Lowest-Price-FS-ALL"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "1034"
+            },
+            {
+              "value": "817"
+            },
+            {
+              "value": "49"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/FB-Ductless-Lowest-Price-FS-SD"
+            },
+            {
+              "value": "Paid Social"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "813"
+            },
+            {
+              "value": "697"
+            },
+            {
+              "value": "32"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/GA-Ductless-Lowest-Price-FS-SD"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "517"
+            },
+            {
+              "value": "482"
+            },
+            {
+              "value": "11"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "(not set)"
+            },
+            {
+              "value": "Unassigned"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "404"
+            },
+            {
+              "value": "331"
+            },
+            {
+              "value": "6"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "(not set)"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "313"
+            },
+            {
+              "value": "198"
+            },
+            {
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "(not set)"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "286"
+            },
+            {
+              "value": "177"
+            },
+            {
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/refer-friend"
+            },
+            {
+              "value": "Referral"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "255"
+            },
+            {
+              "value": "137"
+            },
+            {
+              "value": "2"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/greenbuttondata"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "230"
+            },
+            {
+              "value": "189"
+            },
+            {
+              "value": "218"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/locations/san-diego"
+            },
+            {
+              "value": "Direct"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "219"
+            },
+            {
+              "value": "213"
+            },
+            {
+              "value": "10"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "/locations/san-diego"
+            },
+            {
+              "value": "Organic Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "217"
+            },
+            {
+              "value": "204"
+            },
+            {
+              "value": "69"
+            }
+          ]
+        },
+        {
+          "dimensionValues": [
+            {
+              "value": "(not set)"
+            },
+            {
+              "value": "Paid Search"
+            }
+          ],
+          "metricValues": [
+            {
+              "value": "215"
+            },
+            {
+              "value": "160"
+            },
+            {
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "rowCount": 2466,
+      "metadata": {
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles"
+      },
+      "kind": "analyticsData#runReport"
+    }
+  ]
+}

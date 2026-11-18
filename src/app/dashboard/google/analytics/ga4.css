@@ -1,0 +1,242 @@
+/* Web Traffic (GA4) page. Built on the theme tokens in globals.css. */
+
+:root, [data-theme="light"] {
+  --ga4-up: #15803d;
+  --ga4-down: #b91c1c;
+  --ga4-accent: #7c3aed;
+  --ga4-accent-soft: rgba(124,58,237,0.10);
+  --ga4-grid: rgba(17,24,39,0.08);
+  --ga4-cursor: rgba(17,24,39,0.05);
+  --ga4-row-hover: rgba(17,24,39,0.025);
+  --ga4-total-bg: rgba(17,24,39,0.04);
+  --ga4-skel: rgba(17,24,39,0.07);
+  --ga4-pop-bg: #ffffff;
+  --ga4-sticky-bg: #ffffff;
+  --ga4-warn-bg: #fffbeb;
+  --ga4-warn-border: #fcd34d;
+  --ga4-warn-text: #92400e;
+  --ga4-error-bg: #fef2f2;
+  --ga4-error-border: #fecaca;
+  --ga4-error-text: #991b1b;
+}
+[data-theme="dark"] {
+  --ga4-up: #4ade80;
+  --ga4-down: #f87171;
+  --ga4-accent: #c084fc;
+  --ga4-accent-soft: rgba(168,85,247,0.18);
+  --ga4-grid: rgba(255,255,255,0.08);
+  --ga4-cursor: rgba(255,255,255,0.05);
+  --ga4-row-hover: rgba(255,255,255,0.03);
+  --ga4-total-bg: rgba(255,255,255,0.05);
+  --ga4-skel: rgba(255,255,255,0.08);
+  --ga4-pop-bg: #1a0f2e;
+  --ga4-sticky-bg: #1d1430;
+  --ga4-warn-bg: rgba(245,158,11,0.10);
+  --ga4-warn-border: rgba(245,158,11,0.35);
+  --ga4-warn-text: #fcd34d;
+  --ga4-error-bg: rgba(239,68,68,0.10);
+  --ga4-error-border: rgba(239,68,68,0.35);
+  --ga4-error-text: #fca5a5;
+}
+
+.ga4-page { display: flex; flex-direction: column; flex: 1; min-width: 0; color: var(--text-primary); }
+.ga4-body { width: 100%; max-width: 1280px; margin: 0 auto; padding: 20px 24px 64px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box; }
+.ga4-content { display: flex; flex-direction: column; gap: 16px; transition: opacity 0.15s; }
+.ga4-content.is-stale { opacity: 0.55; pointer-events: none; }
+
+/* ── Controls ── */
+.ga4-toolbar { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 14px 24px; border-bottom: 1px solid var(--header-border); background: var(--gads-toolbar-bg); position: relative; z-index: 5; }
+.ga4-field { display: flex; flex-direction: column; gap: 5px; }
+.ga4-field-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.ga4-field-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--ga4-down); }
+.ga4-control { height: 38px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--gads-control-border); background: var(--gads-control-bg); color: var(--gads-control-text); font-size: 14px; padding: 0 12px; font-family: inherit; }
+.ga4-control:hover { background: var(--gads-control-bg-hover); }
+.ga4-control:focus-visible, .ga4-btn:focus-visible, .ga4-segment-btn:focus-visible,
+.ga4-legend-item:focus-visible, .ga4-sort:focus-visible, .ga4-link:focus-visible,
+.ga4-picker-item:focus-visible, .ga4-chip:focus-visible { outline: 2px solid var(--ga4-accent); outline-offset: 2px; }
+.ga4-select { padding-right: 28px; cursor: pointer; }
+.ga4-select option { color: #111827; background: #ffffff; }
+.ga4-date { color-scheme: light; }
+[data-theme="dark"] .ga4-date { color-scheme: dark; }
+.ga4-range { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.ga4-custom { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.ga4-range.is-stacked { flex-direction: column; align-items: stretch; }
+.ga4-range.is-stacked .ga4-control { width: 100%; font-size: 16px; /* prevent iOS zoom */ }
+.ga4-range.is-stacked .ga4-custom > .ga4-field { flex: 1 1 140px; }
+.ga4-range-summary { display: flex; flex-direction: column; gap: 2px; margin-left: auto; text-align: right; padding-bottom: 2px; }
+.ga4-range-main { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.ga4-range-vs { font-size: 12px; color: var(--text-secondary); }
+
+.ga4-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--btn-border); background: var(--btn-bg); color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; }
+.ga4-btn:hover:not(:disabled) { border-color: var(--card-border-hover); }
+.ga4-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ga4-btn-primary { background: #7c3aed; border-color: #7c3aed; color: #ffffff; }
+.ga4-btn-primary:hover:not(:disabled) { background: #6d28d9; border-color: #6d28d9; }
+.ga4-btn-sm { height: 32px; padding: 0 12px; font-size: 12px; flex-shrink: 0; }
+.ga4-link { background: none; border: none; padding: 0; color: var(--ga4-accent); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.ga4-link:hover:not(:disabled) { text-decoration: underline; }
+.ga4-link:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Property picker ── */
+.ga4-picker { position: relative; min-width: 0; }
+.ga4-picker-btn { display: flex; align-items: center; gap: 10px; min-width: 260px; max-width: 360px; width: 100%; cursor: pointer; text-align: left; height: auto; min-height: 38px; padding: 5px 12px; }
+.ga4-picker-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ga4-picker-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ga4-picker-account { font-size: 11px; color: var(--gads-control-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ga4-caret { color: var(--gads-control-muted); font-size: 12px; }
+.ga4-picker-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max(100%, 340px); max-width: calc(100vw - 32px); background: var(--ga4-pop-bg); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 10px; box-sizing: border-box; }
+.ga4-input { width: 100%; box-sizing: border-box; height: 36px; border-radius: 8px; border: 1px solid var(--gads-control-border); background: var(--gads-control-bg); color: var(--gads-control-text); padding: 0 10px; font-size: 14px; font-family: inherit; }
+.ga4-input:focus { outline: 2px solid var(--ga4-accent); outline-offset: -1px; }
+.ga4-picker-list { max-height: 320px; overflow-y: auto; margin: 8px -4px 0; padding: 0 4px; }
+.ga4-picker-group { margin: 10px 8px 4px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.ga4-picker-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: none; color: var(--text-primary); font-size: 13.5px; text-align: left; cursor: pointer; font-family: inherit; }
+.ga4-picker-item:hover { background: var(--ga4-accent-soft); }
+.ga4-picker-item.is-active { background: var(--ga4-accent-soft); color: var(--ga4-accent); font-weight: 600; }
+.ga4-picker-id { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.ga4-picker-none { margin: 12px 8px; font-size: 13px; color: var(--text-secondary); }
+.ga4-picker-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding: 8px 6px 2px; border-top: 1px solid var(--card-border); font-size: 12px; color: var(--text-muted); }
+
+/* ── Segmented controls ── */
+.ga4-view-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ga4-segment { display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--card-border); max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
+.ga4-segment::-webkit-scrollbar { display: none; }
+.ga4-segment-btn { border: none; background: none; padding: 7px 14px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; white-space: nowrap; font-family: inherit; }
+.ga4-segment-btn:hover { color: var(--text-primary); }
+.ga4-segment-btn.is-active { background: #7c3aed; color: #ffffff; }
+.ga4-segment-sm .ga4-segment-btn { padding: 5px 11px; font-size: 12px; }
+.ga4-loading-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.ga4-spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ga4-skel); border-top-color: var(--ga4-accent); animation: ga4-spin 0.8s linear infinite; }
+@keyframes ga4-spin { to { transform: rotate(360deg); } }
+
+/* ── Cards ── */
+.ga4-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; box-shadow: var(--card-shadow); box-sizing: border-box; min-width: 0; }
+.ga4-panel { padding: 18px 20px; }
+.ga4-panel-head { margin-bottom: 12px; }
+.ga4-h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.ga4-sub { margin: 3px 0 0; font-size: 12px; color: var(--text-secondary); }
+.ga4-skel { background: var(--ga4-skel); border-radius: 10px; animation: ga4-pulse 1.4s ease-in-out infinite; }
+@keyframes ga4-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ── KPIs ── */
+.ga4-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.ga4-kpi { padding: 16px 18px; }
+.ga4-kpi-label { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.ga4-kpi-value { margin: 6px 0 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ga4-kpi-delta { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13px; }
+.ga4-kpi-vs { font-size: 11.5px; color: var(--text-muted); }
+.ga4-delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ga4-delta-up { color: var(--ga4-up); }
+.ga4-delta-down { color: var(--ga4-down); }
+.ga4-delta-flat { color: var(--text-muted); }
+
+/* ── Chart ── */
+.ga4-chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ga4-chart { width: 100%; min-width: 0; }
+.ga4-chart .recharts-cartesian-axis-tick-value { fill: var(--text-secondary); }
+.ga4-chart .recharts-cartesian-grid line { stroke: var(--ga4-grid); }
+.ga4-chart-empty { height: 200px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 14px; color: var(--text-secondary); }
+.ga4-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.ga4-legend-item { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--card-border); background: none; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.ga4-legend-item:hover { border-color: var(--card-border-hover); }
+.ga4-legend-item.is-off { opacity: 0.45; text-decoration: line-through; }
+.ga4-tooltip { background: var(--ga4-pop-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); min-width: 180px; }
+.ga4-tooltip-title { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.ga4-tooltip-row { margin: 3px 0 0; display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); }
+.ga4-tooltip-name { flex: 1; }
+.ga4-tooltip-val { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ga4-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; margin-right: 8px; vertical-align: -1px; }
+.ga4-legend-item .ga4-swatch, .ga4-tooltip-row .ga4-swatch { margin-right: 0; }
+.ga4-swatch-sm { width: 8px; height: 8px; margin-right: 6px; }
+
+/* ── Tables ── */
+.ga4-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ga4-table { width: 100%; border-collapse: collapse; font-size: 13.5px; color: var(--text-primary); }
+.ga4-table th { padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+.ga4-table td { padding: 10px 12px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+.ga4-table tbody tr:hover { background: var(--ga4-row-hover); }
+.ga4-table .ga4-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ga4-table th.ga4-num .ga4-sort { justify-content: flex-end; width: 100%; }
+.ga4-sort { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.ga4-sort:hover { color: var(--text-primary); }
+.ga4-sort-icon { opacity: 0.4; font-size: 10px; }
+.ga4-sort-icon.is-active { opacity: 1; color: var(--ga4-accent); }
+.ga4-total-row td { font-weight: 700; background: var(--ga4-total-bg); border-bottom: none; }
+.ga4-table-wrap .ga4-sticky { position: sticky; left: 0; z-index: 1; background: var(--ga4-sticky-bg); }
+.ga4-empty-cell { text-align: center; color: var(--text-secondary); padding: 28px 12px !important; white-space: normal !important; }
+.ga4-table-compact td { padding: 8px 12px; }
+.ga4-cell-main { white-space: normal !important; max-width: 340px; }
+.ga4-cell-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ga4-cell-meta { display: flex; align-items: center; flex-wrap: wrap; margin-top: 2px; font-size: 11.5px; color: var(--text-secondary); }
+.ga4-row-flag { background: var(--ga4-warn-bg); }
+.ga4-tag-paid { margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: var(--ga4-warn-bg); color: var(--ga4-warn-text); border: 1px solid var(--ga4-warn-border); }
+.ga4-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+#ga4-sources { scroll-margin-top: 16px; }
+
+/* ── Notices ── */
+.ga4-notice { padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.ga4-notice-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-primary); flex: 1 1 320px; overflow-wrap: anywhere; }
+.ga4-notice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ga4-notice-error { background: var(--ga4-error-bg); border-color: var(--ga4-error-border); }
+.ga4-notice-error .ga4-notice-text { color: var(--ga4-error-text); }
+.ga4-warn { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; border-radius: 14px; background: var(--ga4-warn-bg); border: 1px solid var(--ga4-warn-border); color: var(--ga4-warn-text); font-size: 13.5px; }
+.ga4-warn-icon { font-size: 16px; line-height: 1.3; }
+.ga4-warn-body { flex: 1; min-width: 0; }
+.ga4-warn-title { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8; }
+.ga4-warn ul { margin: 0; padding-left: 18px; }
+.ga4-warn-link { color: inherit; text-decoration: underline; white-space: nowrap; }
+.ga4-dq-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+
+/* ── Definitions ── */
+.ga4-defs summary { cursor: pointer; }
+.ga4-defs-list { margin: 14px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+.ga4-def dt { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.ga4-def dd { margin: 3px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.ga4-source-note { margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+
+/* ── Mobile ── */
+.ga4-mobile-bar { align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--header-border); background: var(--gads-toolbar-bg); }
+.ga4-chip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--btn-border); background: var(--btn-bg); color: var(--text-primary); font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.ga4-mobile-summary { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ga4-mobile-prop, .ga4-mobile-range { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ga4-mobile-prop { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.ga4-mobile-range { font-size: 11px; color: var(--text-secondary); }
+.ga4-sheet { color: var(--text-primary); }
+.ga4-sheet .ga4-picker-btn { max-width: none; min-width: 0; }
+.ga4-sheet .ga4-picker-pop { position: static; width: 100%; margin-top: 8px; max-width: none; box-shadow: none; }
+.ga4-sheet-label { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.ga4-sheet-label:not(:first-child) { margin-top: 18px; }
+.ga4-sheet-summary { margin: 14px 0 0; font-size: 12px; color: var(--text-secondary); }
+
+@media (max-width: 1100px) {
+  .ga4-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ga4-two-col { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .ga4-body { padding: 14px 16px 48px; gap: 12px; }
+  .ga4-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ga4-kpi { padding: 12px 14px; }
+  .ga4-kpi-value { font-size: 22px; }
+  .ga4-panel { padding: 14px; }
+  .ga4-defs-list { grid-template-columns: minmax(0, 1fr); }
+  .ga4-view-row .ga4-segment { width: 100%; }
+  .ga4-view-row .ga4-segment-btn { flex: 1 0 auto; }
+  .ga4-cell-main { max-width: 200px; }
+  .ga4-notice { padding: 16px; }
+}
+
+/* ── Download menu (choose which views go in the report) ─────────────────── */
+.ga4-dl { position: relative; z-index: 40; }
+.ga4-dl-caret { font-size: 10px; opacity: 0.85; margin-left: -2px; }
+.ga4-dl-pop { position: absolute; top: calc(100% + 6px); right: 0; width: 300px; max-width: calc(100vw - 32px); background: var(--ga4-pop-bg); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 14px; box-sizing: border-box; color: var(--text-primary); text-align: left; }
+.ga4-dl-title { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.ga4-dl-options { display: flex; flex-direction: column; gap: 4px; }
+.ga4-dl-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; font-size: 13.5px; cursor: pointer; user-select: none; }
+.ga4-dl-option:hover { background: var(--ga4-accent-soft); }
+.ga4-dl-option.is-on { border-color: var(--ga4-accent); background: var(--ga4-accent-soft); font-weight: 600; }
+.ga4-dl-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--ga4-accent); cursor: pointer; flex-shrink: 0; }
+.ga4-dl-option input:focus-visible { outline: 2px solid var(--ga4-accent); outline-offset: 2px; }
+.ga4-dl-tag { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ga4-dl-hint { margin: 10px 2px 0; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+.ga4-dl-paid { margin: 6px 2px 0; font-size: 12px; font-weight: 600; color: var(--ga4-warn-text); }
+.ga4-dl-go { width: 100%; margin-top: 12px; }
+.ga4-mobile-bar { position: relative; z-index: 6; }
