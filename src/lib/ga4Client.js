@@ -49,3 +49,23 @@ export async function fetchTrafficReport({ property, startDate, endDate, compare
   const [first, second] = await Promise.all([batch(requests.slice(0, 5)), batch(requests.slice(5))]);
   return normalizeTrafficReport([...first, ...second], { property, range, compareRange: cmp, granularity });
 }
+
+// Web data streams for the given properties, so a website domain can be matched
+// to its GA4 property. One Admin API call per property.
+export async function listWebStreams(properties) {
+  const admin = google.analyticsadmin({ version: 'v1beta', auth: getGa4Auth() });
+  const out = [];
+  for (const p of properties) {
+    try {
+      const res = await admin.properties.dataStreams.list({ parent: p.id });
+      for (const s of res.data.dataStreams || []) {
+        if (s.type === 'WEB_DATA_STREAM' && s.webStreamData?.defaultUri) {
+          out.push({ propertyId: p.id, propertyName: p.name, account: p.account, uri: s.webStreamData.defaultUri });
+        }
+      }
+    } catch (err) {
+      console.warn('[ga4] could not list streams for', p.id, err?.message || err);
+    }
+  }
+  return out;
+}

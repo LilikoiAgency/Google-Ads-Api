@@ -10,6 +10,7 @@ import { checkRateLimit } from '../../../../lib/seoRateLimit.js';
 import { z } from 'zod';
 import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
 import { parseAuditJson } from '../../../../lib/seoAuditJson';
+import { gatherSiteData } from '../../../../lib/seoAuditData';
 
 // A full audit takes a few minutes to generate.
 export const maxDuration = 300;
@@ -144,6 +145,9 @@ export async function POST(request) {
 
   const client = new Anthropic({ apiKey });
 
+  // Real traffic context: Search Console + GA4 for this domain (best-effort, ~5-10s).
+  const siteData = await gatherSiteData(domain);
+
   const auditRequest = {
     audit_request: {
       domain,
@@ -151,7 +155,8 @@ export async function POST(request) {
       audit_date: crawlData.audit_date || new Date().toISOString().split("T")[0],
       pages_crawled: crawlData.pages_crawled,
       site_wide: crawlData.site_wide || null,
-      google_search_console: gscData || null,
+      google_search_console: gscData || siteData.gsc || null,
+      site_analytics_ga4: siteData.ga4 || null,
       google_ads: adsData || null,
       seo_tool_data: seoToolData || null,
     },
@@ -230,6 +235,20 @@ export async function POST(request) {
         { status: 502 }
       );
     }
+
+    // Never present a half-parsed audit as complete.
+    const missing = ["audit_summary", "seo_analysis", "geo_analysis", "aeo_analysis", "priority_recommendations"]
+      .filter((k) => !audit?.[k]);
+    if (missing.length) {
+      console.error("[seo-audit/analyze] audit missing sections:", missing.join(", "), { requestId });
+      return NextResponse.json(
+        { error: "The audit came back incomplete. Please run it again.", requestId },
+        { status: 502 }
+      );
+    }
+
+    // Record which data sources fed this audit (shown on screen and kept in history).
+    audit.data_sources = siteData.sources;
 
     // ── Save audit to SeoAudits collection ─────────────────────────────
     let auditId = null;

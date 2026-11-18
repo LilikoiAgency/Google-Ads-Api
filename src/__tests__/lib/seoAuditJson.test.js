@@ -23,6 +23,22 @@ describe('parseAuditJson', () => {
     expect(parseAuditJson('{"a":1}{"b":2}')).toEqual({ a: 1 });
   });
 
+  it('repairs a stray closing brace that ends the object early (real model slip)', () => {
+    const slipped = '{"audit_summary":{"domain":"x.com","top_3_priorities":["a"]},"biggest_strength":"b"}, "seo_analysis":{"summary":"s"}, "strengths":[]}';
+    expect(parseAuditJson(slipped)).toEqual({
+      audit_summary: { domain: 'x.com', top_3_priorities: ['a'], biggest_strength: 'b' },
+      seo_analysis: { summary: 's' },
+      strengths: [],
+    });
+  });
+
+  it('moves summary fields that landed at the top level back into audit_summary', () => {
+    expect(parseAuditJson('{"audit_summary":{"domain":"x"},"executive_summary":"e","seo_analysis":{}}')).toEqual({
+      audit_summary: { domain: 'x', executive_summary: 'e' },
+      seo_analysis: {},
+    });
+  });
+
   it('throws on truncated JSON', () => {
     expect(() => parseAuditJson('{"a":{"b":"unfinished')).toThrow();
   });

@@ -266,6 +266,98 @@ function GSCSection({ data }) {
   );
 }
 
+function fmtChange(n) {
+  if (n == null) return "—";
+  return `${n > 0 ? "▲" : n < 0 ? "▼" : ""} ${Math.abs(n)}%`.trim();
+}
+
+function AnalyticsSection({ data }) {
+  if (!data) return <p style={{ color: "#999", fontSize: 13 }}>No Google Analytics data included in this audit.</p>;
+  const trend = data.organic_trend || {};
+  const stat = (label, value, color = "#0f3460") => (
+    <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 160 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>{label}</p>
+      <p style={{ fontSize: 20, fontWeight: 800, color }}>{value}</p>
+    </div>
+  );
+  const changeColor = (n) => (n == null ? "#0f3460" : n >= 0 ? "#27ae60" : "#c0392b");
+  return (
+    <div>
+      <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{data.summary}</p>
+      <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+        {stat("Organic share of visits", fmtPct(data.organic_share_of_sessions))}
+        {stat("Organic visits vs prior 90 days", fmtChange(trend.sessions_change_pct), changeColor(trend.sessions_change_pct))}
+        {data.key_events_configured
+          ? stat("Organic key events vs prior", fmtChange(trend.key_events_change_pct), changeColor(trend.key_events_change_pct))
+          : stat("Lead tracking", "Not set up", "#c0392b")}
+      </div>
+      {trend.assessment && <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 16 }}>{trend.assessment}</p>}
+      {data.page_insights?.length > 0 && (
+        <>
+          <SectionTitle>Page Insights</SectionTitle>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#f8f9fb" }}>
+                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Page</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Finding</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee" }}>Recommendation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.page_insights.map((p, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                    <td style={{ padding: "10px 12px", color: "#333", maxWidth: 220, wordBreak: "break-all", fontWeight: 600 }}>{p.page}</td>
+                    <td style={{ padding: "10px 12px", color: "#666", lineHeight: 1.5 }}>{p.finding}</td>
+                    <td style={{ padding: "10px 12px", color: "#444", lineHeight: 1.5 }}>{p.recommendation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {data.channel_insight && (
+        <>
+          <SectionTitle>Organic vs Other Channels</SectionTitle>
+          <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>{data.channel_insight}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+const SOURCE_STATUS = {
+  ok: null,
+  not_connected: "not connected",
+  no_site: "this site isn't in Search Console for our login",
+  no_property: "no GA4 property found for this site",
+  no_data: "no data yet",
+  error: "couldn't load",
+};
+
+// "Data: Site crawl · Search Console (sc-domain:x) · GA4 (BBT)" with reasons for anything missing.
+function DataSourcesLine({ sources }) {
+  if (!sources) return null;
+  const part = (label, s, detail) => {
+    if (!s) return null;
+    const ok = s.status === "ok";
+    return (
+      <span key={label} style={{ color: ok ? "#5eead4" : "#888" }}>
+        {ok ? "✓" : "–"} {label}{ok && detail ? ` (${detail})` : ""}{!ok ? ` — ${SOURCE_STATUS[s.status] || s.status}` : ""}
+      </span>
+    );
+  };
+  return (
+    <p style={{ fontSize: 12, marginTop: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
+      <span style={{ color: "#5eead4" }}>{"✓"} Site crawl</span>
+      {part("Search Console", sources.search_console, sources.search_console?.site)}
+      {part("Google Analytics", sources.ga4, sources.ga4?.property)}
+      {sources.range && <span style={{ color: "#888" }}>{sources.range.startDate} to {sources.range.endDate}</span>}
+    </p>
+  );
+}
+
 function AdsSection({ data }) {
   if (!data) return <p style={{ color: "#999", fontSize: 13 }}>No Google Ads data included in this audit.</p>;
   return (
@@ -615,6 +707,7 @@ export default function SEOAuditPage() {
     { key: "aeo", label: "AEO Analysis" },
   ];
   if (audit?.search_console_analysis) tabList.push({ key: "gsc", label: "Search Console" });
+  if (audit?.site_analytics_analysis) tabList.push({ key: "ga4", label: "Site Analytics" });
   if (audit?.google_ads_analysis) tabList.push({ key: "ads", label: "Google Ads" });
   if (audit?.technical_health) tabList.push({ key: "tech", label: "Technical Health" });
   tabList.push({ key: "recs", label: "Recommendations" });
@@ -938,6 +1031,7 @@ export default function SEOAuditPage() {
                 <p style={{ fontSize: 13, color: "#aaa" }}>
                   {audit.audit_summary?.audit_type === "full" ? "Full" : "Quick"} audit &middot; {audit.audit_summary?.pages_reviewed || crawlData?.pages_crawled?.length || 0} pages reviewed &middot; {audit.audit_summary?.audit_date}
                 </p>
+                <DataSourcesLine sources={audit.data_sources} />
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button
@@ -1035,6 +1129,7 @@ export default function SEOAuditPage() {
               {activeTab === "geo" && <GEOSection data={audit.geo_analysis} />}
               {activeTab === "aeo" && <AEOSection data={audit.aeo_analysis} />}
               {activeTab === "gsc" && <GSCSection data={audit.search_console_analysis} />}
+              {activeTab === "ga4" && <AnalyticsSection data={audit.site_analytics_analysis} />}
               {activeTab === "ads" && <AdsSection data={audit.google_ads_analysis} />}
               {activeTab === "tech" && <TechnicalSection data={audit.technical_health} />}
               {activeTab === "recs" && <RecommendationsSection data={audit.priority_recommendations} />}
