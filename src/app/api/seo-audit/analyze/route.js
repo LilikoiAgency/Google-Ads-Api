@@ -9,7 +9,13 @@ import { ADMIN_EMAILS } from "../../../../lib/admins";
 import { checkRateLimit } from '../../../../lib/seoRateLimit.js';
 import { z } from 'zod';
 import { logApiUsage, estimateClaudeCost, getMonthlyClaudeCost, getClaudeBudgetCap } from '../../../../lib/usageLogger';
+import { parseAuditJson } from '../../../../lib/seoAuditJson';
+import { gatherSiteData } from '../../../../lib/seoAuditData';
 
+// A full audit takes a few minutes to generate.
+export const maxDuration = 300;
+
+const AUDIT_MODEL = "claude-sonnet-4-6";
 const DAILY_LIMIT = 5;
 const DB = "tokensApi";
 const COLLECTION = "SeoAudits";
@@ -139,6 +145,9 @@ export async function POST(request) {
 
   const client = new Anthropic({ apiKey });
 
+  // Real traffic context: Search Console + GA4 for this domain (best-effort, ~5-10s).
+  const siteData = await gatherSiteData(domain);
+
   const auditRequest = {
     audit_request: {
       domain,
@@ -146,7 +155,8 @@ export async function POST(request) {
       audit_date: crawlData.audit_date || new Date().toISOString().split("T")[0],
       pages_crawled: crawlData.pages_crawled,
       site_wide: crawlData.site_wide || null,
-      google_search_console: gscData || null,
+      google_search_console: gscData || siteData.gsc || null,
+      site_analytics_ga4: siteData.ga4 || null,
       google_ads: adsData || null,
       seo_tool_data: seoToolData || null,
     },
@@ -161,12 +171,15 @@ export async function POST(request) {
   async function callClaudeWithRetry() {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        return await client.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 8000,
-          system: SEO_AUDIT_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userPrompt }],
-        });
+        // Streamed: long audits exceed what a single non-streaming request allows.
+        return await client.messages
+          .stream({
+            model: AUDIT_MODEL,
+            max_tokens: 16000,
+            system: SEO_AUDIT_SYSTEM_PROMPT,
+            messages: [{ role: "user", content: userPrompt }],
+          })
+          .finalMessage();
       } catch (err) {
         const isOverloaded = err.status === 529 || err.error?.type === "overloaded_error";
         if (isOverloaded && attempt < MAX_RETRIES) {
@@ -185,12 +198,12 @@ export async function POST(request) {
     logApiUsage({
       type: 'claude_tokens',
       email,
-      model: 'claude-sonnet-4-6',
+      model: AUDIT_MODEL,
       feature: 'seo_audit',
       inputTokens: message.usage?.input_tokens ?? 0,
       outputTokens: message.usage?.output_tokens ?? 0,
       totalTokens: (message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0),
-      estimatedCostUsd: estimateClaudeCost('claude-sonnet-4-6', message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0),
+      estimatedCostUsd: estimateClaudeCost(AUDIT_MODEL, message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0),
     }).catch(() => {});
 
     const responseText = message.content
@@ -198,29 +211,44 @@ export async function POST(request) {
       .map((block) => block.text)
       .join("");
 
-    // Parse JSON response — handle potential markdown fences
+    // A reply that hit the token cap is cut off mid-JSON; say so plainly.
+    if (message.stop_reason === "max_tokens") {
+      console.error("[seo-audit/analyze] audit reply hit max_tokens", { requestId, outputTokens: message.usage?.output_tokens });
+      return NextResponse.json(
+        { error: "The audit came back incomplete (it ran too long). Please try again, or run a Quick Audit.", requestId },
+        { status: 502 }
+      );
+    }
+
+    // Parse JSON response — tolerates code fences and stray text around the object
     let audit;
     try {
-      audit = JSON.parse(responseText);
-    } catch {
-      const cleaned = responseText
-        .replace(/```json\n?/g, "")
-        .replace(/```\n?/g, "")
-        .trim();
-      try {
-        audit = JSON.parse(cleaned);
-      } catch (parseErr) {
-        console.error("[seo-audit/analyze] JSON parse failed:", parseErr.message);
-        return NextResponse.json(
-          {
-            error: "Failed to parse audit response as JSON",
-            rawResponse: responseText.substring(0, 500),
-            requestId,
-          },
-          { status: 502 }
-        );
-      }
+      audit = parseAuditJson(responseText);
+    } catch (parseErr) {
+      console.error("[seo-audit/analyze] JSON parse failed:", parseErr.message);
+      return NextResponse.json(
+        {
+          error: "Failed to parse audit response as JSON",
+          rawResponse: responseText.substring(0, 500),
+          requestId,
+        },
+        { status: 502 }
+      );
     }
+
+    // Never present a half-parsed audit as complete.
+    const missing = ["audit_summary", "seo_analysis", "geo_analysis", "aeo_analysis", "priority_recommendations"]
+      .filter((k) => !audit?.[k]);
+    if (missing.length) {
+      console.error("[seo-audit/analyze] audit missing sections:", missing.join(", "), { requestId });
+      return NextResponse.json(
+        { error: "The audit came back incomplete. Please run it again.", requestId },
+        { status: 502 }
+      );
+    }
+
+    // Record which data sources fed this audit (shown on screen and kept in history).
+    audit.data_sources = siteData.sources;
 
     // ── Save audit to SeoAudits collection ─────────────────────────────
     let auditId = null;
