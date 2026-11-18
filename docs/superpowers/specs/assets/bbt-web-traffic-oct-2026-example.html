@@ -1,0 +1,90 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Big Bully Turf: Organic Traffic, October 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#ffffff;--ink:#17231a;--muted:#5d6b60;--line:#dfe6e0;--c1:#2f7d32;--c2:#7fb069;--c3:#c9a227;--c4:#3d6f8f;--c5:#a7b3a9;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a15;--ink:#e8eee9;--muted:#9aa89d;--line:#2b352d;--c1:#5cb85f;--c2:#9fd08a;--c3:#e0bb45;--c4:#6fa3c4;--c5:#6d7a70}}
+:root[data-theme="dark"]{--bg:#141a15;--ink:#e8eee9;--muted:#9aa89d;--line:#2b352d;--c1:#5cb85f;--c2:#9fd08a;--c3:#e0bb45;--c4:#6fa3c4;--c5:#6d7a70}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+main{max-width:1040px;margin:0 auto;padding:40px 20px 56px}
+h1{font-size:clamp(1.6rem,3.5vw,2.4rem);font-weight:800;line-height:1.15;margin:0 0 8px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 28px;max-width:70ch}
+.kpi{display:flex;flex-wrap:wrap;gap:36px;margin:0 0 28px}
+.kpi div b{display:block;font-size:1.8rem;font-weight:800}
+.kpi div span{color:var(--muted);font-size:.9rem}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:16px}
+.toggle button{font:inherit;font-size:.9rem;background:none;color:var(--ink);border:0;padding:8px 14px;cursor:pointer}
+.toggle button[aria-pressed="true"]{background:var(--c1);color:#fff}
+.toggle button:focus-visible{outline:2px solid var(--c3);outline-offset:-2px}
+.chart{position:relative;height:420px}
+.tw{overflow-x:auto;margin-top:36px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums;min-width:680px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--muted)}
+.t{font-weight:600}
+.sum td{font-weight:800;border-top:2px solid var(--ink)}
+.note{color:var(--muted);font-size:.85rem;margin-top:24px;max-width:75ch}
+</style></head><body><main>
+<h1>Big Bully Turf organic traffic, October 2026</h1>
+<p class="sub" id="sub"></p>
+<div class="kpi" id="kpi"></div>
+<div class="toggle" role="group" aria-label="Chart view">
+<button id="bOrg" aria-pressed="true">Organic search only</button><button id="bAll" aria-pressed="false">All non-paid</button>
+</div>
+<div class="chart"><canvas id="c" aria-label="Daily organic users chart"></canvas></div>
+<div class="tw"><table id="tbl"></table></div>
+<p class="note">Source: GA4 Traffic acquisition report, Total users by Session primary channel group, October 1–31, 2026. Totals are unique users for the month. The daily chart counts users per day, so a person who visits on several days appears on each of those days.</p>
+<p class="note"><strong>What each channel means</strong><br>
+<strong>Organic Search:</strong> visitors who clicked an unpaid result on Google, Bing or another search engine.<br>
+<strong>Direct:</strong> visitors who typed the web address, used a bookmark, or came from a link Google Analytics couldn't trace, such as one in a text message or app.<br>
+<strong>Referral:</strong> visitors who clicked a link to the site from another website.<br>
+<strong>Organic Social:</strong> visitors who clicked an unpaid post or profile link on Facebook, Instagram, TikTok or another social platform.<br>
+<strong>Other organic:</strong> smaller unpaid sources combined: free shopping listings (Organic Shopping), unpaid video such as YouTube (Organic Video), email links (Email), and AI tools like ChatGPT (AI Assistant).</p>
+</main>
+<script>
+const D={"labels": ["Oct 1", "Oct 2", "Oct 3", "Oct 4", "Oct 5", "Oct 6", "Oct 7", "Oct 8", "Oct 9", "Oct 10", "Oct 11", "Oct 12", "Oct 13", "Oct 14", "Oct 15", "Oct 16", "Oct 17", "Oct 18", "Oct 19", "Oct 20", "Oct 21", "Oct 22", "Oct 23", "Oct 24", "Oct 25", "Oct 26", "Oct 27", "Oct 28", "Oct 29", "Oct 30", "Oct 31"], "series": {"Organic Search": [49, 61, 42, 37, 74, 69, 70, 86, 52, 53, 33, 64, 66, 46, 61, 56, 54, 29, 68, 50, 49, 56, 53, 40, 41, 49, 51, 55, 56, 38, 31], "Direct": [69, 57, 19, 37, 49, 33, 41, 92, 41, 34, 30, 52, 57, 73, 33, 46, 40, 36, 36, 56, 28, 70, 61, 29, 27, 63, 35, 64, 60, 61, 67], "Referral": [39, 21, 34, 13, 15, 21, 18, 30, 38, 38, 18, 14, 18, 18, 23, 26, 21, 22, 20, 33, 22, 22, 21, 22, 22, 26, 19, 28, 23, 37, 23], "Organic Social": [7, 7, 11, 15, 29, 9, 7, 14, 9, 12, 11, 11, 15, 22, 28, 65, 34, 26, 34, 29, 30, 15, 18, 15, 17, 21, 80, 26, 25, 37, 75], "Other organic": [0, 17, 1, 0, 0, 7, 3, 1, 1, 1, 0, 0, 0, 1, 0, 3, 9, 1, 3, 2, 8, 4, 9, 2, 0, 3, 1, 2, 4, 1, 1]}, "monthly": {"Organic Search": 1440, "Direct": 1396, "Referral": 577, "Organic Social": 741, "Other organic": 76}};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const keys=Object.keys(D.series);
+let mode='org',chart;
+const fmt=n=>n.toLocaleString();
+function build(){
+ const cols=['--c1','--c2','--c3','--c4','--c5'].map(css);
+ const ks=mode==='all'?keys:['Organic Search'];
+ if(chart)chart.destroy();
+ Chart.defaults.font.family="Archivo,system-ui,sans-serif";
+ Chart.defaults.color=css('--muted');
+ chart=new Chart(document.getElementById('c'),{type:'bar',data:{labels:D.labels,datasets:ks.map(k=>({label:k,data:D.series[k],backgroundColor:cols[keys.indexOf(k)],borderRadius:2,stack:'s'}))},
+ options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+ plugins:{legend:{position:'bottom',labels:{boxWidth:12,boxHeight:12}},
+ tooltip:{callbacks:{footer:it=>mode==='all'?'Total: '+fmt(ks.reduce((s,k)=>s+D.series[k][it[0].dataIndex],0)):''}}},
+ scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:css('--line')},ticks:{callback:v=>v.toLocaleString()}}}}});
+}
+function render(){
+ const ks=mode==='all'?keys:['Organic Search'];
+ const total=ks.reduce((s,k)=>s+D.monthly[k],0);
+ const daily=D.labels.map((_,i)=>ks.reduce((s,k)=>s+D.series[k][i],0));
+ const mx=Math.max(...daily), mi=daily.indexOf(mx);
+ const avg=Math.round(daily.reduce((a,b)=>a+b,0)/daily.length);
+ document.getElementById('kpi').innerHTML=
+  `<div><b>${fmt(total)}</b><span>${mode==='all'?'Non-paid users':'Organic search users'}, October</span></div>`+
+  `<div><b>${fmt(avg)}</b><span>Daily average</span></div>`+
+  `<div><b>${fmt(mx)}</b><span>Best day (${D.labels[mi]})</span></div>`;
+ let t='<thead><tr><th>Channel</th><th>Users, October</th></tr></thead><tbody>';
+ ks.forEach(k=>t+=`<tr><td>${k}</td><td>${fmt(D.monthly[k])}</td></tr>`);
+ if(ks.length>1)t+=`<tr class="sum"><td>Total</td><td class="t">${fmt(total)}</td></tr>`;
+ const tb=document.getElementById('tbl');tb.innerHTML=t+'</tbody>';tb.style.minWidth='0';
+ document.getElementById('sub').textContent=mode==='all'
+  ?'Users from non-paid channels, October 1–31, 2026. Paid Search, Paid Social, Paid Other, Cross-network, Display and Unassigned traffic are excluded.'
+  :'Users from unpaid search engine results (Google, Bing and others), October 1–31, 2026.';
+}
+function set(m){mode=m;document.getElementById('bAll').setAttribute('aria-pressed',m==='all');document.getElementById('bOrg').setAttribute('aria-pressed',m==='org');render();build();}
+document.getElementById('bAll').onclick=()=>set('all');
+document.getElementById('bOrg').onclick=()=>set('org');
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',build);
+render();build();
+</script></body></html>
