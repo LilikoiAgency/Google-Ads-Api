@@ -16,6 +16,7 @@ vi.mock('@/app/dashboard/components/DashboardIcons', () => ({
   AudienceLabIcon: () => <span>audience</span>,
   StreamingIcon: () => <span>streaming</span>,
   UsageAnalyticsIcon: () => <span>usage</span>,
+  AnalyticsIcon: () => <span>analytics</span>,
 }));
 
 import { MobileNavProvider } from '@/app/dashboard/components/MobileNavContext.jsx';

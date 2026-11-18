@@ -72,3 +72,13 @@ export function StreamingIcon({ size = S }) {
 export function UsageAnalyticsIcon({ size = S }) {
   return <FontAwesomeIcon icon={faChartLine} style={{ width: size, height: size, color: "#ec4899" }} />;
 }
+
+export function AnalyticsIcon({ size = S }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+      <rect x="3" y="13" width="4.5" height="8" rx="1.2" fill="#F9AB00"/>
+      <rect x="9.75" y="8" width="4.5" height="13" rx="1.2" fill="#E37400"/>
+      <rect x="16.5" y="3" width="4.5" height="18" rx="1.2" fill="#E37400"/>
+    </svg>
+  );
+}

@@ -13,7 +13,7 @@ import { faHouse } from "@fortawesome/free-solid-svg-icons";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon, AudienceLabIcon,
-  StreamingIcon, UsageAnalyticsIcon,
+  StreamingIcon, UsageAnalyticsIcon, AnalyticsIcon,
 } from "./DashboardIcons";
 
 const NAV = [
@@ -24,6 +24,7 @@ const NAV = [
   ]},
   { label: "Organic & Reports", items: [
     { href: "/dashboard/google/organic", label: "Google Organic",  icon: <SearchConsoleIcon />  },
+    { href: "/dashboard/google/analytics", label: "Web Traffic (GA4)", icon: <AnalyticsIcon /> },
     { href: "/dashboard/report",         label: "Paid vs Organic", icon: <ReportIcon />         },
     { href: "/dashboard/pacing",         label: "Pacing Reports",  icon: <ReportIcon />         },
     { href: "/dashboard/streaming-pacing", label: "Streaming Pacing", icon: <StreamingIcon />  },

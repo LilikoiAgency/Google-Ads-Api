@@ -13,7 +13,7 @@ import PacingWidget from "./components/PacingWidget";
 import {
   GoogleAdsIcon, MetaAdsIcon, MicrosoftAdsIcon, SearchConsoleIcon,
   ReportIcon, SEOAuditIcon, ClientPortalsIcon,
-  AudienceLabIcon, StreamingIcon,
+  AudienceLabIcon, StreamingIcon, AnalyticsIcon,
 } from "./components/DashboardIcons";
 
 // ── Editable "What's New" content ────────────────────────────────────────────
@@ -34,6 +34,7 @@ const TOOLS = [
     section: "Organic & Reports",
     items: [
       { href: "/dashboard/google/organic", Icon: SearchConsoleIcon, name: "Google Search Organic",   tag: "Organic",   tagColor: "rgba(52,168,83,0.12)",   tagText: "#34A853",  tagBorder: "rgba(52,168,83,0.3)",   desc: "Search Console data — top queries, clicks, impressions, CTR, and average position by property." },
+      { href: "/dashboard/google/analytics", Icon: AnalyticsIcon, name: "Web Traffic (GA4)",       tag: "Organic",   tagColor: "rgba(52,168,83,0.12)",   tagText: "#34A853",  tagBorder: "rgba(52,168,83,0.3)",   desc: "GA4 website traffic by channel: organic vs paid, any date range, with period comparisons and downloadable client reports." },
       { href: "/dashboard/report",         Icon: ReportIcon,        name: "Paid vs. Organic Report", tag: "Report",    tagColor: "rgba(245,158,11,0.12)",  tagText: "#f59e0b",  tagBorder: "rgba(245,158,11,0.3)",  desc: "Cross-channel keyword overlap — find gaps, double-coverage, and opportunities between paid and organic." },
       { href: "/dashboard/seo-audit",      Icon: SEOAuditIcon,      name: "SEO / GEO / AEO Audit",  tag: "AI Audit",  tagColor: "rgba(13,148,136,0.12)",  tagText: "#0d9488",  tagBorder: "rgba(13,148,136,0.3)",  desc: "AI-powered site audit. Enter any domain to get scored recommendations for SEO, generative engine, and answer engine optimization." },
       { href: "/dashboard/admin/clients",  Icon: ClientPortalsIcon, name: "Client Portals",          tag: "Portals",   tagColor: "rgba(168,85,247,0.12)",  tagText: "#a855f7",  tagBorder: "rgba(168,85,247,0.3)",  desc: "Manage client-facing reporting portals. Each portal exposes ad and audience data for a specific client account." },
