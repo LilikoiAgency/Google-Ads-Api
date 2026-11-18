@@ -93,6 +93,57 @@ describe('gather partial', () => {
   });
 });
 
+describe('gather fix round 1', () => {
+  const gscOk = () => {
+    m.findGscSite.mockResolvedValue({ status: 'ok', site: 'sc-domain:x.com', auth: {} });
+    m.query.mockResolvedValue({ data: { rows: [{ impressions: 5 }] } });
+    m.summarizeGsc.mockReturnValue({ summary: true });
+    m.joinPagesToQueries.mockReturnValue([{ page: 'https://x.com/a' }]);
+    m.inspectUrls.mockResolvedValue({ status: 'ok', results: [] });
+    m.listGoogleSitemaps.mockResolvedValue({ status: 'ok', sitemaps: [] });
+    m.fetchPageSpeed.mockImplementation(async (url) => ({ status: 'ok', url }));
+  };
+  const ga4Ok = () => {
+    process.env.GA4_SA_KEY = 'k';
+    m.findGa4Property.mockResolvedValue({ propertyId: '1', propertyName: 'p', account: 'a' });
+    m.fetchTrafficReport.mockResolvedValue({ totalsByView: { all: { sessions: 10 } } });
+    m.summarizeGa4.mockReturnValue({ ga4: true });
+  };
+
+  it('GA4 ok path populates ga4 and ga4Pages', async () => {
+    gscOk(); ga4Ok();
+    m.ga4PerPage.mockReturnValue([{ page: '/a', sessions: 3 }]);
+    const { data, gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
+    expect(data.ga4).toEqual({ ga4: true });
+    expect(data.ga4Pages).toEqual([{ page: '/a', sessions: 3 }]);
+    expect(gaps.find((g) => g.source === 'ga4')).toBeUndefined();
+  });
+
+  it('a ga4PerPage throw keeps other data and adds a ga4 error gap', async () => {
+    gscOk(); ga4Ok();
+    m.ga4PerPage.mockImplementation(() => { throw new Error('per page boom'); });
+    const { data, gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
+    expect(data.gsc).toEqual({ summary: true });
+    expect(data.ga4Pages).toBeNull();
+    expect(gaps.find((g) => g.source === 'ga4')).toMatchObject({ status: 'error', detail: 'per page boom' });
+    expect(gaps.find((g) => g.source === 'gather')).toBeUndefined();
+  });
+
+  it('caps inspected and measured URLs to the profile limits', async () => {
+    gscOk();
+    const many = Array.from({ length: 60 }, (_, i) => ({ page: `https://x.com/p${i}` }));
+    m.joinPagesToQueries.mockReturnValue(many);
+    await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
+    expect(m.inspectUrls.mock.calls[0][2]).toHaveLength(AUDIT_PROFILES.quick.inspect);
+    expect(m.fetchPageSpeed).toHaveBeenCalledTimes(AUDIT_PROFILES.quick.pagespeed);
+  });
+
+  it('a URL containing 429 in a non-quota detail is not worded as quota', () => {
+    const [text] = describeGaps([{ source: 'pagespeed', status: 'error', detail: 'https://x.com/p429: boom' }]);
+    expect(text).not.toMatch(/quota/);
+  });
+});
+
 describe('describeGaps', () => {
   it('words each status', () => {
     const out = describeGaps([

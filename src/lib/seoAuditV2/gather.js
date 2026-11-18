@@ -149,7 +149,12 @@ export async function gatherAll({ domain, crawl, profile = 'quick' } = {}) {
 
     if (ga4.status === 'ok') {
       data.ga4 = ga4.ga4;
-      data.ga4Pages = ga4PerPage(ga4.report, targets);
+      try {
+        data.ga4Pages = ga4PerPage(ga4.report, targets);
+      } catch (err) {
+        data.ga4Pages = null;
+        gap('ga4', 'error', errText(err));
+      }
     } else gap('ga4', ga4.status, ga4.error || '');
 
     if (pagespeed.status !== 'ok') gap('pagespeed', pagespeed.status, pagespeed.error || '');
@@ -192,7 +197,7 @@ export function describeGaps(gaps) {
   return (gaps || []).map(({ source, status, detail }) => {
     if (source === 'pagespeed') {
       if (status === 'timeout') return `Page speed timed out for ${detail || 'a page'}.`;
-      if (/429/.test(detail || '')) {
+      if (/HTTP 429/.test(detail || '')) {
         return 'Page speed is unavailable because the free PageSpeed quota ran out; adding a PAGESPEED_API_KEY fixes it.';
       }
     }
