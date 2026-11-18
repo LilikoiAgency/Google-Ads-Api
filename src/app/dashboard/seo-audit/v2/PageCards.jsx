@@ -3,7 +3,8 @@
 // its top Search Console queries, the fix list and the queries each fix targets,
 // plus the Action Plan tasks for that page. Blocks without data are hidden.
 
-import { pagePath } from "./ActionPlan";
+import { pagePath, pageHref } from "./ActionPlan";
+import { pathKey } from "@/lib/seoAuditV2/tasks";
 
 const LABEL = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 4 };
 const ROW = { fontSize: 12, color: "#444", lineHeight: 1.6 };
@@ -70,18 +71,20 @@ function TopQueries({ queries }) {
   );
 }
 
-export default function PageCards({ pages, tasks = [] }) {
+export default function PageCards({ pages, tasks = [], domain = "" }) {
   if (!pages?.length) return <p style={{ color: "#999", fontSize: 13 }}>No page-level fixes in this audit.</p>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {pages.map((p) => {
-        const ids = tasks.filter((t) => t.page === p.page).map((t) => t.id);
-        const isUrl = /^https?:\/\//i.test(p.page || "");
+        // Pages and tasks are matched by path, so "/a", "/a/" and a full URL agree.
+        const key = pathKey(p.page);
+        const ids = tasks.filter((t) => pathKey(t.page) === key).map((t) => t.id);
+        const href = pageHref(p.page, domain);
         return (
           <div key={p.page} data-page-card style={{ border: "1px solid #eee", borderRadius: 12, padding: "14px 18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
-              {isUrl ? (
-                <a href={p.page} target="_blank" rel="noopener noreferrer" style={{ fontSize: 15, fontWeight: 700, color: "#0f3460", wordBreak: "break-all", textDecoration: "none" }}>
+              {href ? (
+                <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 15, fontWeight: 700, color: "#0f3460", wordBreak: "break-all", textDecoration: "none" }}>
                   {pagePath(p.page)}
                 </a>
               ) : (

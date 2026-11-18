@@ -101,7 +101,17 @@ describe('ActionPlan', () => {
     expect(pagePath('site-wide')).toBe('site-wide');
     expect(tasksToChecklist([TASKS[0], { ...TASKS[1], change: 'Line one\n  line two' }])).toBe(
       '- [ ] T1 · /services/turf · Add pricing section to turf page — Add an H2 "How much does turf cost?" with a price range table.\n'
-      + '- [ ] T2 · / · Fix canonical pointing to staging — Line one line two',
+      + '- [ ] T2 · / · Fix canonical pointing to staging — Line one\n'
+      + '  - line two',
+    );
+  });
+
+  it('checklist keeps the exact fix text as indented sub-lines', () => {
+    const change = 'Rewrite the title.\nReplace the title with: "Turf Installation in Las Vegas, NV | Acme"\nReplace the meta description with: "Turf in Las Vegas."';
+    expect(tasksToChecklist([{ ...TASKS[0], page: '/las-vegas', change }])).toBe(
+      '- [ ] T1 · /las-vegas · Add pricing section to turf page — Rewrite the title.\n'
+      + '  - Replace the title with: "Turf Installation in Las Vegas, NV | Acme"\n'
+      + '  - Replace the meta description with: "Turf in Las Vegas."',
     );
   });
 
@@ -191,6 +201,25 @@ describe('ProgressSteps', () => {
     expect(screen.getByText('crawl: no pages could be fetched')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('shows a plain message per error code instead of the raw service text', () => {
+    const progress = {
+      domain: 'acme.com', status: 'failed', dataGaps: [],
+      steps: steps(['failed', 'failed', 'failed', 'failed'], {
+        0: { error: 'timeout: The request timed out' },
+        1: { error: 'refusal: Declined (cyber)' },
+        2: { error: 'max_tokens: The reply hit the output limit' },
+        3: { error: 'api: 529 {"type":"error","error":{"type":"overloaded_error"}}' },
+      }),
+    };
+    render(<ProgressSteps progress={progress} onRetry={() => {}} />);
+    expect(screen.getByText('This step took too long and was stopped.')).toBeInTheDocument();
+    expect(screen.getByText('The analysis service declined this step.')).toBeInTheDocument();
+    expect(screen.getByText('The analysis ran too long to finish in one reply.')).toBeInTheDocument();
+    expect(screen.getByText('The analysis service returned an error.')).toBeInTheDocument();
+    expect(screen.queryByText(/overloaded_error/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Declined \(cyber\)/)).not.toBeInTheDocument();
   });
 
   it('shows a request error with Retry even while the job is running', () => {
@@ -293,6 +322,14 @@ describe('v2 results pieces', () => {
     expect(screen.getByText('Add a pricing table')).toBeInTheDocument();
     expect(screen.getByText('turf cost')).toBeInTheDocument();
     expect(screen.getByText(/T1/)).toBeInTheDocument();
+  });
+
+  it('PageCards matches tasks by path and links path pages on the domain', () => {
+    const pages = [{ page: '/services/turf', fixes: [{ change: 'Add a pricing table', targets_queries: [] }] }];
+    const tasks = [{ ...TASKS[0], page: 'https://acme.com/services/turf/' }, { ...TASKS[1], id: 'T9', page: '/services/turf' }];
+    render(<PageCards pages={pages} tasks={tasks} domain="acme.com" />);
+    expect(screen.getByText('In the action plan: T1, T9')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '/services/turf' })).toHaveAttribute('href', 'https://acme.com/services/turf');
   });
 
   it('PageCards shows index status, speed and top queries, and hides empty blocks', () => {

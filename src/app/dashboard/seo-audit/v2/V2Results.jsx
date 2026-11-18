@@ -101,7 +101,7 @@ export default function V2Results({ result, domain, actions }) {
         {tab === "pages" && (
           <>
             {incomplete("content") && <IncompleteNotice area="Content" />}
-            {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={tasks} />}
+            {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={tasks} domain={result.domain || domain} />}
             {findings.content?.length > 0 && (
               <>
                 <SectionTitle>Content findings</SectionTitle>

@@ -28,10 +28,23 @@ export function pagePath(page) {
 
 const oneLine = (s) => String(s || "").replace(/\s*\n\s*/g, " ").trim();
 
-// "- [ ] T1 · /page · title — change", one line per task.
+// Link for a task or page: a full URL as is, a path on the audited domain.
+export function pageHref(page, domain) {
+  const s = String(page || "");
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("/") && domain) return `https://${domain}${s}`;
+  return null;
+}
+
+// "- [ ] T1 · /page · title — change"; a multi-line change (summary plus the
+// exact text of each fix) keeps its extra lines as indented sub-items.
 export function tasksToChecklist(tasks) {
   return (tasks || [])
-    .map((t) => `- [ ] ${t.id} · ${pagePath(t.page)} · ${oneLine(t.title)} — ${oneLine(t.change)}`)
+    .map((t) => {
+      const [first = "", ...rest] = String(t.change || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const head = `- [ ] ${t.id} · ${pagePath(t.page)} · ${oneLine(t.title)} — ${first}`;
+      return [head, ...rest.map((l) => `  - ${l}`)].join("\n");
+    })
     .join("\n");
 }
 
@@ -90,7 +103,8 @@ function downloadCsv(csv, filename) {
 }
 
 // copyNotice: { ok, text } after a "Copy change" click on this task, else null.
-function ExpandedTask({ task, onCopy, copyNotice }) {
+function ExpandedTask({ task, domain, onCopy, copyNotice }) {
+  const href = pageHref(task.page, domain);
   return (
     <div style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "4px 4px 8px" }}>
       <div style={{ flex: "1 1 320px", minWidth: 0 }}>
@@ -115,15 +129,15 @@ function ExpandedTask({ task, onCopy, copyNotice }) {
             <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>{task.why}</p>
           </>
         )}
-        {/^https?:\/\//i.test(task.page || "") && (
+        {href && (
           <a
-            href={task.page}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#0f3460", wordBreak: "break-all" }}
           >
-            Open {task.page} &#8599;
+            Open {href} &#8599;
           </a>
         )}
       </div>
@@ -295,7 +309,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
                   <tr key={`${t.id}-detail`} style={{ borderBottom: "1px solid #f0f0f0", background: "#fafbff" }}>
                     <td />
                     <td colSpan={7} style={{ padding: "0 12px 14px" }}>
-                      <ExpandedTask task={t} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
+                      <ExpandedTask task={t} domain={domain} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
                     </td>
                   </tr>
                 ),

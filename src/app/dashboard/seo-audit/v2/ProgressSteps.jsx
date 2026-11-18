@@ -27,6 +27,19 @@ function StepIcon({ status }) {
 
 const STATUS_TEXT = { pending: "Waiting", running: "Working…", done: "Done", failed: "Failed" };
 
+// Step errors are stored as "<code>: <raw message>"; the raw text stays on the job.
+const ERROR_TEXT = {
+  timeout: "This step took too long and was stopped.",
+  refusal: "The analysis service declined this step.",
+  max_tokens: "The analysis ran too long to finish in one reply.",
+  api: "The analysis service returned an error.",
+};
+
+export function stepErrorText(error) {
+  const code = String(error || "").match(/^(timeout|refusal|max_tokens|api):/)?.[1];
+  return code ? ERROR_TEXT[code] : String(error || "");
+}
+
 export default function ProgressSteps({ progress, error, onRetry, onBack }) {
   const status = progress?.status;
   const finished = status === "done" || status === "failed";
@@ -80,7 +93,7 @@ export default function ProgressSteps({ progress, error, onRetry, onBack }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 14, fontWeight: s.status === "running" ? 700 : 600, color: s.status === "pending" ? "#999" : "#1a1a2e" }}>{s.label}</p>
                 {s.status === "failed" && s.error && (
-                  <p style={{ fontSize: 12, color: "#c0392b", marginTop: 2, wordBreak: "break-word" }}>{s.error}</p>
+                  <p style={{ fontSize: 12, color: "#c0392b", marginTop: 2, wordBreak: "break-word" }}>{stepErrorText(s.error)}</p>
                 )}
               </div>
               <span style={{ fontSize: 11, fontWeight: 600, color: s.status === "failed" ? "#c0392b" : s.status === "done" ? "#1a7a4a" : "#999" }}>
