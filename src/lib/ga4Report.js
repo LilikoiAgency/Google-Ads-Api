@@ -157,6 +157,13 @@ function suspectedPaidWarning(sources) {
 
 // ── normalizer ───────────────────────────────────────────────────────────
 
+// Page-only text for GA data-quality flags (also exposed as report.dataQuality).
+export const DATA_QUALITY_WARNINGS = {
+  otherRow: 'GA grouped some rows into (other)',
+  sampled: 'GA sampled this data',
+  thresholded: 'GA hid some low numbers to protect user privacy (thresholding)',
+};
+
 export function normalizeTrafficReport(reports, { property, range, compareRange, granularity }) {
   const hasCompare = !!compareRange;
   const [channelsReport, ...rest] = reports || [];
@@ -226,8 +233,14 @@ export function normalizeTrafficReport(reports, { property, range, compareRange,
   const paidWarning = suspectedPaidWarning(sources);
   if (paidWarning) warnings.push(paidWarning);
   const all = reports || [];
-  if (all.some((r) => r?.metadata?.dataLossFromOtherRow)) warnings.push('GA grouped some rows into (other)');
-  if (all.some((r) => r?.metadata?.samplingMetadatas?.length)) warnings.push('GA sampled this data');
+  const dataQuality = {
+    sampled: all.some((r) => r?.metadata?.samplingMetadatas?.length > 0),
+    otherRow: all.some((r) => !!r?.metadata?.dataLossFromOtherRow),
+    thresholded: all.some((r) => !!r?.metadata?.subjectToThresholding),
+  };
+  for (const key of ['otherRow', 'sampled', 'thresholded']) {
+    if (dataQuality[key]) warnings.push(DATA_QUALITY_WARNINGS[key]);
+  }
 
   return {
     property,
@@ -241,6 +254,7 @@ export function normalizeTrafficReport(reports, { property, range, compareRange,
     sources,
     landingPages,
     warnings,
+    dataQuality,
     fetchedAt: new Date().toISOString(),
   };
 }

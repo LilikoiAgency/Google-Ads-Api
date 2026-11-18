@@ -45,5 +45,6 @@ describe('ga4Dates', () => {
     expect(rangeLabel({ startDate: '2026-10-01', endDate: '2026-10-31' })).toBe('Oct 2026');
     expect(rangeLabel({ startDate: '2025-12-20', endDate: '2026-01-05' })).toBe('Dec 20, 2025 – Jan 5, 2026');
     expect(rangeLabel({ startDate: '2026-10-03', endDate: '2026-11-02' })).toBe('Oct 3 – Nov 2, 2026');
+    expect(rangeLabel({ startDate: '2026-10-03', endDate: '2026-10-03' })).toBe('Oct 3, 2026');
   });
 });

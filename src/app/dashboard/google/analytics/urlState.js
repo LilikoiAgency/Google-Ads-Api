@@ -51,6 +51,12 @@ export function buildQuery({ property, rangeKey, custom, compare, view, gran }) 
   return `?${p.toString()}`;
 }
 
+// True when the link named a property that isn't in the connected list.
+export function isUrlPropertyMissing({ properties, fromUrl }) {
+  if (!fromUrl || !properties?.length) return false;
+  return !properties.some((p) => p.id === fromUrl);
+}
+
 // Which property to show: the current one if still listed, else the URL's
 // (first resolution only), else the last one used, else the first.
 export function resolveProperty({ properties, current, fromUrl, stored }) {

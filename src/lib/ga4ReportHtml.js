@@ -59,11 +59,10 @@ function cellDelta(d, hasCompare) {
   return { t, dir: dirOf(t) };
 }
 
-function buildViewData(report, viewKey, { hasCompare, compareLabel, range }) {
+function buildViewData(report, viewKey, { hasCompare, compareLabel, range, showKeyEvents }) {
   const v = selectView(report, viewKey);
   const t = v.totals;
   const tc = v.totalsCompare;
-  const showKeyEvents = (t.keyEvents || 0) > 0 || (tc?.keyEvents || 0) > 0;
   // A rate change against a period with no sessions means nothing.
   const rateDelta = tc && tc.sessions > 0 ? v.deltas.engagementRate : null;
 
@@ -136,18 +135,26 @@ export function generateTrafficReportHtml(report, { view } = {}) {
   const compareLabel = hasCompare ? rangeLabel(report.compareRange) : null;
   const title = `${report.property.name}: Web Traffic, ${range}`;
   const unit = { day: 'day', week: 'week', month: 'month' }[report.granularity] || 'day';
+  // Same rule as the page: key events column only when the whole property had any.
+  const showKeyEvents = (report.totalsByView?.all?.keyEvents || 0) > 0
+    || (report.totalsByViewCompare?.all?.keyEvents || 0) > 0;
 
   const data = {
     labels: report.series.labels,
     compareLabel,
-    views: Object.fromEntries(VIEWS.map((v) => [v.key, buildViewData(report, v.key, { hasCompare, compareLabel, range })])),
+    views: Object.fromEntries(VIEWS.map((v) => [v.key, buildViewData(report, v.key, { hasCompare, compareLabel, range, showKeyEvents })])),
   };
   // U+2028/2029 are legal in JS string literals since ES2019; only '<' needs escaping.
   const json = JSON.stringify(data).replace(/</g, '\\' + 'u003c');
 
+  const dq = report.dataQuality || {};
   const note = `Source: Google Analytics 4, Session primary channel group, ${range}.`
     + (hasCompare ? ` Compared with ${compareLabel}.` : '')
-    + ` Users are unique visitors for the whole period; the chart counts users per ${unit}, so someone who visits in several periods appears in each.`;
+    + ` Users are unique visitors for the whole period; the chart counts users per ${unit}, so someone who visits in several periods appears in each.`
+    + ' Landing-page users are added up across channels, so someone who arrived through two channels counts twice there.'
+    + (dq.sampled || dq.otherRow || dq.thresholded
+      ? ' Google Analytics sampled or grouped some of this data, so small numbers may be approximate.'
+      : '');
 
   const buttons = VIEWS.map((v) =>
     `<button type="button" data-v="${v.key}" aria-pressed="${v.key === view}">${esc(v.label)}</button>`).join('');
@@ -250,7 +257,7 @@ function render(){
  if(!v.sources.length)u+='<tr><td class="none" colspan="4">No sources for these channels in this period.</td></tr>';
  v.sources.forEach(r=>{u+='<tr><td>'+esc(r.sourceMedium)+'</td><td class="l">'+esc(r.channel)+'</td><td>'+esc(r.sessions)+'</td><td>'+esc(r.users)+'</td></tr>';});
  $('src').innerHTML=u+'</tbody>';
- let p='<thead><tr><th>Landing page</th><th>Sessions</th><th>Users</th>'+(ke?'<th>Key events</th>':'')+'</tr></thead><tbody>';
+ let p='<thead><tr><th>Landing page</th><th>Sessions</th><th>Users (approx.)</th>'+(ke?'<th>Key events</th>':'')+'</tr></thead><tbody>';
  if(!v.pages.length)p+='<tr><td class="none" colspan="'+(ke?4:3)+'">No landing pages for these channels in this period.</td></tr>';
  v.pages.forEach(r=>{p+='<tr><td class="pg">'+esc(r.page)+'</td><td>'+esc(r.sessions)+'</td><td>'+esc(r.users)+'</td>'+(ke?'<td>'+esc(r.keyEvents)+'</td>':'')+'</tr>';});
  $('pg').innerHTML=p+'</tbody>';

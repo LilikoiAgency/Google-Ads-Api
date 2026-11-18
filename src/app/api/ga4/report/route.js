@@ -3,6 +3,7 @@ import { getAllowedSession } from "@/lib/routeAuth";
 import { getCached, setCached } from "@/lib/serverCache";
 import { listProperties, fetchTrafficReport } from "@/lib/ga4Client";
 import { isValidRange } from "@/lib/ga4Dates";
+import { mapGa4Error } from "@/lib/ga4Errors";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function GET(request) {
     }
     if (!match) return fail(403, "no_access", "Property is not visible to the service account");
 
-    const key = `ga4:v1:report:${property}:${startDate}:${endDate}:${compare}:${granularity}`;
+    const key = `ga4:v2:report:${property}:${startDate}:${endDate}:${compare}:${granularity}`;
     const cached = await getCached(key);
     if (cached) return NextResponse.json(cached);
 
@@ -55,13 +56,7 @@ export async function GET(request) {
     await setCached(key, report, ttl);
     return NextResponse.json(report);
   } catch (err) {
-    // Never return/log the whole error: GaxiosError carries a bearer token.
-    const message = String(err?.message || "GA4 error");
-    const code = err?.code;
-    console.error("[ga4/report]", code, message);
-    if (message.startsWith("GA4_SA_KEY")) return fail(500, "missing_key", message);
-    if (code === 429 || code === 8 || err?.status === "RESOURCE_EXHAUSTED") return fail(429, "quota", message);
-    if (code === 403) return fail(403, "no_access", message);
-    return fail(502, "ga_error", message);
+    const { status, error, message } = mapGa4Error(err, "ga4/report");
+    return fail(status, error, message);
   }
 }

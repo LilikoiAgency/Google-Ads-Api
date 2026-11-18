@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAllowedSession } from "@/lib/routeAuth";
 import { getCached, setCached } from "@/lib/serverCache";
 import { listProperties } from "@/lib/ga4Client";
+import { mapGa4Error } from "@/lib/ga4Errors";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,7 @@ export async function GET(request) {
     await setCached(KEY, properties, TTL);
     return NextResponse.json({ properties });
   } catch (err) {
-    const message = String(err?.message || "GA4 error");
-    console.error("[ga4/properties]", err?.code, message);
-    if (message.startsWith("GA4_SA_KEY")) return NextResponse.json({ error: "missing_key", message }, { status: 500 });
-    return NextResponse.json({ error: "ga_error", message }, { status: 502 });
+    const { status, error, message } = mapGa4Error(err, "ga4/properties");
+    return NextResponse.json({ error, message }, { status });
   }
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeTrafficReport } from '@/lib/ga4Report';
 import { inView } from '@/lib/ga4Channels';
-import { selectView, delta } from '@/lib/ga4View';
+import { selectView, delta, pageNotes } from '@/lib/ga4View';
 import semper from '../fixtures/ga4/semper-oct-2026.json';
 
 const ctx = {
@@ -93,6 +93,18 @@ describe('ga4View', () => {
     expect(v.suspected.sessions).toBe(exp.reduce((s, x) => s + x.sessions, 0));
     expect(Object.values(v.suspected.byChannel).reduce((a, b) => a + b, 0)).toBe(v.suspected.sessions);
     expect(selectView(report, 'paid').suspected).toEqual({ sessions: 0, byChannel: {} });
+  });
+
+  it('pageNotes: paid line only when the view has suspected sessions; quality notes always', () => {
+    const PAID = '~40 sessions labeled Organic Social look like paid ads with missing UTM tags';
+    const r = { warnings: [PAID, 'GA sampled this data', 'GA hid some low numbers to protect user privacy (thresholding)'] };
+    expect(pageNotes(r, { suspected: { sessions: 40 } })).toEqual({
+      paid: [PAID],
+      quality: ['GA sampled this data', 'GA hid some low numbers to protect user privacy (thresholding)'],
+    });
+    expect(pageNotes(r, { suspected: { sessions: 0 } }).paid).toEqual([]);
+    expect(pageNotes(r, { suspected: { sessions: 0 } }).quality).toHaveLength(2);
+    expect(pageNotes(null, null)).toEqual({ paid: [], quality: [] });
   });
 
   it('throws on unknown view', () => {

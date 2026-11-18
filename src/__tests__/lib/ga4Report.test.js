@@ -74,7 +74,16 @@ describe('ga4Report', () => {
     expect(out.sources).toEqual([]);
     expect(out.landingPages).toEqual([]);
     expect(out.warnings).toEqual([]);
+    expect(out.dataQuality).toEqual({ sampled: false, otherRow: false, thresholded: false });
     expect(out.property).toEqual(ctx.property);
+  });
+
+  it('detects thresholding', () => {
+    const reports = JSON.parse(JSON.stringify(empty.reports));
+    reports[2] = { ...(reports[2] || {}), metadata: { subjectToThresholding: true } };
+    const out = normalizeTrafficReport(reports, ctx);
+    expect(out.dataQuality.thresholded).toBe(true);
+    expect(out.warnings).toEqual(['GA hid some low numbers to protect user privacy (thresholding)']);
   });
 
   it('totalsByViewCompare is null without a comparison', () => {
@@ -152,6 +161,7 @@ describe('ga4Report', () => {
     expect(out.warnings[0]).toMatch(/Organic Social/);
     expect(out.warnings).toContain('GA grouped some rows into (other)');
     expect(out.warnings).toContain('GA sampled this data');
+    expect(out.dataQuality).toEqual({ sampled: true, otherRow: true, thresholded: false });
     expect(typeof out.fetchedAt).toBe('string');
   });
 

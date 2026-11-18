@@ -64,7 +64,7 @@ describe("ga4 routes", () => {
       property: prop, startDate: "2026-10-01", endDate: "2026-10-31", compare: "prev", granularity: "day",
     });
     expect(setCached).toHaveBeenCalledWith(
-      "ga4:v1:report:properties/1:2026-10-01:2026-10-31:prev:day", { ok: true }, 6 * 60 * 60 * 1000);
+      "ga4:v2:report:properties/1:2026-10-01:2026-10-31:prev:day", { ok: true }, 6 * 60 * 60 * 1000);
   });
 
   it("refetches properties fresh once when cached list lacks the property", async () => {
@@ -82,6 +82,39 @@ describe("ga4 routes", () => {
     const res = await getReport(url(base));
     expect(res.init.status).toBe(429);
     expect(res.body.error).toBe("quota");
+  });
+
+  it("429 maps gaxios-shaped quota errors (status / response)", async () => {
+    for (const err of [
+      { status: 429, message: "q" },
+      { response: { status: 429 }, message: "q" },
+      { response: { status: 400, data: { error: { status: "RESOURCE_EXHAUSTED" } } }, message: "q" },
+    ]) {
+      fetchTrafficReport.mockRejectedValueOnce(err);
+      const res = await getReport(url(base));
+      expect(res.init.status).toBe(429);
+      expect(res.body.error).toBe("quota");
+    }
+  });
+
+  it("403 maps GA permission errors via status / response.status", async () => {
+    for (const err of [{ status: 403, message: "denied" }, { response: { status: 403 }, message: "denied" }]) {
+      fetchTrafficReport.mockRejectedValueOnce(err);
+      const res = await getReport(url(base));
+      expect(res.init.status).toBe(403);
+      expect(res.body.error).toBe("no_access");
+    }
+  });
+
+  it("properties route maps quota and no_access, returning only the message", async () => {
+    listProperties.mockRejectedValueOnce({ response: { status: 429, headers: { authorization: "Bearer secret" } }, message: "q" });
+    let res = await getProps(url(""));
+    expect(res.init.status).toBe(429);
+    expect(res.body).toEqual({ error: "quota", message: "q" });
+    listProperties.mockRejectedValueOnce({ code: 403, message: "denied" });
+    res = await getProps(url(""));
+    expect(res.init.status).toBe(403);
+    expect(res.body.error).toBe("no_access");
   });
 
   it("500 missing_key without leaking details", async () => {

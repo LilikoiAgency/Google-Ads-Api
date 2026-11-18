@@ -117,6 +117,7 @@ export function rangeLabel(range) {
   const { startDate, endDate } = range;
   const [sy, sm, sd] = startDate.split('-').map(Number);
   const [ey, em, ed] = endDate.split('-').map(Number);
+  if (startDate === endDate) return `${MONTHS[sm - 1]} ${sd}, ${sy}`;
   if (isFullMonth(range)) return `${MONTHS[sm - 1]} ${sy}`;
   if (sy === ey) return `${MONTHS[sm - 1]} ${sd} – ${MONTHS[em - 1]} ${ed}, ${ey}`;
   return `${MONTHS[sm - 1]} ${sd}, ${sy} – ${MONTHS[em - 1]} ${ed}, ${ey}`;

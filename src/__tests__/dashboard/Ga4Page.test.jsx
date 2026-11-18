@@ -3,7 +3,7 @@
 // (page.js itself is JSX in a .js file, which vitest can't import.)
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { parseParams, buildQuery, resolveProperty, localToday } from '@/app/dashboard/google/analytics/urlState';
+import { parseParams, buildQuery, resolveProperty, localToday, isUrlPropertyMissing } from '@/app/dashboard/google/analytics/urlState';
 import { useTrafficReport, makeReportKey, _clearReportCache } from '@/app/dashboard/google/analytics/useTrafficReport';
 
 const sp = (s) => new URLSearchParams(s);
@@ -42,6 +42,14 @@ describe('urlState', () => {
     expect(resolveProperty({ properties, current: null, fromUrl: null, stored: 'properties/9' })).toBe('properties/1');
     expect(resolveProperty({ properties, current: 'properties/2', fromUrl: 'properties/3', stored: null })).toBe('properties/2');
     expect(resolveProperty({ properties: [], current: null })).toBeNull();
+  });
+
+  it('flags a link property that is not in the connected list', () => {
+    const properties = [{ id: 'properties/1' }, { id: 'properties/2' }];
+    expect(isUrlPropertyMissing({ properties, fromUrl: 'properties/9' })).toBe(true);
+    expect(isUrlPropertyMissing({ properties, fromUrl: 'properties/2' })).toBe(false);
+    expect(isUrlPropertyMissing({ properties, fromUrl: null })).toBe(false);
+    expect(isUrlPropertyMissing({ properties: [], fromUrl: 'properties/9' })).toBe(false);
   });
 
   it('localToday uses the local calendar date', () => {

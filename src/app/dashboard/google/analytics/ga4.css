@@ -184,6 +184,7 @@
 .ga4-warn-title { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8; }
 .ga4-warn ul { margin: 0; padding-left: 18px; }
 .ga4-warn-link { color: inherit; text-decoration: underline; white-space: nowrap; }
+.ga4-dq-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
 
 /* ── Definitions ── */
 .ga4-defs summary { cursor: pointer; }

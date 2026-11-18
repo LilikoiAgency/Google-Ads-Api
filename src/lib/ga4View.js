@@ -2,6 +2,20 @@
 // view (organic / nonPaid / paid / all) shows. Used by the page and the download.
 
 import { VIEWS, inView } from './ga4Channels';
+import { DATA_QUALITY_WARNINGS } from './ga4Report';
+
+const QUALITY_TEXT = new Set(Object.values(DATA_QUALITY_WARNINGS));
+
+// Splits report.warnings for the page: the suspected-paid line only when the
+// current view (selectView result) has suspected sessions; GA data-quality
+// notices (sampling / (other) / thresholding) always.
+export function pageNotes(report, selected) {
+  const warnings = report?.warnings || [];
+  return {
+    paid: selected?.suspected?.sessions > 0 ? warnings.filter((w) => !QUALITY_TEXT.has(w)) : [],
+    quality: warnings.filter((w) => QUALITY_TEXT.has(w)),
+  };
+}
 
 const M_KEYS = ['users', 'newUsers', 'sessions', 'engagedSessions', 'engagementRate', 'keyEvents'];
 const TOP_N = 25;

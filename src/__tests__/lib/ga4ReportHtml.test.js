@@ -108,6 +108,39 @@ describe('ga4ReportHtml', () => {
     expect(D.views.all.showKeyEvents).toBe(false);
   });
 
+  it('key events column follows the whole property, not the view', () => {
+    const r = JSON.parse(JSON.stringify(report));
+    r.totalsByView.all.keyEvents = 5;
+    r.totalsByViewCompare.all.keyEvents = 0;
+    r.totalsByView.paid.keyEvents = 0;
+    r.totalsByViewCompare.paid.keyEvents = 0;
+    const D = dataOf(generateTrafficReportHtml(r, { view: 'paid' }));
+    expect(D.views.paid.showKeyEvents).toBe(true);
+    for (const k of Object.keys(r.totalsByView)) {
+      r.totalsByView[k].keyEvents = k === 'paid' ? 3 : 0;
+      r.totalsByViewCompare[k].keyEvents = 0;
+    }
+    expect(dataOf(generateTrafficReportHtml(r, { view: 'paid' })).views.paid.showKeyEvents).toBe(false);
+  });
+
+  it('labels landing-page users as approximate and explains why', () => {
+    const html = generateTrafficReportHtml(report, { view: 'all' });
+    expect(html).toContain('<th>Users (approx.)</th>');
+    expect(html).toContain('Landing-page users are added up across channels, so someone who arrived through two channels counts twice there.');
+  });
+
+  it('discloses sampled / grouped / thresholded data, never the suspected-paid text', () => {
+    const SENTENCE = 'Google Analytics sampled or grouped some of this data, so small numbers may be approximate.';
+    const clean = { ...report, dataQuality: { sampled: false, otherRow: false, thresholded: false } };
+    expect(generateTrafficReportHtml(clean, { view: 'all' })).not.toContain(SENTENCE);
+    for (const flag of ['sampled', 'otherRow', 'thresholded']) {
+      const r = { ...clean, dataQuality: { ...clean.dataQuality, [flag]: true }, warnings: ['~5 sessions labeled X look like paid ads'] };
+      const html = generateTrafficReportHtml(r, { view: 'all' });
+      expect(html).toContain(SENTENCE);
+      expect(html).not.toContain('look like paid ads');
+    }
+  });
+
   it('empty report renders with zeros and dashes, never NaN', () => {
     const r = normalizeTrafficReport(empty.reports, ctx);
     const html = generateTrafficReportHtml(r, { view: 'paid' });

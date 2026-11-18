@@ -8,7 +8,7 @@ import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
 import MobileFilterSheet from "../../components/MobileFilterSheet";
 import { AnalyticsIcon } from "../../components/DashboardIcons";
-import { selectView } from "@/lib/ga4View";
+import { selectView, pageNotes } from "@/lib/ga4View";
 import { presetRange, autoGranularity, rangeLabel, compareRange } from "@/lib/ga4Dates";
 import { downloadTrafficReport } from "@/lib/ga4ReportHtml";
 import PropertyPicker from "./components/PropertyPicker";
@@ -19,7 +19,7 @@ import TrafficChart from "./components/TrafficChart";
 import ChannelTable from "./components/ChannelTable";
 import SourcesAndPages, { SOURCES_ANCHOR } from "./components/SourcesAndPages";
 import ChannelDefinitions from "./components/ChannelDefinitions";
-import { localToday, parseParams, buildQuery, resolveProperty } from "./urlState";
+import { localToday, parseParams, buildQuery, resolveProperty, isUrlPropertyMissing } from "./urlState";
 import { useTrafficReport, makeReportKey, fetchJson } from "./useTrafficReport";
 import "../../../globals.css";
 import "./ga4.css";
@@ -142,6 +142,13 @@ function WebTrafficPage() {
     if (propertyId) storeProperty(propertyId);
   }, [propertyId]);
 
+  // The first property picked on load; the "link's property isn't connected"
+  // notice shows only while that fallback is still on screen.
+  const [firstPropertyId, setFirstPropertyId] = useState(null);
+  useEffect(() => {
+    if (propertyId && firstPropertyId === null) setFirstPropertyId(propertyId);
+  }, [propertyId, firstPropertyId]);
+
   // ── derived range ─────────────────────────────────────────────────────────
   const range = useMemo(
     () => (rangeKey === "custom" ? custom : presetRange(rangeKey, today)),
@@ -190,6 +197,9 @@ function WebTrafficPage() {
     : {};
 
   const currentProperty = properties?.find((p) => p.id === propertyId) || null;
+  const showUrlPropertyNotice = !!currentProperty && propertyId === firstPropertyId
+    && isUrlPropertyMissing({ properties, fromUrl: initial.property });
+  const notes = pageNotes(report, selected);
   const rangeText = range ? rangeLabel(range) : "";
   const compareText = pendingCompareRange ? `vs ${rangeLabel(pendingCompareRange)}` : "No comparison";
 
@@ -302,6 +312,11 @@ function WebTrafficPage() {
 
         {hasProperties && propertyId && (
           <>
+            {showUrlPropertyNotice && (
+              <Notice>
+                The property in this link isn&apos;t connected to lilikoi-reporting, so we&apos;re showing {currentProperty.name} instead.
+              </Notice>
+            )}
             <div className="ga4-view-row">
               <ViewToggle value={view} onChange={setView} />
               {loading && <span className="ga4-loading-pill"><span className="ga4-spinner" aria-hidden="true" />Loading traffic…</span>}
@@ -355,19 +370,23 @@ function WebTrafficPage() {
                       />
                     </section>
 
-                    {report.warnings?.length > 0 && (
+                    {notes.paid.length > 0 && (
                       <div className="ga4-warn" role="note">
                         <span className="ga4-warn-icon" aria-hidden="true">⚠</span>
                         <div className="ga4-warn-body">
                           <p className="ga4-warn-title">Internal note (not in the client download)</p>
                           <ul>
-                            {report.warnings.map((w) => <li key={w}>{w}</li>)}
+                            {notes.paid.map((w) => <li key={w}>{w}</li>)}
                           </ul>
                         </div>
-                        {selected.suspected.sessions > 0 && (
-                          <button type="button" className="ga4-link ga4-warn-link" onClick={scrollToSources}>See sources</button>
-                        )}
+                        <button type="button" className="ga4-link ga4-warn-link" onClick={scrollToSources}>See sources</button>
                       </div>
+                    )}
+
+                    {notes.quality.length > 0 && (
+                      <p className="ga4-dq-note" role="note">
+                        Data note: {notes.quality.join("; ")}. Small numbers may be approximate.
+                      </p>
                     )}
 
                     <SourcesAndPages sources={selected.sources} pages={selected.pages} />
