@@ -220,5 +220,22 @@ describe('crawlSite', () => {
     expect(rec.status_code).toBe(200);
     expect(rec.final_url).toBe('https://example.com/top-page');
     expect(typeof rec.response_ms).toBe('number');
+    expect(r.crawl_truncated).toBeUndefined();
+  });
+
+  it('stops fetching new pages once deadlineMs is used up and returns what it has', async () => {
+    const html = (t) => `<html><head><title>${t}</title></head><body>${t}</body></html>`;
+    const fetchMock = vi.fn(async (url) => {
+      const body = url.endsWith('.xml') || url.endsWith('robots.txt') ? null : html(url);
+      return { status: body ? 200 : 404, url, text: async () => body || 'not found' };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const seedUrls = ['https://example.com/', 'https://example.com/a', 'https://example.com/b', 'https://example.com/c'];
+    const r = await crawlSite('example.com', 'quick', null, { seedUrls, deadlineMs: 1 });
+    expect(r.pages_crawled).toHaveLength(1);
+    expect(r.pages_crawled[0].url).toBe('https://example.com/');
+    expect(r.crawl_truncated).toBe(true);
+    const pageFetches = fetchMock.mock.calls.map((c) => c[0]).filter((u) => /example\.com\/[abc]$/.test(u));
+    expect(pageFetches).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@ import * as store from './jobStore';
 import { runStep } from './runStep';
 import { describeGaps } from './gather';
 import {
-  STEP_KEYS, runnableSteps, markRunning, applyStepResult, expireStale, resetFailed, jobStatus, shouldRefund,
+  STEP_KEYS, runnableSteps, applyStepResult, expireStale, resetFailed, jobStatus, shouldRefund,
 } from './jobs';
 
 export const STEP_LABELS = {
@@ -71,18 +71,37 @@ async function settleJob(id, fresh, now) {
     await store.setJobStatus(id, status, now);
     job = { ...fresh, status };
   }
+  return finishFollowUps(job);
+}
+
+// History save for a done job, refund for a failed one. Both are one-time in the
+// store (historySaved / refunded flags), so calling again on every advance of a
+// finished job retries a follow-up that failed earlier and is a no-op otherwise.
+async function finishFollowUps(job) {
   if (job.status === 'done') {
     const auditId = await store.saveFinished(job);
-    if (auditId) job = { ...job, auditId };
+    if (auditId) return { ...job, auditId };
   }
   if (job.status === 'failed' && shouldRefund(job)) await store.refundUsage(job);
   return job;
 }
 
+// The step as the atomic claim stored it, so effort and the guarded save use
+// the stored attempt count rather than a local guess.
+function withClaim(job, key, claim) {
+  return {
+    ...job,
+    status: 'running',
+    steps: job.steps.map((s) => (s.key === key
+      ? { ...s, status: 'running', startedAt: claim.startedAt, finishedAt: null, attempts: claim.attempts }
+      : s)),
+  };
+}
+
 export async function advanceJob(id) {
   const loaded = await store.getJob(id);
   if (!loaded) return null;
-  if (loaded.status === 'done' || loaded.status === 'failed') return toProgress(loaded);
+  if (loaded.status === 'done' || loaded.status === 'failed') return toProgress(await finishFollowUps(loaded));
 
   const now = new Date();
   const expired = expireStale(loaded, now);
@@ -91,8 +110,9 @@ export async function advanceJob(id) {
   let job = expired;
   const claimed = [];
   for (const key of runnableSteps(job, now)) {
-    if (!(await store.claimStep(id, key, now))) continue; // another caller has it
-    job = markRunning(job, key, now);
+    const claim = await store.claimStep(id, key, now);
+    if (!claim) continue; // another caller has it
+    job = withClaim(job, key, claim);
     claimed.push(key);
   }
 
@@ -109,21 +129,22 @@ export async function advanceJob(id) {
     await store.saveStep(id, key, {
       step: stepFields(stepOf(after, key)),
       set: res.ok ? res.patch || {} : {},
-      addGaps: newGaps(before, after),
+      addGaps: [...newGaps(before, after), ...(res.ok && Array.isArray(res.gaps) ? res.gaps : [])],
       attempts: stepOf(job, key).attempts,
     });
   }
 
-  const fresh = (await store.getJob(id)) || after;
+  // Progress needs no crawl or pass data, so the reload leaves them out.
+  const fresh = (await store.getJob(id, { light: true })) || after;
   return toProgress(await settleJob(id, fresh, finishedAt));
 }
 
 // UI Retry on a failed job: resumes from the failed step; not a new daily use.
 export async function retryJob(id) {
-  const job = await store.getJob(id);
+  const job = await store.getJob(id, { light: true });
   if (!job) return { notFound: true };
   if (job.status !== 'failed') return { conflict: true, progress: toProgress(job) };
   await store.resetJob(id, resetFailed(job, new Date()));
-  const fresh = (await store.getJob(id)) || job;
+  const fresh = (await store.getJob(id, { light: true })) || job;
   return { progress: toProgress(fresh) };
 }

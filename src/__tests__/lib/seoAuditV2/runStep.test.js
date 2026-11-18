@@ -46,8 +46,18 @@ describe('runStep', () => {
     m.crawlSite.mockResolvedValue(crawl);
     const res = await runStep(job(), 'crawl');
     expect(m.seedPages).toHaveBeenCalledWith('acme.com', 'full');
-    expect(m.crawlSite).toHaveBeenCalledWith('acme.com', 'full', null, { seedUrls: ['https://acme.com/a'] });
+    expect(m.crawlSite).toHaveBeenCalledWith('acme.com', 'full', null, { seedUrls: ['https://acme.com/a'], deadlineMs: 200_000 });
     expect(res).toEqual({ ok: true, patch: { 'data.crawl': crawl } });
+  });
+
+  it('a crawl cut short by the deadline becomes a job gap', async () => {
+    m.seedPages.mockResolvedValue([]);
+    const truncated = { ...crawl, crawl_truncated: true };
+    m.crawlSite.mockResolvedValue(truncated);
+    const res = await runStep(job(), 'crawl');
+    expect(res.ok).toBe(true);
+    expect(res.patch['data.crawl'].crawl_truncated).toBe(true);
+    expect(res.gaps).toEqual(['Crawl stopped early after 6 pages because the site responded slowly.']);
   });
 
   it('crawl with no pages fails so it can retry', async () => {

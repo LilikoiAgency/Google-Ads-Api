@@ -1,6 +1,7 @@
 // Runs one SEO Audit v2 step for a job whose step is already marked running.
-// Never throws: resolves to { ok, patch, error }, where patch holds dotted
-// fields to store on the job (data.*, passes.*, result).
+// Never throws: resolves to { ok, patch, error, gaps? }, where patch holds dotted
+// fields to store on the job (data.*, passes.*, result) and gaps holds
+// sentences to add to the job's data gaps.
 
 import { crawlSite } from '../seoCrawler';
 import { seedPages, gatherAll, describeGaps, AUDIT_PROFILES } from './gather';
@@ -36,13 +37,21 @@ const profileOf = (job) => AUDIT_PROFILES[job.auditType] || AUDIT_PROFILES.quick
 const stepOf = (job, key) => job.steps.find((s) => s.key === key) || {};
 const effortFor = (job, key) => effortForAttempt(profileOf(job).effort, stepOf(job, key).attempts || 1);
 
+// Overall time budget for fetching pages, leaving room in the 300s request for the rest.
+export const CRAWL_DEADLINE_MS = 200_000;
+
 async function runCrawl(job) {
   const seedUrls = await seedPages(job.domain, job.auditType);
-  const crawl = await crawlSite(job.domain, job.auditType, null, { seedUrls });
+  const crawl = await crawlSite(job.domain, job.auditType, null, { seedUrls, deadlineMs: CRAWL_DEADLINE_MS });
   if (!crawl?.pages_crawled?.length) {
     return { ok: false, error: `No pages could be crawled on ${job.domain}` };
   }
-  return { ok: true, patch: { 'data.crawl': crawl } };
+  const res = { ok: true, patch: { 'data.crawl': crawl } };
+  if (crawl.crawl_truncated) {
+    const n = crawl.pages_crawled.length;
+    res.gaps = [`Crawl stopped early after ${n} page${n === 1 ? '' : 's'} because the site responded slowly.`];
+  }
+  return res;
 }
 
 async function runGather(job) {

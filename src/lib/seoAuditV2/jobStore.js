@@ -39,20 +39,28 @@ export async function createJob(job) {
   return res.insertedId.toString();
 }
 
-export async function getJob(id) {
+// Fields only the step runner needs; progress reads leave them out.
+const HEAVY_FIELDS = { 'data.crawl': 0, 'data.sources': 0, 'data.sharedContext': 0, passes: 0 };
+
+// light: true skips the crawl, source data and pass outputs (keeps steps,
+// gaps, data.gaps and result), for progress responses.
+export async function getJob(id, { light = false } = {}) {
   const _id = oid(id);
   if (!_id) return null;
-  return withId(await (await col(JOBS)).findOne({ _id }));
+  const options = light ? { projection: HEAVY_FIELDS } : undefined;
+  return withId(await (await col(JOBS)).findOne({ _id }, options));
 }
 
 // Atomic counterpart of markRunning: matches only a pending step, or a running
 // step older than 6 minutes with attempts left, and bumps attempts in the same write.
+// Returns the claimed step as stored ({ attempts, startedAt }), or null when
+// another caller has it.
 export async function claimStep(id, key, now) {
   const _id = oid(id);
-  if (!_id) return false;
+  if (!_id) return null;
   const t = iso(now);
   const staleBefore = new Date(new Date(now).getTime() - STALE_MS).toISOString();
-  const res = await (await col(JOBS)).updateOne(
+  const doc = await (await col(JOBS)).findOneAndUpdate(
     {
       _id,
       status: { $nin: ['done', 'failed'] },
@@ -77,8 +85,10 @@ export async function claimStep(id, key, now) {
       },
       $inc: { 'steps.$.attempts': 1 },
     },
+    { returnDocument: 'after', projection: { steps: 1 } },
   );
-  return res.modifiedCount === 1;
+  const step = doc?.steps?.find((s) => s.key === key);
+  return step ? { attempts: step.attempts, startedAt: step.startedAt } : null;
 }
 
 // patch: { step: fields of the step, set: other dotted fields (step outputs),
@@ -116,16 +126,14 @@ export async function resetJob(id, job) {
   return res.modifiedCount === 1;
 }
 
-// An in-progress job for the domain and type, or one created today that finished.
+// A job for the domain and type created today (UTC) that is in progress or finished.
 export async function findReusable({ domain, auditType, todayStart }) {
   const doc = await (await col(JOBS)).findOne(
     {
       domain,
       auditType,
-      $or: [
-        { status: { $in: ['queued', 'running'] } },
-        { status: 'done', createdAt: { $gte: iso(todayStart) } },
-      ],
+      status: { $in: ['queued', 'running', 'done'] },
+      createdAt: { $gte: iso(todayStart) },
     },
     { sort: { createdAt: -1 }, projection: { data: 0, passes: 0, result: 0 } },
   );
@@ -152,7 +160,8 @@ export async function saveFinished(job) {
     version: 2,
     jobId: job.id,
     scores: { seo, geo, aeo, combined: [seo, geo, aeo].every((n) => n != null) ? seo + geo + aeo : null },
-    pagesCrawled: job.data?.crawl?.pages_crawled?.length || 0,
+    // A light job has no data.crawl; the result carries the crawled page count.
+    pagesCrawled: job.result?.data_sources?.crawl?.pages ?? job.data?.crawl?.pages_crawled?.length ?? 0,
     auditResult: job.result,
     createdAt: new Date(),
   };

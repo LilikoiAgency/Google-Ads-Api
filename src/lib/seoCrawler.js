@@ -532,10 +532,15 @@ function isHomepageUrl(url) {
  * @param {string} domain
  * @param {'full'|'quick'} auditType
  * @param {string[]|null} customUrls  explicit page list (overrides discovery)
- * @param {{ seedUrls?: string[] }} options  seedUrls (e.g. top Search Console
- *   pages) are crawled first, deduped; nav/sitemap priority fills up to the cap.
+ * @param {{ seedUrls?: string[], deadlineMs?: number }} options  seedUrls (e.g. top
+ *   Search Console pages) are crawled first, deduped; nav/sitemap priority fills up
+ *   to the cap. deadlineMs is an overall time budget from the start of the call:
+ *   once it is used up no new page is fetched, the pages gathered so far are
+ *   returned and crawl_truncated is set.
  */
-export async function crawlSite(domain, auditType = "full", customUrls = null, { seedUrls } = {}) {
+export async function crawlSite(domain, auditType = "full", customUrls = null, { seedUrls, deadlineMs } = {}) {
+  const startedAt = Date.now();
+  const overDeadline = () => Number.isFinite(deadlineMs) && Date.now() - startedAt >= deadlineMs;
   const maxPages = auditType === "quick" ? MAX_PAGES_QUICK : MAX_PAGES_FULL;
   const baseUrl = `https://${domain}`;
 
@@ -577,11 +582,17 @@ export async function crawlSite(domain, auditType = "full", customUrls = null, {
   const crawlErrors = [];
   const crawledFinalUrls = new Set(); // dedupe after redirects
   let homepageCheerio = null;
+  let truncated = false;
 
   for (let i = 0; i < pagesToCrawl.length; i++) {
     const { url, page_type } = pagesToCrawl[i];
 
     if (i > 0) await sleep(DELAY_BETWEEN_PAGES_MS);
+    if (i > 0 && overDeadline()) {
+      truncated = true;
+      console.warn(`[seoCrawler] Time budget used up for ${domain} after ${pagesCrawled.length} pages`);
+      break;
+    }
 
     const { html, status, finalUrl, error, responseMs } = await fetchHtml(url);
 
@@ -628,5 +639,6 @@ export async function crawlSite(domain, auditType = "full", customUrls = null, {
     sitemap_url_count: discovery.sitemapUrlCount,
     sitemaps: discovery.sitemaps,
     sitemap_source: discovery.sitemapSource,
+    ...(truncated ? { crawl_truncated: true } : {}),
   };
 }

@@ -30,6 +30,7 @@ const { getMonthlyClaudeCost, getClaudeBudgetCap } = await import('@/lib/usageLo
 const store = await import('@/lib/seoAuditV2/jobStore');
 const { runStep } = await import('@/lib/seoAuditV2/runStep');
 const { newJob, STEP_KEYS } = await import('@/lib/seoAuditV2/jobs');
+const { resetRateLimitMap } = await import('@/lib/seoRateLimit');
 const jobsRoute = await import('@/app/api/seo-audit/v2/jobs/route.js');
 const jobRoute = await import('@/app/api/seo-audit/v2/jobs/[id]/route.js');
 const advanceRoute = await import('@/app/api/seo-audit/v2/jobs/[id]/advance/route.js');
@@ -51,16 +52,18 @@ function makeJob(statuses = {}, extra = {}) {
 }
 
 const allDone = (except = {}) => Object.fromEntries(STEP_KEYS.map((k) => [k, except[k] || 'done']));
+const claimAs = (attempts) => async (id, key, now) => ({ attempts, startedAt: now.toISOString() });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetRateLimitMap();
   getServerSession.mockResolvedValue({ user: { email: USER } });
   getMonthlyClaudeCost.mockResolvedValue(10);
   getClaudeBudgetCap.mockResolvedValue(100);
   store.findReusable.mockResolvedValue(null);
   store.getDailyUsage.mockResolvedValue(0);
   store.createJob.mockResolvedValue('newjob');
-  store.claimStep.mockResolvedValue(true);
+  store.claimStep.mockImplementation(claimAs(1));
   store.saveStep.mockResolvedValue(true);
   store.refundUsage.mockResolvedValue(true);
   store.saveFinished.mockResolvedValue('audit1');
@@ -109,7 +112,9 @@ describe('POST /api/seo-audit/v2/jobs', () => {
     const res = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full' }));
     expect(res.body).toMatchObject({ jobId: 'old1', reused: true });
     expect(store.findReusable.mock.calls[0][0]).toMatchObject({ domain: 'acme.com', auditType: 'full' });
-    expect(store.findReusable.mock.calls[0][0].todayStart).toBeInstanceOf(Date);
+    const { todayStart } = store.findReusable.mock.calls[0][0];
+    expect(todayStart).toBeInstanceOf(Date);
+    expect(todayStart.toISOString()).toBe(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
     expect(store.createJob).not.toHaveBeenCalled();
     expect(store.incrementUsage).not.toHaveBeenCalled();
   });
@@ -123,6 +128,20 @@ describe('POST /api/seo-audit/v2/jobs', () => {
     expect(store.saveStep).not.toHaveBeenCalled();
     expect(store.setJobStatus).not.toHaveBeenCalled();
     expect(store.resetJob).not.toHaveBeenCalled();
+  });
+
+  it('a second new job within 30 seconds is rate-limited, but reuse is not', async () => {
+    const first = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'quick' }));
+    expect(first.body.jobId).toBe('newjob');
+    const second = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full' }));
+    expect(second.init.status).toBe(429);
+    expect(second.body.retryAfterSeconds).toBeGreaterThan(0);
+    expect(second.body.error).toMatch(/Too many requests/);
+    expect(store.createJob).toHaveBeenCalledTimes(1);
+    expect(store.incrementUsage).toHaveBeenCalledTimes(1);
+    store.findReusable.mockResolvedValue({ id: 'old1', status: 'running' });
+    const reused = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'quick' }));
+    expect(reused.body).toMatchObject({ jobId: 'old1', reused: true });
   });
 
   it('the daily limit blocks a non-admin at 5', async () => {
@@ -193,6 +212,33 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
     expect(patch.set).toEqual({ 'data.crawl': { pages_crawled: [] } });
     expect(patch.attempts).toBe(1);
     expect(res.body).toMatchObject({ jobId: 'job1', status: 'running' });
+    expect(store.getJob.mock.calls[1]).toEqual(['job1', { light: true }]);
+  });
+
+  it('uses the attempts and start time the claim stored, for effort and the guarded save', async () => {
+    // Locally the step looks fresh, but the stored claim says this is attempt 2.
+    const job = makeJob(allDone({ synthesize: 'pending' }));
+    store.getJob.mockResolvedValue(job);
+    store.claimStep.mockResolvedValue({ attempts: 2, startedAt: '2026-11-18T10:30:00.000Z' });
+    runStep.mockResolvedValue({ ok: false, error: 'refusal' });
+    await advanceRoute.POST({}, params());
+    const step = runStep.mock.calls[0][0].steps.find((s) => s.key === 'synthesize');
+    expect(step).toMatchObject({ status: 'running', attempts: 2, startedAt: '2026-11-18T10:30:00.000Z' });
+    const { effortForAttempt } = await import('@/lib/seoAuditV2/jobs');
+    expect(effortForAttempt('high', step.attempts)).toBe('medium');
+    const [, key, patch] = store.saveStep.mock.calls[0];
+    expect(key).toBe('synthesize');
+    expect(patch.attempts).toBe(2);
+    expect(patch.step).toMatchObject({ status: 'pending', error: 'refusal' });
+  });
+
+  it('a truncated crawl adds its gap to the job', async () => {
+    const job = makeJob();
+    store.getJob.mockResolvedValue(job);
+    const gap = 'Crawl stopped early after 12 pages because the site responded slowly.';
+    runStep.mockResolvedValue({ ok: true, patch: { 'data.crawl': { pages_crawled: [], crawl_truncated: true } }, gaps: [gap] });
+    await advanceRoute.POST({}, params());
+    expect(store.saveStep.mock.calls[0][2].addGaps).toEqual([gap]);
   });
 
   it('advance runs the passes in parallel when runnable', async () => {
@@ -230,7 +276,9 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
     const job = makeJob({ crawl: 'done', gather: 'done' });
     store.getJob.mockResolvedValue(job);
     // Another tab already claimed technical and content.
-    store.claimStep.mockImplementation(async (id, key) => !['pass:technical', 'pass:content'].includes(key));
+    store.claimStep.mockImplementation(async (id, key, now) => (['pass:technical', 'pass:content'].includes(key)
+      ? null
+      : { attempts: 1, startedAt: now.toISOString() }));
     runStep.mockResolvedValue({ ok: true, patch: {} });
     await advanceRoute.POST({}, params());
     expect(store.claimStep).toHaveBeenCalledTimes(4);
@@ -242,10 +290,10 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
     const job = makeJob();
     store.getJob.mockResolvedValue(job);
     let claimed = false;
-    store.claimStep.mockImplementation(async () => {
-      if (claimed) return false;
+    store.claimStep.mockImplementation(async (id, key, now) => {
+      if (claimed) return null;
       claimed = true;
-      return true;
+      return { attempts: 1, startedAt: now.toISOString() };
     });
     runStep.mockResolvedValue({ ok: true, patch: {} });
     await Promise.all([advanceRoute.POST({}, params()), advanceRoute.POST({}, params())]);
@@ -257,6 +305,7 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
     store.getJob.mockResolvedValueOnce(makeJob({ crawl: { status: 'pending', attempts: 2 } }, { usageDate: '2026-11-18' }));
     const failed = makeJob({ crawl: { status: 'failed_final', attempts: 3, error: 'no pages' } }, { usageDate: '2026-11-18' });
     store.getJob.mockResolvedValueOnce(failed);
+    store.claimStep.mockImplementation(claimAs(3));
     runStep.mockResolvedValue({ ok: false, error: 'no pages' });
     const res = await advanceRoute.POST({}, params());
     expect(store.saveStep.mock.calls[0][2].step.status).toBe('failed_final');
@@ -283,9 +332,38 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
 
   it('does nothing for a finished job', async () => {
     store.getJob.mockResolvedValue(makeJob(allDone(), { status: 'done', result: { version: 2 } }));
+    store.saveFinished.mockResolvedValue(null); // already saved
     const res = await advanceRoute.POST({}, params());
     expect(store.claimStep).not.toHaveBeenCalled();
+    expect(runStep).not.toHaveBeenCalled();
     expect(res.body.status).toBe('done');
+    expect(res.body.auditId).toBeUndefined();
+  });
+
+  it('a done job whose history save failed earlier is saved on the next advance', async () => {
+    const done = makeJob(allDone(), { status: 'done', result: { version: 2 } });
+    store.getJob.mockResolvedValue(done);
+    store.saveFinished.mockResolvedValue('audit9');
+    const res = await advanceRoute.POST({}, params());
+    expect(store.saveFinished).toHaveBeenCalledWith(expect.objectContaining({ id: 'job1', status: 'done' }));
+    expect(store.claimStep).not.toHaveBeenCalled();
+    expect(res.body.auditId).toBe('audit9');
+    expect(store.refundUsage).not.toHaveBeenCalled();
+  });
+
+  it('a failed job whose refund was lost is refunded once on the next advance', async () => {
+    const failed = makeJob({ crawl: { status: 'failed_final', attempts: 3 } }, { status: 'failed', usageDate: '2026-11-18' });
+    store.getJob.mockResolvedValue(failed);
+    // The store's refunded flag makes the second call a no-op.
+    store.refundUsage.mockResolvedValueOnce(true).mockResolvedValue(false);
+    await advanceRoute.POST({}, params());
+    await advanceRoute.POST({}, params());
+    expect(store.refundUsage).toHaveBeenCalledTimes(2);
+    await expect(store.refundUsage.mock.results[0].value).resolves.toBe(true);
+    await expect(store.refundUsage.mock.results[1].value).resolves.toBe(false);
+    expect(store.refundUsage.mock.calls[0][0]).toMatchObject({ id: 'job1', usageDate: '2026-11-18' });
+    expect(store.saveFinished).not.toHaveBeenCalled();
+    expect(store.claimStep).not.toHaveBeenCalled();
   });
 
   it('expires a stale step that used every attempt and persists it', async () => {
@@ -321,6 +399,7 @@ describe('GET /api/seo-audit/v2/jobs/[id]', () => {
       { data: { gaps: [{ source: 'ga4', status: 'no_property' }] }, gaps: ["Local & AI search analysis didn't complete — rerun to include it"], result: { partial: true } },
     ));
     const res = await jobRoute.GET({}, params());
+    expect(store.getJob).toHaveBeenCalledWith('job1', { light: true });
     expect(res.body.result).toBeUndefined();
     expect(res.body.jobId).toBe('job1');
     expect(res.body.steps.map((s) => s.label)).toEqual([
@@ -376,6 +455,7 @@ describe('jobStore (Mongo calls)', () => {
   const coll = (name) => {
     colls[name] ||= {
       updateOne: vi.fn(async () => ({ modifiedCount: 1, matchedCount: 1 })),
+      findOneAndUpdate: vi.fn(async () => null),
       insertOne: vi.fn(async () => ({ insertedId: new ObjectId() })),
       findOne: vi.fn(async () => null),
       find: vi.fn(() => ({ sort: () => ({ limit: () => ({ toArray: async () => [] }) }) })),
@@ -391,8 +471,13 @@ describe('jobStore (Mongo calls)', () => {
 
   it('claimStep matches only a pending or stale running step and bumps attempts atomically', async () => {
     const now = new Date('2026-11-18T10:10:00.000Z');
-    expect(await actual.claimStep(id, 'pass:technical', now)).toBe(true);
-    const [filter, update] = coll('SeoAuditJobs').updateOne.mock.calls[0];
+    coll('SeoAuditJobs').findOneAndUpdate.mockResolvedValueOnce({
+      _id: new ObjectId(id),
+      steps: [{ key: 'crawl', attempts: 1, startedAt: 'x' }, { key: 'pass:technical', status: 'running', attempts: 2, startedAt: now.toISOString() }],
+    });
+    expect(await actual.claimStep(id, 'pass:technical', now)).toEqual({ attempts: 2, startedAt: now.toISOString() });
+    const [filter, update, options] = coll('SeoAuditJobs').findOneAndUpdate.mock.calls[0];
+    expect(options).toMatchObject({ returnDocument: 'after' });
     expect(filter._id.toString()).toBe(id);
     expect(filter.status).toEqual({ $nin: ['done', 'failed'] });
     const elem = filter.steps.$elemMatch;
@@ -405,9 +490,16 @@ describe('jobStore (Mongo calls)', () => {
     expect(update.$set).toMatchObject({ 'steps.$.status': 'running', 'steps.$.startedAt': now.toISOString(), status: 'running' });
   });
 
-  it('claimStep returns false when another caller got there first', async () => {
-    coll('SeoAuditJobs').updateOne.mockResolvedValueOnce({ modifiedCount: 0, matchedCount: 0 });
-    expect(await actual.claimStep(id, 'crawl', new Date())).toBe(false);
+  it('claimStep returns null when another caller got there first', async () => {
+    expect(await actual.claimStep(id, 'crawl', new Date())).toBeNull();
+  });
+
+  it('getJob light leaves out the crawl, source data and pass outputs', async () => {
+    await actual.getJob(id, { light: true });
+    const [, options] = coll('SeoAuditJobs').findOne.mock.calls[0];
+    expect(options.projection).toEqual({ 'data.crawl': 0, 'data.sources': 0, 'data.sharedContext': 0, passes: 0 });
+    await actual.getJob(id);
+    expect(coll('SeoAuditJobs').findOne.mock.calls[1][1]).toBeUndefined();
   });
 
   it('saveStep only writes while the step is still running on the same attempt', async () => {
@@ -447,15 +539,16 @@ describe('jobStore (Mongo calls)', () => {
     expect(coll('UsageLimits').updateOne).toHaveBeenCalledTimes(1);
   });
 
-  it('findReusable looks for an in-progress job or one finished today', async () => {
-    const todayStart = new Date('2026-11-18T08:00:00.000Z');
+  it('findReusable only reuses an in-progress or finished job created today', async () => {
+    const todayStart = new Date('2026-11-18T00:00:00.000Z');
     await actual.findReusable({ domain: 'acme.com', auditType: 'full', todayStart });
     const [filter] = coll('SeoAuditJobs').findOne.mock.calls[0];
-    expect(filter).toMatchObject({ domain: 'acme.com', auditType: 'full' });
-    expect(filter.$or).toEqual([
-      { status: { $in: ['queued', 'running'] } },
-      { status: 'done', createdAt: { $gte: '2026-11-18T08:00:00.000Z' } },
-    ]);
+    expect(filter).toEqual({
+      domain: 'acme.com',
+      auditType: 'full',
+      status: { $in: ['queued', 'running', 'done'] },
+      createdAt: { $gte: '2026-11-18T00:00:00.000Z' },
+    });
   });
 
   it('getJob returns null for a malformed id', async () => {

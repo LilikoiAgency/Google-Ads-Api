@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAllowedSession } from "../../../../../lib/routeAuth";
 import { ADMIN_EMAILS } from "../../../../../lib/admins";
 import { getMonthlyClaudeCost, getClaudeBudgetCap } from "../../../../../lib/usageLogger";
+import { checkRateLimit } from "../../../../../lib/seoRateLimit";
 import { newJob } from "../../../../../lib/seoAuditV2/jobs";
 import {
   findReusable, getDailyUsage, incrementUsage, createJob, refundUsage,
@@ -52,12 +53,22 @@ export async function POST(request) {
   }
 
   try {
+    // UTC day, the same day usageDate counts against.
     const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    todayStart.setUTCHours(0, 0, 0, 0);
 
     if (!forceRerun) {
       const existing = await findReusable({ domain, auditType, todayStart });
       if (existing) return NextResponse.json({ jobId: existing.id, reused: true });
+    }
+
+    // Per-request 30s window, as in v1; a reused job is not rate-limited.
+    const { limited, retryAfterSeconds } = checkRateLimit(email);
+    if (limited) {
+      return NextResponse.json(
+        { error: `Too many requests — wait ${retryAfterSeconds}s before retrying.`, retryAfterSeconds },
+        { status: 429 },
+      );
     }
 
     const usageDate = new Date().toISOString().slice(0, 10);

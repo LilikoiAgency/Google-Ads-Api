@@ -12,7 +12,7 @@ export async function GET(_request, { params }) {
   if (error) return NextResponse.json({ error }, { status });
 
   try {
-    const job = await getJob(params.id);
+    const job = await getJob(params.id, { light: true });
     if (!job) return NextResponse.json({ error: "Audit job not found" }, { status: 404 });
     return NextResponse.json(toProgress(job));
   } catch (err) {
