@@ -562,20 +562,28 @@ function GoogleAdsDashboard() {
       .catch(() => {});
 
     const loadCustomerList = () => {
+      // Reuse the tab's saved list only if it actually has accounts. An empty list
+      // saved during an outage would otherwise stick for the rest of the session.
       const cached = safeGetSessionStorageItem("gads_customers_list");
       if (cached) {
         try {
-          setPickerCustomers(JSON.parse(cached));
-          return Promise.resolve();
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPickerCustomers(parsed);
+            return Promise.resolve();
+          }
         } catch {}
       }
 
       return fetch("/api/customers")
-        .then((r) => r.json())
-        .then((d) => {
-          const list = d.customers || [];
+        .then(async (r) => {
+          const d = await r.json().catch(() => ({}));
+          const list = Array.isArray(d.customers) ? d.customers : [];
           setPickerCustomers(list);
-          safeSetSessionStorageItem("gads_customers_list", JSON.stringify(list));
+          // Only remember a successful, non-empty result.
+          if (r.ok && list.length > 0) {
+            safeSetSessionStorageItem("gads_customers_list", JSON.stringify(list));
+          }
         })
         .catch(() => setPickerCustomers([]));
     };
