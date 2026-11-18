@@ -308,6 +308,7 @@ Return ONLY valid JSON matching this exact structure (no markdown, no backticks,
 
 IMPORTANT RULES:
 - Return ONLY the JSON object. No markdown formatting, no code fences, no explanatory text.
+- Length budget: keep the entire JSON under about 6,500 tokens (roughly 26,000 characters). In every array, include at most 5 items, choosing the most important. Keep each text field to one or two sentences. A focused audit is more useful than an exhaustive one.
 - Every finding must reference specific data from the payload — actual URLs, actual title tags, actual numbers, actual keywords and positions.
 - If any data source is not provided (GSC, Google Ads, Ahrefs/SEMrush), set that section to null in the response. Don't fabricate data.
 - For schema markup: evaluate what's actually in the crawl data. If schema is present, describe what types and how complete they are. If missing, say so.
