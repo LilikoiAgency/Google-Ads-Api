@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { ObjectId } from "mongodb";
 import { authOptions, allowedEmailDomain } from "../../../../lib/auth";
 import dbConnect from "../../../../lib/mongoose";
+import { listOpenJobs } from "../../../../lib/seoAuditV2/jobStore";
 
 const DB = "tokensApi";
 const COLLECTION = "SeoAudits";
@@ -54,12 +55,37 @@ export async function GET(request) {
     query.domain = domain.toLowerCase().replace(/^www\./, "");
   }
 
-  const audits = await db
-    .collection(COLLECTION)
-    .find(query, { projection: { crawlData: 0, auditResult: 0 } })
-    .sort({ createdAt: -1 })
-    .limit(50)
-    .toArray();
+  const [saved, openJobs] = await Promise.all([
+    db
+      .collection(COLLECTION)
+      .find(query, { projection: { crawlData: 0, auditResult: 0 } })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray(),
+    listOpenJobs({ domain: query.domain }).catch((err) => {
+      console.error("[seo-audit/history] job list failed:", err?.message);
+      return [];
+    }),
+  ]);
+
+  // v2 jobs that are not done (running / queued / failed) show next to saved audits;
+  // the page resumes them through /api/seo-audit/v2/jobs/:id.
+  const jobItems = openJobs.map((job) => ({
+    _id: job.id,
+    jobId: job.id,
+    email: job.email,
+    domain: job.domain,
+    auditType: job.auditType,
+    version: 2,
+    status: job.status,
+    scores: null,
+    pagesCrawled: 0,
+    createdAt: job.createdAt,
+  }));
+
+  const audits = [...saved.map((a) => ({ ...a, status: "done" })), ...jobItems]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 50);
 
   return NextResponse.json({ audits, requestId });
 }

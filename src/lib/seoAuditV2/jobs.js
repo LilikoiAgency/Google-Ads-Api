@@ -85,12 +85,17 @@ export function markRunning(job, key, now) {
   return { ...next, status: 'running' };
 }
 
-function settle(job) {
+// Status implied by the steps of a job that has started.
+export function jobStatus(job) {
   const status = (k) => find(job, k).status;
-  if (['crawl', 'gather', 'synthesize'].some((k) => status(k) === 'failed_final')) job.status = 'failed';
-  else if (PASS_KEYS.every((k) => status(k) === 'failed_final')) job.status = 'failed'; // nothing to synthesize
-  else if (status('synthesize') === 'done') job.status = 'done';
-  else job.status = 'running';
+  if (['crawl', 'gather', 'synthesize'].some((k) => status(k) === 'failed_final')) return 'failed';
+  if (PASS_KEYS.every((k) => status(k) === 'failed_final')) return 'failed'; // nothing to synthesize
+  if (status('synthesize') === 'done') return 'done';
+  return 'running';
+}
+
+function settle(job) {
+  job.status = jobStatus(job);
   return job;
 }
 
