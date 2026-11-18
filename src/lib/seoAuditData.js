@@ -170,7 +170,7 @@ async function fetchGscSummary(domain, ranges) {
   return { status: 'ok', site, data: summarizeGsc({ site, domain, ranges, queryRows, pageRows, totals: tot[0], prevTotals: prevTot[0] }) };
 }
 
-async function findGa4Property(domain) {
+export async function findGa4Property(domain) {
   let streams = await getCached('ga4:webstreams');
   if (!streams) {
     const props = await listProperties();
