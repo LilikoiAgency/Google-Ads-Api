@@ -59,6 +59,14 @@ describe('buildSearchQueries', () => {
     expect(out).toEqual(['Austin lawn experts', 'Synthetic turf installation Austin', 'Acme Co reviews', 'Acme Co']);
   });
 
+  it('only treats the URL path as a service page, not the domain', () => {
+    const crawl = { pages_crawled: [
+      { url: 'https://bestservicepros.com/about', h1_tags: ['About us'] },
+      { url: 'not a url', h1_tags: ['Broken'] },
+    ] };
+    expect(buildSearchQueries({ gscPages: [], crawl, brand: 'Zed', city: null })).toEqual(['Zed reviews', 'Zed']);
+  });
+
   it('works with no city and no data', () => {
     expect(buildSearchQueries({ gscPages: null, crawl: null, brand: 'Zed', city: null })).toEqual(['Zed reviews', 'Zed']);
   });
@@ -133,6 +141,28 @@ describe('runWebSearch', () => {
     m.finalMessage.mockReset().mockResolvedValue(pauseResponse);
     await runWebSearch(base);
     expect(m.betaStream).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps every paused segment in the assistant content on later resumes', async () => {
+    const seg2 = { ...pauseResponse, content: [
+      { type: 'server_tool_use', id: 'srvtoolu_2', name: 'web_search', input: { query: 'artificial grass cost austin' } },
+      { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_2', content: [] },
+    ] };
+    m.finalMessage.mockResolvedValueOnce(pauseResponse).mockResolvedValueOnce(seg2).mockResolvedValueOnce(pauseThenOk[1]);
+    await runWebSearch(base);
+    expect(m.betaStream).toHaveBeenCalledTimes(3);
+    const third = m.betaStream.mock.calls[2][0].messages;
+    expect(third).toHaveLength(2);
+    expect(third[1]).toEqual({ role: 'assistant', content: [...pauseResponse.content, ...seg2.content] });
+  });
+
+  it('assigns a rewritten search to the still-unmatched query', async () => {
+    const rewritten = { ...okResponse, content: okResponse.content.map((b) => (b.id === 'srvtoolu_2'
+      ? { ...b, input: { query: 'artificial turf price in austin' } } : b)) };
+    m.finalMessage.mockResolvedValue(rewritten);
+    const out = await runWebSearch(base);
+    expect(out.queries[1].error).toBeUndefined();
+    expect(out.queries[1].results).toHaveLength(2);
   });
 
   it('turns a refusal into an error result', async () => {

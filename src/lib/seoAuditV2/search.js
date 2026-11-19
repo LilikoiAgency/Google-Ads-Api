@@ -37,7 +37,8 @@ export function buildSearchQueries({ gscPages, crawl, brand, city } = {}) {
 
   if (buyer.length < 3) {
     for (const p of crawl?.pages_crawled || []) {
-      const path = String(p.url || '').toLowerCase();
+      let path = '';
+      try { path = new URL(p.url).pathname.toLowerCase(); } catch { /* bad url: no path */ }
       if (p.page_type !== 'homepage' && !/\/[^?#]*service/.test(path)) continue;
       const h1 = String(p.h1_tags?.[0] || '').trim();
       if (h1 && !isBrandy(h1)) buyer.push(withCity(h1, city));
@@ -76,6 +77,12 @@ function collect(blocks, queries, domain) {
   for (const b of blocks) {
     if (b?.type === 'server_tool_use' && b.name === 'web_search') queryByCall.set(b.id, normQuery(b.input?.query));
   }
+  // A slightly rewritten query still counts: pair leftover calls with leftover queries, in order.
+  const wanted = queries.map(normQuery);
+  const issued = new Set(queryByCall.values());
+  const leftoverQueries = wanted.filter((q) => !issued.has(q));
+  const leftoverCalls = [...queryByCall.entries()].filter(([, q]) => !wanted.includes(q)).map(([id]) => id);
+  leftoverCalls.forEach((id, i) => { if (i < leftoverQueries.length) queryByCall.set(id, leftoverQueries[i]); });
   const found = new Map(); // normalized query -> { results } | { error }
   for (const b of blocks) {
     if (b?.type !== 'web_search_tool_result') continue;
@@ -131,7 +138,7 @@ export async function runWebSearch({ queries, brand, domain, city, region, email
       searches += message.usage?.server_tool_use?.web_search_requests || 0;
       stop = message.stop_reason;
       if (stop !== 'pause_turn') break;
-      messages = [userMessage, { role: 'assistant', content: message.content }];
+      messages = [userMessage, { role: 'assistant', content: [...blocks] }];
     }
   } catch (err) {
     if (isAbort(err, signal)) throw new PassError('timeout', 'The request timed out');
