@@ -5,6 +5,7 @@ import { ADMIN_EMAILS } from "../../../../../lib/admins";
 import { getMonthlyClaudeCost, getClaudeBudgetCap } from "../../../../../lib/usageLogger";
 import { checkRateLimit } from "../../../../../lib/seoRateLimit";
 import { newJob } from "../../../../../lib/seoAuditV2/jobs";
+import { parseAuditOptions } from "../../../../../lib/seoAuditV2/options";
 import {
   findReusable, getDailyUsage, incrementUsage, createJob, refundUsage,
 } from "../../../../../lib/seoAuditV2/jobStore";
@@ -18,6 +19,7 @@ const bodySchema = z.object({
   domain: z.string().trim().min(1, "domain is required"),
   auditType: z.enum(["full", "quick"]),
   forceRerun: z.boolean().optional(),
+  options: z.object({}).passthrough().optional(),
 });
 
 function normalizeDomain(raw) {
@@ -29,7 +31,8 @@ function normalizeDomain(raw) {
 }
 
 /**
- * POST /api/seo-audit/v2/jobs  { domain, auditType: 'full'|'quick', forceRerun? }
+ * POST /api/seo-audit/v2/jobs  { domain, auditType: 'full'|'quick', forceRerun?, options? }
+ * options: { pages?, onlyListed?, skip?, pageCount? } (see seoAuditV2/options).
  * Returns { jobId, reused }. A new job counts as one daily audit use.
  */
 export async function POST(request) {
@@ -51,13 +54,16 @@ export async function POST(request) {
   if (!domain.includes(".")) {
     return NextResponse.json({ error: "Enter a valid domain" }, { status: 400 });
   }
+  const { options, error: optionsError } = parseAuditOptions(parsed.data.options, domain);
+  if (optionsError) return NextResponse.json({ error: optionsError }, { status: 400 });
 
   try {
     // UTC day, the same day usageDate counts against.
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
 
-    if (!forceRerun) {
+    // A custom page selection always runs fresh.
+    if (!forceRerun && !options) {
       const existing = await findReusable({ domain, auditType, todayStart });
       if (existing) return NextResponse.json({ jobId: existing.id, reused: true });
     }
@@ -89,7 +95,7 @@ export async function POST(request) {
     }
 
     await incrementUsage(email, usageDate);
-    const job = { ...newJob({ email, domain, auditType, now: new Date() }), usageDate };
+    const job = { ...newJob({ email, domain, auditType, now: new Date() }), usageDate, ...(options ? { options } : {}) };
     try {
       const jobId = await createJob(job);
       return NextResponse.json({ jobId, reused: false });

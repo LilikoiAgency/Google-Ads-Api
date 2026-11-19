@@ -19,6 +19,7 @@ import PageCards from '@/app/dashboard/seo-audit/v2/PageCards.jsx';
 import PassFindings from '@/app/dashboard/seo-audit/v2/PassFindings.jsx';
 import { useAuditJob, friendlyError } from '@/app/dashboard/seo-audit/v2/useAuditJob.js';
 import ResultsView, { isV2Audit } from '@/app/dashboard/seo-audit/ResultsView.jsx';
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from '@/app/dashboard/seo-audit/v2/AdvancedOptions.jsx';
 
 const TASKS = [
   {
@@ -468,5 +469,46 @@ describe('ResultsView picks the view by version', () => {
       });
     }
     expect(hits).toEqual([]);
+  });
+});
+
+describe('AdvancedOptions', () => {
+  it('toRequestOptions: nothing set is undefined; lines and commas split; onlyListed needs pages', () => {
+    expect(toRequestOptions(EMPTY_ADVANCED)).toBeUndefined();
+    expect(toRequestOptions({ pagesText: '/a\n /b \n', skipText: '/blog/*, /tag/*', onlyListed: true, pageCount: '10' }))
+      .toEqual({ pages: ['/a', '/b'], skip: ['/blog/*', '/tag/*'], onlyListed: true, pageCount: 10 });
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, onlyListed: true, skipText: '/x' }).onlyListed).toBe(false);
+  });
+
+  it('fromAuditOptions turns saved URLs back into paths', () => {
+    expect(fromAuditOptions({ pages: ['https://acme.com/pet-turf'], onlyListed: true, skip: ['/blog/*'], pageCount: null }))
+      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '' });
+    expect(fromAuditOptions(null)).toEqual(EMPTY_ADVANCED);
+  });
+
+  it('starts collapsed, opens on click and reports edits', () => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="quick" />);
+    expect(screen.queryByLabelText('Pages to audit first')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    fireEvent.change(screen.getByLabelText('Pages to audit first'), { target: { value: '/pet-turf' } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_ADVANCED, pagesText: '/pet-turf' });
+    expect(screen.getByRole('option', { name: 'Default (5)' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  it('shows a summary when collapsed and Clear resets', () => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={{ pagesText: '/a\n/b', onlyListed: false, skipText: '/blog/*', pageCount: '10' }} onChange={onChange} auditType="full" />);
+    expect(screen.getByText('· 2 priority pages · skip /blog/* · 10 pages')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(onChange).toHaveBeenCalledWith(EMPTY_ADVANCED);
+  });
+
+  it('only-listed hides skip and page count', () => {
+    render(<AdvancedOptions value={{ ...EMPTY_ADVANCED, pagesText: '/a', onlyListed: true }} onChange={() => {}} auditType="full" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    expect(screen.queryByLabelText('Skip pages matching')).toBeNull();
+    expect(screen.queryByLabelText('Number of pages')).toBeNull();
   });
 });

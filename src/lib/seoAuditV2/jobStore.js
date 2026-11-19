@@ -4,6 +4,7 @@
 
 import { ObjectId } from 'mongodb';
 import dbConnect from '../mongoose';
+import { describeOptions } from './options';
 
 const DB = 'tokensApi';
 const JOBS = 'SeoAuditJobs';
@@ -132,6 +133,8 @@ export async function findReusable({ domain, auditType, todayStart }) {
     {
       domain,
       auditType,
+      // Never hand a custom-page audit to a plain request (matches missing or null).
+      options: null,
       status: { $in: ['queued', 'running', 'done'] },
       createdAt: { $gte: iso(todayStart) },
     },
@@ -162,6 +165,7 @@ export async function saveFinished(job) {
     scores: { seo, geo, aeo, combined: [seo, geo, aeo].every((n) => n != null) ? seo + geo + aeo : null },
     // A light job has no data.crawl; the result carries the crawled page count.
     pagesCrawled: job.result?.data_sources?.crawl?.pages ?? job.data?.crawl?.pages_crawled?.length ?? 0,
+    ...(job.options ? { optionsSummary: describeOptions(job.options) } : {}),
     auditResult: job.result,
     createdAt: new Date(),
   };

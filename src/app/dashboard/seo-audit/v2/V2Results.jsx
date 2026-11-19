@@ -8,6 +8,7 @@ import ClientSummary from "./ClientSummary";
 import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
+import { describeOptions } from "../../../../lib/seoAuditV2/options";
 
 const SOURCES = [
   ["crawl", "Site crawl"],
@@ -88,6 +89,9 @@ export default function V2Results({ result, domain, actions }) {
             {pagesCrawled ? <> &middot; {pagesCrawled} pages crawled</> : null}
             {result.audit_date ? <> &middot; {result.audit_date}</> : null}
           </p>
+          {result.audit_options && (
+            <p style={{ fontSize: 12, color: "#5eead4", marginTop: 2 }}>Custom pages: {describeOptions(result.audit_options)}</p>
+          )}
           <DataSources sources={result.data_sources} gaps={result.data_gaps} />
         </div>
         {actions}
