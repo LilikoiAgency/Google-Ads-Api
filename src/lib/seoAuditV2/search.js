@@ -13,17 +13,50 @@ const MAX_BUYER_QUERIES = 6;
 const MAX_QUERIES = 8;
 const MAX_RESUMES = 2;
 const MAX_TOKENS = 16000;
-const NAME_NOISE = /^(company|co|inc|llc|the)$/;
+const GENERIC_WORDS = new Set([
+  'electric', 'electrical', 'electrician', 'roofing', 'roofer', 'solar', 'plumbing', 'plumber', 'hvac', 'heating',
+  'cooling', 'air', 'turf', 'landscaping', 'lawn', 'construction', 'contractors', 'contractor', 'services', 'service',
+  'company', 'co', 'inc', 'llc', 'group', 'pros', 'home', 'homes', 'the', 'and',
+]);
 
-const tokensOf = (brand) => String(brand || '').toLowerCase().split(/\s+/)
+const wordsOf = (text) => String(text || '').toLowerCase().split(/\s+/)
   .map((t) => t.replace(/[^a-z0-9]/g, ''))
-  .filter((t) => t.length >= 3 && !NAME_NOISE.test(t));
+  .filter(Boolean);
+
+const isServicePage = (p) => {
+  let path = '';
+  try { path = new URL(p.url).pathname.toLowerCase(); } catch { /* bad url: no path */ }
+  return p.page_type !== 'homepage' && /\/[^?#]*service/.test(path);
+};
+
+// Words the site itself uses for what it sells: service-page H1s and service nav links.
+function siteServiceWords(crawl) {
+  const words = new Set();
+  const pages = crawl?.pages_crawled || [];
+  for (const p of pages) {
+    if (isServicePage(p)) wordsOf(p.h1_tags?.[0]).forEach((w) => words.add(w));
+  }
+  const home = pages.find((p) => p.page_type === 'homepage');
+  for (const link of home?.navigation_links || []) {
+    if (/service/i.test(String(link?.href || link?.url || ''))) wordsOf(link?.text).forEach((w) => words.add(w));
+  }
+  return words;
+}
+
+// A query is "brand" only if it holds a distinctive brand word (not a trade word),
+// or, when every brand word is generic, the whole brand phrase.
+function brandMatcher(brand, crawl) {
+  const generic = siteServiceWords(crawl);
+  const distinctive = wordsOf(brand).filter((t) => t.length >= 3 && !GENERIC_WORDS.has(t) && !generic.has(t));
+  if (distinctive.length) return (text) => distinctive.some((tok) => text.toLowerCase().includes(tok));
+  const phrase = wordsOf(brand).join(' ');
+  return (text) => !!phrase && wordsOf(text).join(' ').includes(phrase);
+}
 
 const withCity = (text, city) => (city && !text.toLowerCase().includes(city.toLowerCase()) ? `${text} ${city}` : text);
 
 export function buildSearchQueries({ gscPages, crawl, brand, city } = {}) {
-  const tokens = tokensOf(brand);
-  const isBrandy = (text) => { const t = text.toLowerCase(); return tokens.some((tok) => t.includes(tok)); };
+  const isBrandy = brandMatcher(brand, crawl);
 
   const impressions = new Map();
   for (const page of gscPages || []) {
@@ -37,9 +70,7 @@ export function buildSearchQueries({ gscPages, crawl, brand, city } = {}) {
 
   if (buyer.length < 3) {
     for (const p of crawl?.pages_crawled || []) {
-      let path = '';
-      try { path = new URL(p.url).pathname.toLowerCase(); } catch { /* bad url: no path */ }
-      if (p.page_type !== 'homepage' && !/\/[^?#]*service/.test(path)) continue;
+      if (p.page_type !== 'homepage' && !isServicePage(p)) continue;
       const h1 = String(p.h1_tags?.[0] || '').trim();
       if (h1 && !isBrandy(h1)) buyer.push(withCity(h1, city));
     }

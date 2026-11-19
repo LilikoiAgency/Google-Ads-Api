@@ -72,6 +72,36 @@ describe('buildSearchQueries', () => {
   });
 });
 
+describe('buildSearchQueries brand filter', () => {
+  it('keeps trade-word queries when the brand shares a generic word', () => {
+    const gscPages = [{ queries: [q('electrician tampa', 100), q('electrical panel upgrade', 90), q('ranger electric reviews', 500)] }];
+    const out = buildSearchQueries({ gscPages, crawl: {}, brand: 'Ranger Electric', city: null });
+    expect(out).toEqual(['electrician tampa', 'electrical panel upgrade', 'Ranger Electric reviews', 'Ranger Electric']);
+  });
+
+  it('keeps roofing queries for Acme Roofing but drops acme ones', () => {
+    const gscPages = [{ queries: [q('roofing contractor tampa', 100), q('acme roofing quote', 90)] }];
+    const out = buildSearchQueries({ gscPages, crawl: {}, brand: 'Acme Roofing', city: null });
+    expect(out[0]).toBe('roofing contractor tampa');
+    expect(out).not.toContain('acme roofing quote');
+  });
+
+  it('falls back to the whole brand phrase when every word is generic', () => {
+    const gscPages = [{ queries: [q('electric company tampa', 100), q('the electric company reviews', 90)] }];
+    const out = buildSearchQueries({ gscPages, crawl: {}, brand: 'The Electric Company', city: null });
+    expect(out[0]).toBe('electric company tampa');
+    expect(out).not.toContain('the electric company reviews');
+  });
+
+  it('treats words from service-page H1s as generic', () => {
+    const crawl = { pages_crawled: [{ url: 'https://x.com/services/gutter', h1_tags: ['Gutter Cleaning'] }] };
+    const gscPages = [{ queries: [q('gutter cleaning tampa', 100), q('zed gutter reviews', 90)] }];
+    const out = buildSearchQueries({ gscPages, crawl, brand: 'Zed Gutter', city: null });
+    expect(out[0]).toBe('gutter cleaning tampa');
+    expect(out).not.toContain('zed gutter reviews');
+  });
+});
+
 describe('runWebSearch', () => {
   it('sends web_search with max_uses and user_location', async () => {
     m.finalMessage.mockResolvedValue(okResponse);
