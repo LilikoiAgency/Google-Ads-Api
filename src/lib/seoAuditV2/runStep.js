@@ -171,13 +171,36 @@ function dataSources(job) {
 
 const byPath = (list) => new Map((list || []).filter((x) => x?.url || x?.page).map((x) => [pathKey(x.url || x.page), x]));
 
+// Older audits checked both "https://x.com/" and "https://www.x.com/", which share
+// a path. Keep the indexed result over a redirect (first wins on a tie).
+function inspectionByPath(list) {
+  const out = new Map();
+  for (const r of list || []) {
+    if (!r?.url || r.error) continue;
+    const k = pathKey(r.url);
+    const held = out.get(k);
+    if (!held || (held.verdict !== 'PASS' && r.verdict === 'PASS')) out.set(k, r);
+  }
+  return out;
+}
+
+// Speed for the same address the index result came from, when there are several.
+function speedByPath(list, inspection) {
+  const out = byPath(list);
+  for (const s of list || []) {
+    const i = s?.url && inspection.get(pathKey(s.url));
+    if (i && s.url === i.url) out.set(pathKey(s.url), s);
+  }
+  return out;
+}
+
 // Content-pass pages plus any page that was inspected or measured, each with its
 // index status, speed and top Search Console queries (null / [] when unavailable).
 // Every page is keyed and labelled by its path ("/services/turf"), as tasks are.
 function buildPages(job) {
   const sources = job.data?.sources || {};
-  const inspection = byPath((sources.inspection || []).filter((r) => !r.error));
-  const speed = byPath(sources.pagespeed);
+  const inspection = inspectionByPath(sources.inspection);
+  const speed = speedByPath(sources.pagespeed, inspection);
   const gsc = byPath(sources.gscPages);
 
   const entries = new Map();

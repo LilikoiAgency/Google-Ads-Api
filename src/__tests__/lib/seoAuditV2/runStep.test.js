@@ -251,6 +251,30 @@ describe('runStep', () => {
     expect(r.pages.find((p) => p.page.includes('broken'))).toBeUndefined();
   });
 
+  it('when two addresses share a path, the page card shows the indexed one, not the redirect', async () => {
+    const inspection = [
+      { url: 'https://www.acme.com/', verdict: 'PASS', coverage_state: 'Submitted and indexed', canonical_mismatch: false },
+      { url: 'https://acme.com/', verdict: 'NEUTRAL', coverage_state: 'Page with redirect', canonical_mismatch: false },
+    ];
+    const pagespeed = [
+      { status: 'ok', url: 'https://www.acme.com/', score: 76 },
+      { status: 'ok', url: 'https://acme.com/', score: 70 },
+    ];
+    const j = job({
+      'pass:technical': { status: 'done' }, 'pass:content': { status: 'done' }, 'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' }, synthesize: { status: 'running', attempts: 1 },
+    }, {
+      data: { crawl, sources: { inspection, pagespeed }, gaps: [], sharedContext: 'ctx' },
+      passes: {
+        technical: { findings: [], tasks: [] }, content: { findings: [], tasks: [], pages: [] },
+        local: { findings: [], tasks: [] }, conversion: { skipped: true, findings: [], tasks: [] },
+      },
+    });
+    const home = (await runStep(j, 'synthesize')).patch.result.pages.find((p) => p.page === '/');
+    expect(home.index.coverage_state).toBe('Submitted and indexed');
+    expect(home.speed.score).toBe(76);
+  });
+
   const chunkReply = (input, extra = {}) => ({
     output: { findings: [], tasks: [], pages: input.pages.map((p) => ({ page: p.url, fixes: [] })), ...extra },
   });

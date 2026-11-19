@@ -60,6 +60,26 @@ describe('joinPagesToQueries', () => {
     ]);
   });
 
+  it('merges www / no-www / http versions of a page under the site\'s main address', () => {
+    const out = joinPagesToQueries([
+      row('https://www.x.com/', 'brand', 30, 200, 3),
+      row('https://x.com/', 'brand', 5, 50, 5),
+      row('http://x.com/', 'other', 1, 10, 9),
+      row('https://www.x.com/services', 'svc', 4, 40, 6),
+    ]);
+    expect(out.map((p) => p.page)).toEqual(['https://www.x.com/', 'https://www.x.com/services']);
+    expect(out[0]).toMatchObject({ clicks: 36, impressions: 260 });
+    expect(out[0].queries[0]).toMatchObject({ query: 'brand', clicks: 35, impressions: 250 });
+  });
+
+  it('labels a page by its own busiest address when the main one never shows for it', () => {
+    const out = joinPagesToQueries([
+      row('https://www.x.com/a', 'q', 50, 500, 2),
+      row('https://x.com/only', 'q', 1, 10, 4),
+    ]);
+    expect(out.map((p) => p.page)).toEqual(['https://www.x.com/a', 'https://x.com/only']);
+  });
+
   it('caps the number of pages', () => {
     expect(joinPagesToQueries(rows, { topPages: 2 })).toHaveLength(2);
     expect(joinPagesToQueries([])).toEqual([]);

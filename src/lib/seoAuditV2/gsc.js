@@ -35,19 +35,47 @@ const finishMetrics = (a) => ({
   position: a.impressions ? round(a.posWeight / a.impressions, 1) : 0,
 });
 
+// A domain property reports https://www.x.com/a, https://x.com/a and http://x.com/a
+// as separate pages, though the extras just redirect. Key them as one page.
+function variantKey(page) {
+  try {
+    const u = new URL(page);
+    return `${u.host.toLowerCase().replace(/^www\./, '')}${u.pathname}`;
+  } catch {
+    return page;
+  }
+}
+
+function originOf(page) {
+  try {
+    return new URL(page).origin.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+const mostImpressions = (map) => [...map.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
 // Rows come from a ['page','query'] Search Console query (rowLimit 5000).
-// Pages are query-free; rows for the same page (and same query) are merged.
+// Pages are query-free; rows for the same page (and same query) are merged,
+// including the www / no-www / http versions of a page. A merged page is labelled
+// with the site's main address (most impressions overall) when it has one.
 export function joinPagesToQueries(pageQueryRows, { topPages = 25, perPage = 10 } = {}) {
   const pages = new Map();
+  const originImpressions = new Map();
   for (const r of pageQueryRows || []) {
     const [rawPage, query] = r.keys || [];
     if (!rawPage) continue;
-    const page = stripQuery(rawPage);
-    let p = pages.get(page);
+    const url = stripQuery(rawPage);
+    const key = variantKey(url);
+    let p = pages.get(key);
     if (!p) {
-      p = { page, clicks: 0, impressions: 0, posWeight: 0, queries: new Map() };
-      pages.set(page, p);
+      p = { clicks: 0, impressions: 0, posWeight: 0, queries: new Map(), variants: new Map() };
+      pages.set(key, p);
     }
+    p.variants.set(url, (p.variants.get(url) || 0) + (r.impressions || 0));
+    const origin = originOf(url);
+    originImpressions.set(origin, (originImpressions.get(origin) || 0) + (r.impressions || 0));
     addMetrics(p, r);
     let q = p.queries.get(query);
     if (!q) {
@@ -55,6 +83,11 @@ export function joinPagesToQueries(pageQueryRows, { topPages = 25, perPage = 10 
       p.queries.set(query, q);
     }
     addMetrics(q, r);
+  }
+  const mainOrigin = mostImpressions(originImpressions);
+  for (const p of pages.values()) {
+    const onMain = new Map([...p.variants].filter(([u]) => originOf(u) === mainOrigin));
+    p.page = mostImpressions(onMain.size ? onMain : p.variants);
   }
   return [...pages.values()]
     .sort(byClicksThenImpressions)

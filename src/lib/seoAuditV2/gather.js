@@ -8,6 +8,7 @@ import { fetchTrafficReport } from '../ga4Client';
 import { joinPagesToQueries, inspectUrls, listGoogleSitemaps, ga4PerPage } from './gsc';
 import { fetchPageSpeed } from './pagespeed';
 import { filterSkipped } from './options';
+import { pathKey } from './tasks';
 
 export const AUDIT_PROFILES = {
   quick: { pages: 5, inspect: 5, pagespeed: 2, effort: 'medium' },
@@ -109,6 +110,20 @@ async function fetchGa4(domain, ranges, chosen) {
   return { status: 'ok', report, ga4: summarizeGa4(report), property: match.propertyName };
 }
 
+// One URL per page path, in order. "https://x.com/" and "https://www.x.com/" are
+// the same page (results are matched to pages by path), so checking both wastes
+// a slot and the redirect's result can overwrite the real one. Where Search
+// Console reports a page, its address is the one Google uses, so prefer it.
+function onePerPage(urls, gscUrls) {
+  const gscByPath = new Map(gscUrls.map((u) => [pathKey(u), u]));
+  const byPath = new Map();
+  for (const u of urls) {
+    const k = pathKey(u);
+    if (!byPath.has(k)) byPath.set(k, gscByPath.get(k) || u);
+  }
+  return [...byPath.values()];
+}
+
 const crawlUrls = (crawl) => (crawl?.pages_crawled || []).map((p) => p.final_url || p.url).filter(Boolean);
 
 const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, ga4Property: null, pagespeed: null });
@@ -136,7 +151,7 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
     const targetsP = gscP.then((g) => {
       const fromGsc = filterSkipped((g.gscPages || []).map((p) => p.page), skip);
       const base = onlyListed || !fromGsc.length ? crawlUrls(crawl) : fromGsc;
-      return [...new Set([...(priorityUrls || []), ...base])];
+      return onePerPage([...(priorityUrls || []), ...base], fromGsc);
     });
     const inspectionP = Promise.all([siteP, targetsP]).then(([s, urls]) => (s.status === 'ok'
       ? settle(() => inspectUrls(s.auth, s.site, urls.slice(0, prof.inspect), { concurrency: 5 }))
