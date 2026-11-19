@@ -1,0 +1,302 @@
+/* SEO audit results as a report document: a pine cover with the main finding,
+   then a white sheet. Colours come from the Lilikoi mark (pine, cream, lilac). */
+
+.doc {
+  --pine: #1f4a46;
+  --pine-2: #285a56;
+  --cream: #fbf7ec;
+  --cream-muted: rgba(251, 247, 236, 0.72);
+  --lilac: #bab0d3;
+  --lilac-ink: #5f4f95;
+  --ink: #16211f;
+  --muted: #5c6b68;
+  --line: #e3e8e6;
+  --soft: #f4f7f6;
+  font-family: var(--audit-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* ── cover ───────────────────────────────────────────── */
+.cover {
+  background: var(--pine);
+  color: var(--cream);
+  padding: 36px 44px 40px;
+}
+.coverTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.domain {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.meta {
+  font-size: 13px;
+  color: var(--cream-muted);
+  margin: 4px 0 0;
+}
+.custom {
+  font-size: 13px;
+  color: var(--lilac);
+  margin: 4px 0 0;
+}
+.headline {
+  font-family: var(--audit-serif), Georgia, serif;
+  font-weight: 500;
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  max-width: 30ch;
+  margin: 36px 0 0;
+  text-wrap: balance;
+}
+.summaryRest {
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--cream-muted);
+  max-width: 68ch;
+  margin: 16px 0 0;
+}
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+/* ── sheet ───────────────────────────────────────────── */
+.sheet {
+  padding: 8px 44px 40px;
+}
+.section {
+  padding-top: 36px;
+}
+.sectionHead {
+  font-family: var(--audit-serif), Georgia, serif;
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.2;
+  margin: 0 0 18px;
+}
+
+/* scores: three 0–10 scales */
+.scores {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  padding: 28px 0 30px;
+  border-bottom: 1px solid var(--line);
+}
+.scoreHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.scoreNum {
+  font-family: var(--audit-serif), Georgia, serif;
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--pine);
+}
+.scoreOf {
+  font-size: 14px;
+  color: var(--muted);
+}
+.scoreName {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 10px 0 0;
+}
+.scoreName abbr {
+  text-decoration: none;
+  font-weight: 400;
+  color: var(--muted);
+}
+.scale {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  margin-top: 10px;
+}
+.scale i {
+  height: 6px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.scale i.on {
+  background: var(--pine-2);
+}
+.scoreWhy {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 12px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* top moves: a real ranking, so numbered */
+.moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+.move {
+  min-width: 0;
+  border-top: 2px solid var(--pine);
+  padding-top: 14px;
+}
+.moveNum {
+  font-family: var(--audit-serif), Georgia, serif;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--lilac-ink);
+}
+.moveText {
+  font-family: var(--audit-serif), Georgia, serif;
+  font-size: 18.5px;
+  line-height: 1.38;
+  margin: 10px 0 0;
+}
+.movePage {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 10px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* tabs */
+.tabs {
+  display: flex;
+  gap: 26px;
+  border-bottom: 1px solid var(--line);
+  margin: 44px 0 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.tab {
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 12px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--pine);
+}
+.tab:focus-visible,
+.doc button:focus-visible,
+.doc a:focus-visible,
+.doc select:focus-visible {
+  outline: 2px solid var(--lilac-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.tabCount {
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 6px;
+}
+.tabWarn {
+  color: #a15c00;
+  margin-left: 6px;
+}
+
+/* about this audit */
+.about {
+  margin-top: 44px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+.about summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+  width: fit-content;
+}
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ok::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pine-2);
+  margin-right: 7px;
+  vertical-align: 1px;
+}
+.off::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid #9aa6a3;
+  margin-right: 7px;
+  vertical-align: 1px;
+}
+.gaps {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+  line-height: 1.6;
+}
+.gapHint {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .cover {
+    padding: 26px 20px 30px;
+  }
+  .sheet {
+    padding: 4px 20px 28px;
+  }
+  .scores,
+  .moves {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .headline {
+    margin-top: 26px;
+  }
+}

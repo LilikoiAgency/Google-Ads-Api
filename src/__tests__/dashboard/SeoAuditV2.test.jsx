@@ -378,7 +378,8 @@ describe('v2 results pieces', () => {
     expect(screen.getByText('Your site is close to page one for turf pricing searches.')).toBeInTheDocument();
     expect(screen.getByText('Answer pricing questions on the turf page')).toBeInTheDocument();
     expect(screen.getByText('Good crawl health')).toBeInTheDocument();
-    expect(screen.getByText('13')).toBeInTheDocument(); // combined 6+4+3
+    expect(screen.getByRole('img', { name: 'Search visibility: 6 out of 10' })).toBeInTheDocument();
+    expect(screen.queryByText('13')).not.toBeInTheDocument(); // no combined score
   });
 
   it('PageCards lists each page with its fixes and target queries', () => {
@@ -463,13 +464,13 @@ describe('ResultsView picks the view by version', () => {
 
   it('renders a v2 audit with the action plan, tabs and data gaps', () => {
     render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
-    expect(screen.getByRole('button', { name: /^action plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^action plan/i })).toBeInTheDocument();
     for (const tab of ['Pages', 'Technical', 'Local & AI search', 'Conversion']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${tab}`) })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: new RegExp(`^${tab}`) })).toBeInTheDocument();
     }
     expect(screen.getByText(V2_RESULT.data_gaps[0])).toBeInTheDocument();
     expect(screen.getByText('Fix canonical pointing to staging')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^technical/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /^technical/i }));
     expect(screen.getByText('Staging canonical')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'SEO Analysis' })).not.toBeInTheDocument();
   });
@@ -480,14 +481,14 @@ describe('ResultsView picks the view by version', () => {
       passes_completed: { technical: true, content: false, local: false, conversion: true },
     };
     render(<ResultsView audit={result} domain="acme.com" />);
-    expect(screen.getByRole('button', { name: /^local & ai search\s*!/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^technical\s*1$/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^local & ai search/i }));
+    expect(screen.getByRole('tab', { name: /^local & ai search\s*!/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^technical\s*1$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /^local & ai search/i }));
     expect(screen.getByText("Local & AI search analysis didn't complete — rerun to include it")).toBeInTheDocument();
     expect(screen.queryByText(/no findings/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^pages/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /^pages/i }));
     expect(screen.getByText("Content analysis didn't complete — rerun to include it")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^conversion/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /^conversion/i }));
     expect(screen.getByText(/no findings/i)).toBeInTheDocument();
   });
 
@@ -502,9 +503,10 @@ describe('ResultsView picks the view by version', () => {
       ...fs.readdirSync(path.join(dir, 'v2')).filter((f) => /\.jsx?$/.test(f)).map((f) => path.join(dir, 'v2', f)),
       ...['page.js', 'ui.jsx', 'ResultsView.jsx', 'V1Results.jsx'].map((f) => path.join(dir, f)),
     ];
-    // Explicit exceptions: the "Local & AI search" area label, and a v1 section
+    // Explicit exceptions: the "Local & AI search" area label, the "AI search
+    // readiness" score name (both name the search channel), and a v1 section
     // title kept verbatim so saved v1 audits render as before.
-    const ALLOWED = ['Local & AI search', 'Content for AI Synthesis'];
+    const ALLOWED = ['Local & AI search', 'AI search readiness', 'Content for AI Synthesis'];
     const BANNED = /\bAI\b|claude|anthropic|openai|\bLLM\b|\bGPT\b|gemini|chatbot|powered by|machine learning|language model/i;
     expect(files.length).toBeGreaterThan(8);
     const hits = [];

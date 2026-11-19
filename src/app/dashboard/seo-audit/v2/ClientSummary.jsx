@@ -1,65 +1,79 @@
 "use client";
-// Top of the v2 results: the plain-language summary for the client, the three top moves,
-// and the scores row.
+// Report pieces for the top of a v2 audit: the summary split into a headline and
+// the rest (for the cover), the three 0–10 scales, and the three top moves.
 
-import { ScoreCard, CombinedScoreCard, CARD, CARD_LABEL, getScoreStatus } from "../ui";
+import s from "./audit.module.css";
 import { pagePath } from "./ActionPlan";
 
+export const SCORES = [
+  { key: "seo", name: "Search visibility", abbr: "SEO" },
+  { key: "geo", name: "AI search readiness", abbr: "GEO" },
+  { key: "aeo", name: "Answer readiness", abbr: "AEO" },
+];
+
+// The first sentence leads as the headline; the rest follows as body text.
+export function splitSummary(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/^(.+?[.!?])\s+(?=[A-Z0-9"'“‘(])/s);
+  if (!m || m[1].length < 40) return { headline: t, rest: "" };
+  return { headline: m[1], rest: t.slice(m[0].length).trim() };
+}
+
+export function ScoreScales({ scores }) {
+  const shown = SCORES.filter((x) => Number.isFinite(scores?.[x.key]?.score));
+  if (!shown.length) return null;
+  return (
+    <div className={s.scores}>
+      {shown.map(({ key, name, abbr }) => {
+        const { score, reason } = scores[key];
+        return (
+          <div key={key}>
+            <div className={s.scoreHead}>
+              <span className={s.scoreNum}>{score}</span>
+              <span className={s.scoreOf}>out of 10</span>
+            </div>
+            <p className={s.scoreName}>{name} <abbr>({abbr})</abbr></p>
+            <div className={s.scale} role="img" aria-label={`${name}: ${score} out of 10`}>
+              {Array.from({ length: 10 }, (_, i) => <i key={i} className={i < score ? s.on : undefined} />)}
+            </div>
+            {reason && <p className={s.scoreWhy} title={reason}>{reason}</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function TopMoves({ moves }) {
+  if (!moves?.length) return null;
+  return (
+    <section className={s.section}>
+      <h3 className={s.sectionHead}>The moves that matter most</h3>
+      <ol className={s.moves}>
+        {moves.map((m, i) => (
+          <li key={m.task?.id || i} className={s.move}>
+            <span className={s.moveNum} aria-hidden>{i + 1}</span>
+            <p className={s.moveText}>{m.headline}</p>
+            {m.task && (
+              <p className={s.movePage} title={m.task.page}>
+                {m.task.id}, {m.task.group ? `${m.task.items?.length || 0} pages` : pagePath(m.task.page)}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+// Kept for callers that want the whole block in one piece.
 export default function ClientSummary({ result }) {
   if (!result) return null;
-  const scores = result.scores || {};
-  const keys = ["seo", "geo", "aeo"];
-  const hasScores = keys.some((k) => typeof scores[k]?.score === "number");
-  const combined = keys.reduce((sum, k) => sum + (Number(scores[k]?.score) || 0), 0);
-  const moves = result.top_moves || [];
-
   return (
     <div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
-        {result.client_summary && (
-          <div style={{ ...CARD, flex: "1 1 340px", borderTop: "4px solid #0d9488" }}>
-            <p style={{ ...CARD_LABEL, marginBottom: 8 }}>Summary for the client</p>
-            <p style={{ fontSize: 14, color: "#333", lineHeight: 1.7, whiteSpace: "pre-line" }}>{result.client_summary}</p>
-          </div>
-        )}
-        {moves.length > 0 && (
-          <div style={{ ...CARD, flex: "1 1 300px" }}>
-            <p style={{ ...CARD_LABEL, marginBottom: 12 }}>Top {moves.length} moves</p>
-            <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {moves.map((m, i) => (
-                <li key={m.task?.id || i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                  <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#0f3460", color: "#fff", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {i + 1}
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", lineHeight: 1.45 }}>{m.headline}</p>
-                    {m.task && (
-                      <p style={{ fontSize: 12, color: "#888", marginTop: 2, wordBreak: "break-all" }}>
-                        {m.task.id} &middot; {m.task.group ? `${m.task.items?.length || 0} pages` : pagePath(m.task.page)}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-      </div>
-
-      {hasScores && (
-        <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-          {keys.map((k) => (
-            <ScoreCard
-              key={k}
-              label={k.toUpperCase()}
-              score={scores[k]?.score}
-              status={getScoreStatus(scores[k]?.score)}
-              takeaway={scores[k]?.reason}
-            />
-          ))}
-          <CombinedScoreCard score={combined} max={30} />
-        </div>
-      )}
+      {result.client_summary && <p className={s.summaryRest}>{result.client_summary}</p>}
+      <ScoreScales scores={result.scores} />
+      <TopMoves moves={result.top_moves} />
     </div>
   );
 }

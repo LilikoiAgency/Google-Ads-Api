@@ -1,0 +1,146 @@
+/* Action Plan table, in the audit report style (see audit.module.css). */
+
+.th {
+  position: relative;
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #5c6b68;
+  border-bottom: 1px solid #d5ddda;
+  white-space: nowrap;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.row {
+  cursor: pointer;
+  border-bottom: 1px solid #e9eeec;
+}
+.row:hover {
+  background: #f7faf9;
+}
+.rowOpen,
+.rowOpen:hover {
+  background: #f4f7f6;
+  border-bottom: none;
+}
+.detailRow {
+  background: #f4f7f6;
+  border-bottom: 1px solid #e3e8e6;
+}
+.td {
+  padding: 14px 12px;
+  vertical-align: top;
+}
+.rank {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #5f4f95;
+  padding-top: 16px;
+}
+.taskCell {
+  min-width: 260px;
+}
+.title {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.42;
+  color: #16211f;
+}
+.sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #5c6b68;
+  min-width: 0;
+}
+.path {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4a5a57;
+  background: #eef2f1;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.tagWin {
+  color: #1f4a46;
+  background: #dcebe7;
+}
+.area {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #34413e;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.area i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.meter {
+  display: inline-flex;
+  gap: 3px;
+  padding-top: 7px;
+}
+.meter i {
+  width: 6px;
+  height: 12px;
+  border-radius: 1.5px;
+  background: #e3e8e6;
+}
+.meter i.meterOn {
+  background: #285a56;
+}
+.effort {
+  font-size: 13px;
+  color: #34413e;
+  white-space: nowrap;
+  padding-top: 16px;
+}
+.chev {
+  border: none;
+  background: transparent;
+  color: #7b8885;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.chev:hover {
+  background: #e9eeec;
+}
+
+/* Phones: drop the Area and Effort columns; impact stays as the one signal. */
+@media (max-width: 640px) {
+  .th:nth-child(3),
+  .th:nth-child(5),
+  .row > .td:nth-child(3),
+  .row > .td:nth-child(5) {
+    display: none;
+  }
+  .taskCell {
+    min-width: 0;
+  }
+  .path {
+    max-width: 200px;
+  }
+}
