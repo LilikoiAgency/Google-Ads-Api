@@ -12,7 +12,7 @@ import {
 import { runStructured } from './llm';
 import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
-import { pageLimit, filterSkipped } from './options';
+import { pageLimit, filterSkipped, bareHost } from './options';
 import { buildSearchSummary } from './overview';
 import { getSavedLocations, saveReviewTexts, getReviewTexts } from './reputationStore';
 import { brandName } from './reviews';
@@ -315,9 +315,55 @@ function buildPages(job) {
   });
 }
 
+// Skipped on purpose (quick audit), or a step an older job never had.
+function passSkipped(job, pass) {
+  const step = stepOf(job, `pass:${pass}`);
+  return step.skipped === true || (pass === 'reputation' && !step.key);
+}
+
+function resultHost(r) {
+  if (r?.host) return bareHost(r.host);
+  try {
+    return bareHost(new URL(r?.url).hostname);
+  } catch {
+    return '';
+  }
+}
+
+// Reviews stats, themes and the web search check, or undefined when neither source has data.
+function buildReputation(job, reputationDone) {
+  const reviews = job.data?.sources?.reviews;
+  const search = job.data?.sources?.aiSearch;
+  const hasReviews = Array.isArray(reviews) && reviews.length > 0;
+  const hasSearch = Array.isArray(search?.queries) && search.queries.length > 0;
+  if (!hasReviews && !hasSearch) return undefined;
+  const pass = reputationDone ? job.passes.reputation : null;
+  const domain = bareHost(job.domain);
+  const queries = hasSearch ? search.queries : [];
+  return {
+    locations: hasReviews
+      ? reviews.map((l) => ({ name: l.name, city: l.city, source: l.source, coverage: l.coverage, stats: l.stats }))
+      : [],
+    themes: pass?.themes || [],
+    search: hasSearch
+      ? {
+        appear_count: queries.filter((q) => q.you_appear).length,
+        total: queries.length,
+        summary: pass?.search_summary?.summary ?? null,
+        queries: queries.map((q) => ({
+          query: q.query,
+          you_appear: !!q.you_appear,
+          others: [...new Set((q.results || []).map(resultHost).filter((h) => h && h !== domain))].slice(0, 3),
+        })),
+      }
+      : null,
+    attribution: hasReviews && reviews.some((l) => l.source === 'places') ? 'Source: Google reviews' : null,
+  };
+}
+
 async function runSynthesize(job) {
-  const done = PASSES.filter((p) => stepOf(job, `pass:${p}`).status === 'done' && job.passes?.[p]);
-  const notCompleted = PASSES.filter((p) => !done.includes(p)).map((p) => PASS_AREA[p]);
+  const done = PASSES.filter((p) => stepOf(job, `pass:${p}`).status === 'done' && !passSkipped(job, p) && job.passes?.[p]);
+  const notCompleted = PASSES.filter((p) => !done.includes(p) && !passSkipped(job, p)).map((p) => PASS_AREA[p]);
   const passOutputs = Object.fromEntries(done.map((p) => [p, job.passes[p]]));
 
   const { output: synth } = await runStructured({
@@ -333,6 +379,7 @@ async function runSynthesize(job) {
   const plan = buildActionPlan(done.map((p) => job.passes[p].tasks || []), synth);
   // One deterministic list: source gaps plus job gaps (incomplete passes, crawl cut short).
   const dataGaps = [...new Set([...describeGaps(job.data?.gaps), ...(job.gaps || [])])];
+  const reputation = buildReputation(job, done.includes('reputation'));
   const result = {
     version: 2,
     domain: job.domain,
@@ -344,10 +391,13 @@ async function runSynthesize(job) {
     scores: synth.scores,
     action_plan: plan,
     pages: buildPages(job),
-    findings: Object.fromEntries(PASSES.map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []])),
-    passes_completed: Object.fromEntries(PASSES.map((p) => [p, done.includes(p)])),
+    findings: Object.fromEntries(
+      PASSES.filter((p) => p !== 'reputation' || done.includes(p)).map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []]),
+    ),
+    passes_completed: Object.fromEntries(PASSES.filter((p) => !passSkipped(job, p)).map((p) => [p, done.includes(p)])),
     data_gaps: dataGaps,
     data_sources: dataSources(job),
+    ...(reputation ? { reputation } : {}),
     // Headline search numbers and index counts for the overview.
     ...buildSearchSummary(job.data?.sources?.gsc, job.data?.sources?.inspection),
   };

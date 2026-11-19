@@ -5,6 +5,7 @@
 import * as store from './jobStore';
 import { runStep } from './runStep';
 import { describeGaps } from './gather';
+import { dropReviewTexts } from './reputationStore';
 import {
   STEP_KEYS, runnableSteps, applyStepResult, expireStale, resetFailed, jobStatus, shouldRefund,
 } from './jobs';
@@ -83,6 +84,14 @@ async function settleJob(id, fresh, now) {
 async function finishFollowUps(job) {
   if (job.status === 'done') {
     const auditId = await store.saveFinished(job);
+    // Cached review text is only needed while the audit runs. The store has no
+    // one-time flag for it and deleteOne on a missing doc is cheap, so this runs
+    // on every advance of a done job; a failure is logged and retried next time.
+    try {
+      await dropReviewTexts(job.id);
+    } catch (err) {
+      console.error('[seo-audit-v2] dropping cached reviews failed:', err?.message || err);
+    }
     if (auditId) return { ...job, auditId };
   }
   if (job.status === 'failed' && shouldRefund(job)) await store.refundUsage(job);

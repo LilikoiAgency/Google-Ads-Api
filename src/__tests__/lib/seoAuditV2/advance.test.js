@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('@/lib/seoAuditV2/jobStore', () => ({}));
+const m = vi.hoisted(() => ({ getJob: vi.fn(), saveFinished: vi.fn(), dropReviewTexts: vi.fn() }));
+vi.mock('@/lib/seoAuditV2/jobStore', () => ({ getJob: m.getJob, saveFinished: m.saveFinished }));
+vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ dropReviewTexts: m.dropReviewTexts }));
 vi.mock('@/lib/seoAuditV2/gather', () => ({ describeGaps: () => [] }));
 vi.mock('@/lib/seoAuditV2/runStep', () => ({ runStep: vi.fn() }));
 
-import { toProgress } from '@/lib/seoAuditV2/advance';
+import { toProgress, advanceJob } from '@/lib/seoAuditV2/advance';
 import { newJob } from '@/lib/seoAuditV2/jobs';
 
 const mk = (auditType) => ({ ...newJob({ email: 'a@x.com', domain: 'x.com', auditType, now: 1_000_000 }), id: 'j1' });
@@ -31,5 +33,27 @@ describe('toProgress', () => {
     expect(keys(toProgress(job))).toEqual(
       ['crawl', 'gather', 'pass:technical', 'pass:content', 'pass:local', 'pass:conversion', 'synthesize'],
     );
+  });
+});
+
+describe('advanceJob on a done job', () => {
+  it('done job drops cached review text', async () => {
+    m.getJob.mockResolvedValue({ ...mk('full'), status: 'done', result: { version: 2 } });
+    m.saveFinished.mockResolvedValue('a1');
+    m.dropReviewTexts.mockResolvedValue(undefined);
+    const p = await advanceJob('j1');
+    expect(m.dropReviewTexts).toHaveBeenCalledWith('j1');
+    expect(p.auditId).toBe('a1');
+  });
+
+  it('a failed cache drop is logged and does not break the response', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    m.getJob.mockResolvedValue({ ...mk('full'), status: 'done', result: { version: 2 } });
+    m.saveFinished.mockResolvedValue('a1');
+    m.dropReviewTexts.mockRejectedValue(new Error('db down'));
+    const p = await advanceJob('j1');
+    expect(p.auditId).toBe('a1');
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

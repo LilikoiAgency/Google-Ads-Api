@@ -235,6 +235,7 @@ describe('runStep', () => {
       'pass:content': { status: 'done' },
       'pass:local': { status: 'done' },
       'pass:conversion': { status: 'failed_final' },
+      'pass:reputation': { status: 'done', skipped: true },
       synthesize: { status: 'running', attempts: 1 },
     }, {
       data: { crawl, sources: { gsc: { a: 1 } }, gaps: [{ source: 'ga4', status: 'no_property' }], sharedContext: 'ctx' },
@@ -243,14 +244,14 @@ describe('runStep', () => {
     });
     const res = await runStep(j, 'synthesize');
     const synthInput = m.runStructured.mock.calls[0][0].input;
-    expect(synthInput.passes_not_completed).toEqual(['Conversion', 'Reputation']);
+    expect(synthInput.passes_not_completed).toEqual(['Conversion']);
     expect(synthInput.tasks.map((t) => t.id).sort()).toEqual(['CONT-1-1', 'TECH-1']);
     const r = res.patch.result;
     expect(r).toMatchObject({ version: 2, domain: 'acme.com', audit_type: 'full', client_summary: 'Summary' });
     expect(r.action_plan).toHaveLength(2);
     expect(r.top_moves[0].headline).toBe('Get found');
     expect(r.pages).toEqual([{ page: '/p1', fixes: [], index: null, speed: null, top_queries: [] }]);
-    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: false, reputation: false });
+    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: false });
     expect(r.findings.technical).toEqual([{ title: 'tf' }]);
     expect(r.findings.conversion).toEqual([]);
     expect(r.data_gaps).toEqual(['ga4 unavailable', "Conversion analysis didn't complete — rerun to include it"]);
@@ -420,6 +421,113 @@ describe('runStep', () => {
     });
     const r = (await runStep(j, 'synthesize')).patch.result;
     expect(r.data_gaps).toEqual(['ga4 unavailable', 'Crawl stopped early after 6 pages because the site responded slowly.']);
+  });
+
+  describe('result.reputation', () => {
+    const base = (statuses, extra) => job({
+      'pass:technical': { status: 'done' }, 'pass:content': { status: 'done' }, 'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' }, synthesize: { status: 'running', attempts: 1 }, ...statuses,
+    }, {
+      passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] } },
+      ...extra,
+    });
+    const synth = () => m.runStructured.mockResolvedValue({
+      output: { client_summary: 'S', top_moves: [], scores: {}, drop_task_ids: [] },
+    });
+    const stats = { rating: 4.6, total: 120 };
+    const reviews = [
+      { source: 'places', id: 'p1', name: 'Acme Turf', city: 'Austin', coverage: 'sample', stats },
+      { source: 'places', id: 'p2', name: 'Acme Lawn', city: 'Dallas', coverage: 'sample', stats },
+    ];
+    const aiSearch = {
+      status: 'ok',
+      queries: [
+        { query: 'turf austin', you_appear: true, results: [
+          { title: 'a', url: 'https://www.acme.com/', host: 'www.acme.com' },
+          { title: 'b', url: 'https://b.com/x', host: 'b.com' },
+          { title: 'c', url: 'https://b.com/y', host: 'b.com' },
+          { title: 'd', url: 'https://c.com/', host: 'c.com' },
+          { title: 'e', url: 'https://d.com/', host: 'd.com' },
+          { title: 'f', url: 'https://e.com/', host: 'e.com' },
+        ] },
+        { query: 'turf dallas', you_appear: false, results: [] },
+      ],
+      notes: [],
+    };
+    const reputationPass = {
+      findings: [{ title: 'rf' }], tasks: [],
+      themes: [{ kind: 'praise', theme: 'Fast', count: 4, location: 'Acme Turf', quotes: ['Great'] }],
+      search_summary: { summary: 'You show up in one of two.', competitors: [], cited_sites: [] },
+    };
+
+    it('result.reputation built from stats, themes and search', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews, aiSearch }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r.reputation.locations[0]).toEqual({ name: 'Acme Turf', city: 'Austin', source: 'places', coverage: 'sample', stats });
+      expect(r.reputation.themes).toEqual(reputationPass.themes);
+      expect(r.reputation.search).toEqual({
+        appear_count: 1, total: 2, summary: 'You show up in one of two.',
+        queries: [
+          { query: 'turf austin', you_appear: true, others: ['b.com', 'c.com', 'd.com'] },
+          { query: 'turf dallas', you_appear: false, others: [] },
+        ],
+      });
+      expect(r.findings.reputation).toEqual([{ title: 'rf' }]);
+      expect(r.passes_completed.reputation).toBe(true);
+    });
+
+    it('quick result has reputation stats and no themes', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'done', skipped: true } }, {
+        auditType: 'quick', data: { crawl, sources: { reviews }, sharedContext: 'ctx' },
+      });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r.reputation.locations).toHaveLength(2);
+      expect(r.reputation.themes).toEqual([]);
+      expect(r.reputation.search).toBeNull();
+      expect(r.findings).not.toHaveProperty('reputation');
+      expect(r.passes_completed).not.toHaveProperty('reputation');
+    });
+
+    it('a failed reputation pass keeps stats, drops summary and is reported incomplete', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'failed_final' } }, {
+        data: { crawl, sources: { reviews, aiSearch }, sharedContext: 'ctx' },
+      });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r.reputation.search.summary).toBeNull();
+      expect(r.reputation.themes).toEqual([]);
+      expect(r.passes_completed.reputation).toBe(false);
+    });
+
+    it('attribution set only for public data', async () => {
+      synth();
+      const mk = (src) => base({ 'pass:reputation': { status: 'done', skipped: true } }, {
+        data: { crawl, sources: { reviews: [{ ...reviews[0], source: src }] }, sharedContext: 'ctx' },
+      });
+      expect((await runStep(mk('places'), 'synthesize')).patch.result.reputation.attribution).toBe('Source: Google reviews');
+      expect((await runStep(mk('gbp'), 'synthesize')).patch.result.reputation.attribution).toBeNull();
+    });
+
+    it('no reputation key when neither source exists', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'done', skipped: true } }, { data: { crawl, sources: {}, sharedContext: 'ctx' } });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r).not.toHaveProperty('reputation');
+    });
+
+    it('an old job without the reputation step is not reported incomplete', async () => {
+      synth();
+      const j = base({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } });
+      j.steps = j.steps.filter((s) => s.key !== 'pass:reputation' && s.key !== 'search');
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(m.runStructured.mock.calls[0][0].input.passes_not_completed).toBeUndefined();
+      expect(r.passes_completed).not.toHaveProperty('reputation');
+    });
   });
 
   it('a sitemap read cut short becomes a job gap', async () => {
