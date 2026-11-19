@@ -10,6 +10,7 @@ import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
 import { flattenTasks } from "../../../../lib/seoAuditV2/tasks";
+import ReportDownload from "./ReportDownload";
 
 const SOURCES = [
   ["crawl", "Site crawl"],
@@ -97,7 +98,10 @@ export default function V2Results({ result, domain, actions }) {
           )}
           <DataSources sources={result.data_sources} gaps={result.data_gaps} />
         </div>
-        {actions}
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <ReportDownload result={result} />
+          {actions}
+        </div>
       </div>
 
       <ClientSummary result={result} />
