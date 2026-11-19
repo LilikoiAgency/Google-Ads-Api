@@ -73,7 +73,7 @@ function AboutAudit({ sources, gaps }) {
   );
 }
 
-export default function V2Results({ result, domain, actions }) {
+export default function V2Results({ result, domain, actions, onBack }) {
   const [tab, setTab] = useState("plan");
   if (!result) return null;
   const tasks = result.action_plan || [];
@@ -104,7 +104,13 @@ export default function V2Results({ result, domain, actions }) {
     <article className={`${s.doc} ${auditSans.variable}`}>
       <header className={s.top}>
         <div style={{ minWidth: 0 }}>
-          <p className={s.crumb}>SEO audits / {site}</p>
+          {onBack ? (
+            <button type="button" className={s.back} onClick={onBack}>
+              <span aria-hidden>←</span> All audits
+            </button>
+          ) : (
+            <p className={s.crumb}>SEO audits / {site}</p>
+          )}
           <h2 className={s.domain}>
             {site}
             <span className={s.pill}>{result.audit_type === "quick" ? "Quick audit" : "Full audit"}</span>

@@ -122,6 +122,13 @@ export default function SEOAuditPage() {
     setAdvanced(EMPTY_ADVANCED);
   }
 
+  // Results -> the audit list (history), with a fresh form.
+  function handleBackToAudits() {
+    handleReset();
+    refreshHistory();
+    window.scrollTo({ top: 0 });
+  }
+
   function handleBackFromProgress() {
     setStep(STEPS.CONFIGURE);
     setJobId(null);
@@ -511,7 +518,7 @@ export default function SEOAuditPage() {
 
         {/* ── Step 2: Results (v2 or v1 view, by version) ────────────────── */}
         {step === STEPS.RESULTS && auditResult && (
-          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} />
+          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} onBack={handleBackToAudits} />
         )}
       </div>
     </div>

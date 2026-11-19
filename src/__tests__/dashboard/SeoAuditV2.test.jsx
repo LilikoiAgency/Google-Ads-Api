@@ -622,3 +622,18 @@ describe('Advanced: data source pickers', () => {
     expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_ADVANCED, ga4Property: { id: 'properties/42', name: 'Semper Solaris', account: 'Semper' } });
   });
 });
+
+describe('results back button', () => {
+  it('v2 results show "All audits" and call onBack', () => {
+    const onBack = vi.fn();
+    render(<ResultsView audit={V2_RESULT} domain="acme.com" onBack={onBack} />);
+    fireEvent.click(screen.getByRole('button', { name: /All audits/ }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+  it('v1 results get the same button', () => {
+    const onBack = vi.fn();
+    render(<ResultsView audit={V1_AUDIT} domain="old.com" onBack={onBack} />);
+    fireEvent.click(screen.getByRole('button', { name: /All audits/ }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});

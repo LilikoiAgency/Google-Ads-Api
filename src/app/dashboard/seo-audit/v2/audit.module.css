@@ -26,6 +26,7 @@
   --btn-bg: #09090b;
   --btn-ink: #ffffff;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  color-scheme: light;
   font-family: var(--audit-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-feature-settings: "tnum" 1;
   color: var(--ink);
@@ -53,6 +54,14 @@
   --btn-bg: #ffffff;
   --btn-ink: #0c0618;
   --shadow: none;
+  /* native dropdowns (select menus) render dark too */
+  color-scheme: dark;
+}
+
+/* Open dropdown lists: solid background, readable text in either theme. */
+.doc select option {
+  background: var(--solid);
+  color: var(--ink);
 }
 
 /* ── header ──────────────────────────────────────────── */
@@ -68,6 +77,23 @@
   font-size: 12.5px;
   color: var(--dim);
   margin: 0 0 6px;
+}
+.back {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 4px 8px 4px 0;
+  margin: 0 0 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.back:hover {
+  color: var(--ink);
 }
 .domain {
   font-size: 28px;
