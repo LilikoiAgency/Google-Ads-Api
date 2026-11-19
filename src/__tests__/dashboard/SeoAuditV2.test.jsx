@@ -673,6 +673,13 @@ describe('Reputation tab', () => {
     expect(screen.getByText(/Took three weeks/)).toBeInTheDocument();
   });
 
+  it('About this audit lists Google reviews and the web search check with their status', () => {
+    const data_sources = { crawl: { status: 'ok', pages: 3 }, reviews: { status: 'ok' }, ai_search: { status: 'no_data' } };
+    render(<ResultsView audit={{ ...V2_RESULT, data_sources }} domain="acme.com" />);
+    expect(screen.getByText('Google reviews')).toBeInTheDocument();
+    expect(screen.getByText('Web search check (no data yet)')).toBeInTheDocument();
+  });
+
   it('lists the reputation findings under the tab', () => {
     render(<ResultsView audit={{ ...V2_RESULT, reputation: REPUTATION, findings: { ...V2_RESULT.findings, reputation: [{ title: 'Replies are slow', detail: 'Few reviews get a reply.', evidence: [] }] } }} domain="acme.com" />);
     fireEvent.click(screen.getByRole('tab', { name: /Reputation/ }));

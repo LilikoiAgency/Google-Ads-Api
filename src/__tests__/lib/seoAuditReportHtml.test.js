@@ -115,6 +115,15 @@ describe('seo audit report reputation', () => {
     expect(withSample(undefined)).not.toContain('sample review');
   });
 
+  it('footer names Google reviews and the web search check only when they have data', () => {
+    const on = generateSeoReportHtml({ ...RESULT, data_sources: { ...RESULT.data_sources, reviews: { status: 'ok' }, ai_search: { status: 'ok' } } }, { kind: 'client' });
+    expect(on).toContain('Google reviews');
+    expect(on).toContain('a web search check');
+    const off = generateSeoReportHtml({ ...RESULT, data_sources: { ...RESULT.data_sources, reviews: { status: 'no_data' }, ai_search: { status: 'no_data' } } }, { kind: 'client' });
+    expect(off).not.toContain('a web search check');
+    expect(off.slice(off.indexOf('<footer>'))).not.toContain('Google reviews');
+  });
+
   it('report omits reputation when absent', () => {
     const html = generateSeoReportHtml(RESULT, { kind: 'full' });
     expect(html).not.toContain('Reputation');

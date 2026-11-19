@@ -23,6 +23,8 @@ const SOURCES = [
   ["sitemaps", "Sitemaps"],
   ["ga4", "Google Analytics"],
   ["pagespeed", "Page speed"],
+  ["reviews", "Google reviews"],
+  ["ai_search", "Web search check"],
 ];
 
 const STATUS_TEXT = {

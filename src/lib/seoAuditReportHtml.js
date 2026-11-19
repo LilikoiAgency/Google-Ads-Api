@@ -207,6 +207,8 @@ ${plan.map((t) => taskCard(t)).join('')}`
   const sources = ['a crawl of the site'];
   if (r.data_sources?.search_console?.status === 'ok') sources.push('Google Search Console');
   if (r.data_sources?.ga4?.status === 'ok') sources.push('Google Analytics');
+  if (r.data_sources?.reviews?.status === 'ok') sources.push('Google reviews');
+  if (r.data_sources?.ai_search?.status === 'ok') sources.push('a web search check');
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
