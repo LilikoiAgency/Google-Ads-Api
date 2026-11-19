@@ -6,8 +6,8 @@
 import { pagePath, pageHref } from "./ActionPlan";
 import { pathKey } from "@/lib/seoAuditV2/tasks";
 
-const LABEL = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 4 };
-const ROW = { fontSize: 12, color: "#444", lineHeight: 1.6 };
+const LABEL = { fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 4 };
+const ROW = { fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6 };
 
 const seconds = (ms) => (ms == null ? null : `${(ms / 1000).toFixed(1)}s`);
 
@@ -17,11 +17,11 @@ function IndexStatus({ index }) {
   return (
     <div style={{ marginBottom: 10 }}>
       <p style={LABEL}>Google index</p>
-      <p style={{ ...ROW, fontWeight: 600, color: indexed ? "#1a7a4a" : "#c0392b" }}>
+      <p style={{ ...ROW, fontWeight: 600, color: indexed ? "var(--up)" : "var(--down)" }}>
         {indexed ? "Indexed" : `Not indexed: ${index.coverage_state || index.verdict || "unknown"}`}
       </p>
       {index.canonical_mismatch && index.google_canonical && (
-        <p style={{ ...ROW, color: "#7d5a00", wordBreak: "break-all" }}>
+        <p style={{ ...ROW, color: "var(--amber)", wordBreak: "break-all" }}>
           Google picked a different canonical: {index.google_canonical}
         </p>
       )}
@@ -63,7 +63,7 @@ function TopQueries({ queries }) {
         {queries.map((q) => (
           <li key={q.query} style={ROW}>
             <span style={{ fontWeight: 600 }}>{q.query}</span>
-            <span style={{ color: "#888" }}> · {q.clicks} clicks · {q.impressions} impressions · position {q.position}</span>
+            <span style={{ color: "var(--muted)" }}> · {q.clicks} clicks · {q.impressions} impressions · position {q.position}</span>
           </li>
         ))}
       </ul>
@@ -72,7 +72,7 @@ function TopQueries({ queries }) {
 }
 
 export default function PageCards({ pages, tasks = [], domain = "" }) {
-  if (!pages?.length) return <p style={{ color: "#999", fontSize: 13 }}>No page-level fixes in this audit.</p>;
+  if (!pages?.length) return <p style={{ color: "var(--muted)", fontSize: 13 }}>No page-level fixes in this audit.</p>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {pages.map((p) => {
@@ -81,17 +81,17 @@ export default function PageCards({ pages, tasks = [], domain = "" }) {
         const ids = tasks.filter((t) => pathKey(t.page) === key).map((t) => t.id);
         const href = pageHref(p.page, domain);
         return (
-          <div key={p.page} data-page-card style={{ border: "1px solid #eee", borderRadius: 12, padding: "14px 18px" }}>
+          <div key={p.page} data-page-card style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "14px 18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
               {href ? (
-                <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 15, fontWeight: 700, color: "#0f3460", wordBreak: "break-all", textDecoration: "none" }}>
+                <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 15, fontWeight: 700, color: "var(--accent-ink)", wordBreak: "break-all", textDecoration: "none" }}>
                   {pagePath(p.page)}
                 </a>
               ) : (
-                <span style={{ fontSize: 15, fontWeight: 700, color: "#0f3460" }}>{p.page}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--accent-ink)" }}>{p.page}</span>
               )}
               {ids.length > 0 && (
-                <span style={{ fontSize: 11, color: "#888" }}>In the action plan: {ids.join(", ")}</span>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>In the action plan: {ids.join(", ")}</span>
               )}
             </div>
             {(p.index || p.speed || p.top_queries?.length > 0) && (
@@ -110,13 +110,13 @@ export default function PageCards({ pages, tasks = [], domain = "" }) {
             {p.fixes?.length > 0 && (
               <ol style={{ margin: 0, paddingLeft: 20 }}>
                 {p.fixes.map((f, i) => (
-                  <li key={i} style={{ fontSize: 13, color: "#333", lineHeight: 1.6, marginBottom: 8 }}>
+                  <li key={i} style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 8 }}>
                     <span>{f.change}</span>
                     {f.targets_queries?.length > 0 && (
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4, alignItems: "center" }}>
-                        <span style={{ fontSize: 11, color: "#888" }}>Targets:</span>
+                        <span style={{ fontSize: 11, color: "var(--muted)" }}>Targets:</span>
                         {f.targets_queries.map((q) => (
-                          <span key={q} style={{ fontSize: 11, padding: "1px 8px", borderRadius: 10, background: "#f3e8ff", color: "#6b21a8" }}>{q}</span>
+                          <span key={q} style={{ fontSize: 11, padding: "1px 8px", borderRadius: 10, background: "var(--accent-soft)", color: "var(--accent-ink)" }}>{q}</span>
                         ))}
                       </div>
                     )}

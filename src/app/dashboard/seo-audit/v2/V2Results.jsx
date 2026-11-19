@@ -1,13 +1,17 @@
 "use client";
-// The v2 results view: header with data sources and gaps, client summary, then
-// Action Plan / Pages / per-area findings tabs.
+// The v2 results as a full-width dashboard: header, headline numbers, searches you
+// almost win next to the scores, the top moves, the plan by area and impact vs
+// effort, then the Action Plan / Pages / per-area tabs and "About this audit".
 
 import { useState } from "react";
-import { Tabs, SectionTitle } from "../ui";
-import ClientSummary from "./ClientSummary";
+import s from "./audit.module.css";
+import { auditSans } from "./fonts";
+import { SectionTitle } from "../ui";
+import { KpiRow, Opportunities, ScoresCard, TopMoves, PlanBreakdown } from "./ClientSummary";
 import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
+import ReportDownload from "./ReportDownload";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
 import { flattenTasks } from "../../../../lib/seoAuditV2/tasks";
 
@@ -30,38 +34,46 @@ const STATUS_TEXT = {
   timeout: "timed out",
 };
 
-function DataSources({ sources, gaps }) {
-  const parts = SOURCES.filter(([k]) => sources?.[k]).map(([k, label]) => {
-    const s = sources[k];
-    const ok = s.status === "ok";
-    const detail = ok && k === "crawl" && s.pages ? ` (${s.pages} pages)` : "";
-    return (
-      <span key={k} style={{ color: ok ? "#5eead4" : "#999" }}>
-        {ok ? "✓" : "–"} {label}{detail}{!ok ? ` — ${STATUS_TEXT[s.status] || s.status}` : ""}
-      </span>
-    );
-  });
+function formatDate(iso) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+function AboutAudit({ sources, gaps }) {
+  const items = SOURCES.filter(([k]) => sources?.[k]);
+  if (!items.length && !gaps?.length) return null;
   return (
-    <div style={{ marginTop: 8 }}>
-      {parts.length > 0 && (
-        <p style={{ fontSize: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>
-          <span style={{ color: "#888" }}>Data:</span>
-          {parts}
-        </p>
+    <details className={s.about}>
+      <summary>
+        About this audit
+        {gaps?.length > 0 && <span className={s.gapHint}>, {gaps.length} data gap{gaps.length === 1 ? "" : "s"}</span>}
+      </summary>
+      {items.length > 0 && (
+        <ul className={s.sources}>
+          {items.map(([k, label]) => {
+            const src = sources[k];
+            const ok = src.status === "ok";
+            const detail = ok && k === "crawl" && src.pages ? `, ${src.pages} pages`
+              : src.site ? `: ${src.site}` : src.property ? `: ${src.property}` : "";
+            return (
+              <li key={k} className={ok ? s.ok : s.off}>
+                {label}{detail}{!ok ? ` (${STATUS_TEXT[src.status] || src.status})` : ""}
+              </li>
+            );
+          })}
+        </ul>
       )}
       {gaps?.length > 0 && (
-        <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#fbbf24", marginBottom: 4 }}>Data gaps</p>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {gaps.map((g) => <li key={g} style={{ fontSize: 12, color: "#fcd34d", lineHeight: 1.6 }}>{g}</li>)}
-          </ul>
-        </div>
+        <ul className={s.gaps}>
+          {gaps.map((g) => <li key={g}>{g}</li>)}
+        </ul>
       )}
-    </div>
+    </details>
   );
 }
 
-export default function V2Results({ result, domain, actions }) {
+export default function V2Results({ result, domain, actions, onBack }) {
   const [tab, setTab] = useState("plan");
   if (!result) return null;
   const tasks = result.action_plan || [];
@@ -69,6 +81,7 @@ export default function V2Results({ result, domain, actions }) {
   const pageTasks = flattenTasks(tasks).filter((t) => !t.group);
   const findings = result.findings || {};
   const pagesCrawled = result.data_sources?.crawl?.pages;
+  const site = result.domain || domain;
   // Older results have no passes_completed; treat every area as complete there.
   const incomplete = (area) => result.passes_completed?.[area] === false;
   const flagged = (area, count) => (incomplete(area) ? { count: "!", warn: true } : { count });
@@ -81,52 +94,81 @@ export default function V2Results({ result, domain, actions }) {
     { key: "conversion", label: "Conversion", ...flagged("conversion", findings.conversion?.length || 0) },
   ];
   const areaLabel = (key) => tabs.find((t) => t.key === key).label;
+  const meta = [
+    formatDate(result.audit_date),
+    pagesCrawled ? `${pagesCrawled} pages crawled` : null,
+    result.search?.range ? `Search Console ${result.search.range.startDate} to ${result.search.range.endDate}` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0, flex: "1 1 360px" }}>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>{result.domain || domain}</h2>
-          <p style={{ fontSize: 13, color: "#aaa" }}>
-            {result.audit_type === "quick" ? "Quick" : "Full"} audit
-            {pagesCrawled ? <> &middot; {pagesCrawled} pages crawled</> : null}
-            {result.audit_date ? <> &middot; {result.audit_date}</> : null}
-          </p>
-          {result.audit_options && (
-            <p style={{ fontSize: 12, color: "#5eead4", marginTop: 2 }}>Custom pages: {describeOptions(result.audit_options)}</p>
+    <article className={`${s.doc} ${auditSans.variable}`}>
+      <header className={s.top}>
+        <div style={{ minWidth: 0 }}>
+          {onBack ? (
+            <button type="button" className={s.back} onClick={onBack}>
+              <span aria-hidden>←</span> All audits
+            </button>
+          ) : (
+            <p className={s.crumb}>SEO audits / {site}</p>
           )}
-          <DataSources sources={result.data_sources} gaps={result.data_gaps} />
+          <h2 className={s.domain}>
+            {site}
+            <span className={s.pill}>{result.audit_type === "quick" ? "Quick audit" : "Full audit"}</span>
+          </h2>
+          <p className={s.meta}>{meta}</p>
+          {result.audit_options && <p className={s.custom}>Custom pages: {describeOptions(result.audit_options)}</p>}
         </div>
-        {actions}
+        <div className={s.actions}>
+          <ReportDownload result={result} />
+          {actions}
+        </div>
+      </header>
+
+      <KpiRow result={result} />
+      <div className={s.grid}>
+        <Opportunities search={result.search} gscStatus={result.data_sources?.search_console?.status} />
+        <ScoresCard scores={result.scores} summary={result.client_summary} />
+      </div>
+      <TopMoves moves={result.top_moves} />
+      <PlanBreakdown plan={tasks} />
+
+      <div className={s.tabs} role="tablist" aria-label="Audit sections">
+        {tabs.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={s.tab} onClick={() => setTab(t.key)}>
+            {t.label}
+            <span className={t.warn ? s.tabWarn : s.tabCount}>{t.count}</span>
+          </button>
+        ))}
       </div>
 
-      <ClientSummary result={result} />
-
-      <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
-        <Tabs tabs={tabs} active={tab} onSelect={setTab} />
-        {tab === "plan" && <ActionPlan tasks={tasks} domain={result.domain || domain} auditDate={result.audit_date} />}
-        {tab === "pages" && (
-          <>
-            {incomplete("content") && <IncompleteNotice area="Content" />}
-            {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={pageTasks} domain={result.domain || domain} />}
-            {findings.content?.length > 0 && (
-              <>
-                <SectionTitle>Content findings</SectionTitle>
-                <PassFindings findings={findings.content} />
-              </>
-            )}
-          </>
-        )}
-        {tab === "technical" && <PassFindings findings={findings.technical} incomplete={incomplete("technical") ? areaLabel("technical") : undefined} />}
-        {tab === "local" && <PassFindings findings={findings.local} incomplete={incomplete("local") ? areaLabel("local") : undefined} />}
-        {tab === "conversion" && (
-          <PassFindings
-            findings={findings.conversion}
-            incomplete={incomplete("conversion") ? areaLabel("conversion") : undefined}
-            intro={result.data_sources?.ga4 && result.data_sources.ga4.status !== "ok" ? "Conversion analysis needs Google Analytics, which wasn't available for this site." : undefined}
-          />
-        )}
+      <div className={`${s.card} ${s.panel}`}>
+        <div role="tabpanel">
+          {tab === "plan" && <ActionPlan tasks={tasks} domain={site} auditDate={result.audit_date} />}
+          {tab === "pages" && (
+            <>
+              {incomplete("content") && <IncompleteNotice area="Content" />}
+              {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={pageTasks} domain={site} />}
+              {findings.content?.length > 0 && (
+                <>
+                  <SectionTitle>Content findings</SectionTitle>
+                  <PassFindings findings={findings.content} />
+                </>
+              )}
+            </>
+          )}
+          {tab === "technical" && <PassFindings findings={findings.technical} incomplete={incomplete("technical") ? areaLabel("technical") : undefined} />}
+          {tab === "local" && <PassFindings findings={findings.local} incomplete={incomplete("local") ? areaLabel("local") : undefined} />}
+          {tab === "conversion" && (
+            <PassFindings
+              findings={findings.conversion}
+              incomplete={incomplete("conversion") ? areaLabel("conversion") : undefined}
+              intro={result.data_sources?.ga4 && result.data_sources.ga4.status !== "ok" ? "Conversion analysis needs Google Analytics, which wasn't available for this site." : undefined}
+            />
+          )}
+        </div>
       </div>
-    </div>
+
+      <AboutAudit sources={result.data_sources} gaps={result.data_gaps} />
+    </article>
   );
 }

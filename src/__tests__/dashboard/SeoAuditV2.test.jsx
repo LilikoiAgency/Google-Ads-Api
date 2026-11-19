@@ -19,7 +19,7 @@ import PageCards from '@/app/dashboard/seo-audit/v2/PageCards.jsx';
 import PassFindings from '@/app/dashboard/seo-audit/v2/PassFindings.jsx';
 import { useAuditJob, friendlyError } from '@/app/dashboard/seo-audit/v2/useAuditJob.js';
 import ResultsView, { isV2Audit } from '@/app/dashboard/seo-audit/ResultsView.jsx';
-import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from '@/app/dashboard/seo-audit/v2/AdvancedOptions.jsx';
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions, autoGscSite } from '@/app/dashboard/seo-audit/v2/AdvancedOptions.jsx';
 
 const TASKS = [
   {
@@ -378,7 +378,8 @@ describe('v2 results pieces', () => {
     expect(screen.getByText('Your site is close to page one for turf pricing searches.')).toBeInTheDocument();
     expect(screen.getByText('Answer pricing questions on the turf page')).toBeInTheDocument();
     expect(screen.getByText('Good crawl health')).toBeInTheDocument();
-    expect(screen.getByText('13')).toBeInTheDocument(); // combined 6+4+3
+    expect(screen.getByRole('img', { name: 'Search visibility: 6 out of 10' })).toBeInTheDocument();
+    expect(screen.queryByText('13')).not.toBeInTheDocument(); // no combined score
   });
 
   it('PageCards lists each page with its fixes and target queries', () => {
@@ -463,13 +464,13 @@ describe('ResultsView picks the view by version', () => {
 
   it('renders a v2 audit with the action plan, tabs and data gaps', () => {
     render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
-    expect(screen.getByRole('button', { name: /^action plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^action plan/i })).toBeInTheDocument();
     for (const tab of ['Pages', 'Technical', 'Local & AI search', 'Conversion']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${tab}`) })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: new RegExp(`^${tab}`) })).toBeInTheDocument();
     }
     expect(screen.getByText(V2_RESULT.data_gaps[0])).toBeInTheDocument();
     expect(screen.getByText('Fix canonical pointing to staging')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^technical/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /^technical/i }));
     expect(screen.getByText('Staging canonical')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'SEO Analysis' })).not.toBeInTheDocument();
   });
@@ -480,14 +481,14 @@ describe('ResultsView picks the view by version', () => {
       passes_completed: { technical: true, content: false, local: false, conversion: true },
     };
     render(<ResultsView audit={result} domain="acme.com" />);
-    expect(screen.getByRole('button', { name: /^local & ai search\s*!/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^technical\s*1$/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^local & ai search/i }));
+    expect(screen.getByRole('tab', { name: /^local & ai search\s*!/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^technical\s*1$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /^local & ai search/i }));
     expect(screen.getByText("Local & AI search analysis didn't complete — rerun to include it")).toBeInTheDocument();
     expect(screen.queryByText(/no findings/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^pages/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /^pages/i }));
     expect(screen.getByText("Content analysis didn't complete — rerun to include it")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^conversion/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /^conversion/i }));
     expect(screen.getByText(/no findings/i)).toBeInTheDocument();
   });
 
@@ -502,9 +503,10 @@ describe('ResultsView picks the view by version', () => {
       ...fs.readdirSync(path.join(dir, 'v2')).filter((f) => /\.jsx?$/.test(f)).map((f) => path.join(dir, 'v2', f)),
       ...['page.js', 'ui.jsx', 'ResultsView.jsx', 'V1Results.jsx'].map((f) => path.join(dir, f)),
     ];
-    // Explicit exceptions: the "Local & AI search" area label, and a v1 section
+    // Explicit exceptions: the "Local & AI search" area label, the "AI search
+    // readiness" score name (both name the search channel), and a v1 section
     // title kept verbatim so saved v1 audits render as before.
-    const ALLOWED = ['Local & AI search', 'Content for AI Synthesis'];
+    const ALLOWED = ['Local & AI search', 'AI search readiness', 'Content for AI Synthesis'];
     const BANNED = /\bAI\b|claude|anthropic|openai|\bLLM\b|\bGPT\b|gemini|chatbot|powered by|machine learning|language model/i;
     expect(files.length).toBeGreaterThan(8);
     const hits = [];
@@ -529,7 +531,7 @@ describe('AdvancedOptions', () => {
 
   it('fromAuditOptions turns saved URLs back into paths', () => {
     expect(fromAuditOptions({ pages: ['https://acme.com/pet-turf'], onlyListed: true, skip: ['/blog/*'], pageCount: null }))
-      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '' });
+      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '', gscSite: '', ga4Property: null });
     expect(fromAuditOptions(null)).toEqual(EMPTY_ADVANCED);
   });
 
@@ -557,5 +559,81 @@ describe('AdvancedOptions', () => {
     fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
     expect(screen.queryByLabelText('Skip pages matching')).toBeNull();
     expect(screen.queryByLabelText('Number of pages')).toBeNull();
+  });
+});
+
+describe('v2 dashboard overview', () => {
+  const SEARCH = {
+    search: {
+      range: { startDate: '2026-08-17', endDate: '2026-11-14' },
+      clicks: 4661, impressions: 312344, avg_position: 13.8, avg_position_prev: 12.8,
+      clicks_change_pct: -38, impressions_change_pct: -46, branded_click_share: 0.88, nonbranded_clicks: 365,
+      opportunities: [{ query: 'turf installation las vegas', clicks: 5, impressions: 4081, position: 9.8 }],
+    },
+    index: { checked: 20, indexed: 16 },
+  };
+
+  it('shows the headline numbers, searches you almost win and the plan breakdown', () => {
+    render(<ResultsView audit={{ ...V2_RESULT, ...SEARCH }} domain="acme.com" />);
+    expect(screen.getByText('4,661')).toBeInTheDocument();
+    expect(screen.getByText('▼ 38% vs prior 90 days')).toBeInTheDocument();
+    expect(screen.getByText('312K')).toBeInTheDocument();
+    expect(screen.getByText('turf installation las vegas')).toBeInTheDocument();
+    expect(screen.getByText('4 checked pages not indexed')).toBeInTheDocument();
+    expect(screen.getByText('Action plan by area')).toBeInTheDocument();
+    expect(screen.getByText('Quick wins: high impact, low effort')).toBeInTheDocument();
+  });
+
+  it('an older audit without search data still renders, with a plain note instead of the table', () => {
+    render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
+    expect(screen.queryByText('Search clicks · 90 days')).not.toBeInTheDocument();
+    expect(screen.getByText('This audit was saved before search numbers were added here. Re-run it to see them.')).toBeInTheDocument();
+    expect(screen.getByText('Action plan')).toBeInTheDocument();
+  });
+});
+
+describe('Advanced: data source pickers', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('autoGscSite matches the domain the same way the server does', () => {
+    const sites = ['https://www.other.com/', 'sc-domain:sempersolaris.com', 'https://sempersolaris.com/'];
+    expect(autoGscSite('https://www.SemperSolaris.com/about', sites)).toBe('sc-domain:sempersolaris.com');
+    expect(autoGscSite('nomatch.com', sites)).toBeNull();
+  });
+
+  it('toRequestOptions carries the picked properties', () => {
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, gscSite: 'sc-domain:a.com', ga4Property: { id: 'properties/1', name: 'A', account: 'X' } }))
+      .toEqual({ pages: [], skip: [], onlyListed: false, gscSite: 'sc-domain:a.com', ga4Property: { id: 'properties/1', name: 'A', account: 'X' } });
+  });
+
+  it('loads both lists when opened, shows what Automatic picks, and reports a GA4 choice', async () => {
+    global.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('gsc-sites')
+        ? { connected: true, sites: [{ url: 'sc-domain:sempersolaris.com' }, { url: 'https://www.bigbullyturf.com/' }] }
+        : { properties: [{ id: 'properties/42', name: 'Semper Solaris', account: 'Semper' }] }),
+    }));
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="quick" domain="sempersolaris.com" />);
+    expect(global.fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    expect(await screen.findByRole('option', { name: 'Automatic: sc-domain:sempersolaris.com' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Google Analytics property'), { target: { value: 'properties/42' } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_ADVANCED, ga4Property: { id: 'properties/42', name: 'Semper Solaris', account: 'Semper' } });
+  });
+});
+
+describe('results back button', () => {
+  it('v2 results show "All audits" and call onBack', () => {
+    const onBack = vi.fn();
+    render(<ResultsView audit={V2_RESULT} domain="acme.com" onBack={onBack} />);
+    fireEvent.click(screen.getByRole('button', { name: /All audits/ }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+  it('v1 results get the same button', () => {
+    const onBack = vi.fn();
+    render(<ResultsView audit={V1_AUDIT} domain="old.com" onBack={onBack} />);
+    fireEvent.click(screen.getByRole('button', { name: /All audits/ }));
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });

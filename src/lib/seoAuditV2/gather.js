@@ -38,9 +38,9 @@ async function settle(fn) {
 }
 
 // findGscSite can throw on a sites.list failure; turn that into a status.
-async function safeFindGscSite(domain) {
+async function safeFindGscSite(domain, site) {
   try {
-    return await withTimeout(findGscSite(domain));
+    return await withTimeout(findGscSite(domain, { site }));
   } catch (err) {
     if (err === TIMEOUT) return { status: 'timeout', site: null, auth: null };
     return { status: 'error', site: null, auth: null, error: errText(err) };
@@ -55,11 +55,12 @@ const pageQueryRows = (auth, site, range) =>
 export const SEED_TIMEOUT_MS = 30000;
 
 // Top Search Console pages (query-free URLs) to seed the crawl, or [] (also
-// when Search Console takes longer than SEED_TIMEOUT_MS).
-export async function seedPages(domain, profile = 'quick', count) {
+// when Search Console takes longer than SEED_TIMEOUT_MS). gscSite: a property
+// picked by hand instead of the one matched to the domain.
+export async function seedPages(domain, profile = 'quick', count, { gscSite } = {}) {
   try {
     return await withTimeout((async () => {
-      const { status, site, auth } = await findGscSite(domain);
+      const { status, site, auth } = await findGscSite(domain, { site: gscSite });
       if (status !== 'ok') return [];
       const rows = await pageQueryRows(auth, site, auditRanges(today()).current);
       const n = count || (profile === 'full' ? 25 : 5);
@@ -90,9 +91,12 @@ async function fetchGsc({ site, auth, domain, ranges }) {
   };
 }
 
-async function fetchGa4(domain, ranges) {
+// chosen: { id, name, account } picked by hand; otherwise matched by web stream URL.
+async function fetchGa4(domain, ranges, chosen) {
   if (!process.env.GA4_SA_KEY) return { status: 'not_connected' };
-  const match = await findGa4Property(domain);
+  const match = chosen?.id
+    ? { propertyId: chosen.id, propertyName: chosen.name || chosen.id, account: chosen.account || '' }
+    : await findGa4Property(domain);
   if (!match) return { status: 'no_property' };
   const report = await fetchTrafficReport({
     property: { id: match.propertyId, name: match.propertyName, account: match.account },
@@ -102,12 +106,12 @@ async function fetchGa4(domain, ranges) {
     granularity: 'month',
   });
   if (!report.totalsByView.all.sessions) return { status: 'no_data' };
-  return { status: 'ok', report, ga4: summarizeGa4(report) };
+  return { status: 'ok', report, ga4: summarizeGa4(report), property: match.propertyName };
 }
 
 const crawlUrls = (crawl) => (crawl?.pages_crawled || []).map((p) => p.final_url || p.url).filter(Boolean);
 
-const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, pagespeed: null });
+const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, ga4Property: null, pagespeed: null });
 
 const blocked = (s) => ({ status: s.status, error: s.error });
 
@@ -120,12 +124,13 @@ async function runPageSpeed(urls) {
 
 // priorityUrls (listed by the user) are inspected and speed-tested first; skip
 // patterns drop Search Console pages; onlyListed limits targets to the crawl.
-export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [] } = {}) {
+// gscSite / ga4Property: data sources picked by hand instead of matched by domain.
+export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [], gscSite, ga4Property } = {}) {
   try {
     const prof = profileOf(profile);
     const ranges = auditRanges(today());
 
-    const siteP = safeFindGscSite(domain);
+    const siteP = safeFindGscSite(domain, gscSite);
     const gscP = siteP.then((s) => (s.status === 'ok' ? settle(() => fetchGsc({ ...s, domain, ranges })) : blocked(s)));
     const sitemapsP = siteP.then((s) => (s.status === 'ok' ? settle(() => listGoogleSitemaps(s.auth, s.site)) : blocked(s)));
     const targetsP = gscP.then((g) => {
@@ -136,7 +141,7 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
     const inspectionP = Promise.all([siteP, targetsP]).then(([s, urls]) => (s.status === 'ok'
       ? settle(() => inspectUrls(s.auth, s.site, urls.slice(0, prof.inspect), { concurrency: 5 }))
       : blocked(s)));
-    const ga4P = settle(() => fetchGa4(domain, ranges));
+    const ga4P = settle(() => fetchGa4(domain, ranges, ga4Property));
     const pagespeedP = targetsP.then((urls) => runPageSpeed(urls.slice(0, prof.pagespeed)));
 
     const [gsc, sitemaps, inspection, ga4, pagespeed, targets] = await Promise.all([gscP, sitemapsP, inspectionP, ga4P, pagespeedP, targetsP]);
@@ -158,6 +163,7 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
 
     if (ga4.status === 'ok') {
       data.ga4 = ga4.ga4;
+      data.ga4Property = ga4.property || null;
       try {
         data.ga4Pages = ga4PerPage(ga4.report, targets);
       } catch (err) {

@@ -122,6 +122,13 @@ export default function SEOAuditPage() {
     setAdvanced(EMPTY_ADVANCED);
   }
 
+  // Results -> the audit list (history), with a fresh form.
+  function handleBackToAudits() {
+    handleReset();
+    refreshHistory();
+    window.scrollTo({ top: 0 });
+  }
+
   function handleBackFromProgress() {
     setStep(STEPS.CONFIGURE);
     setJobId(null);
@@ -181,13 +188,13 @@ export default function SEOAuditPage() {
       <button
         onClick={() => handleRunAudit(true)}
         disabled={starting}
-        style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(13,148,136,0.15)", border: "1px solid rgba(13,148,136,0.3)", color: "#5eead4", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1 }}
+        style={{ padding: "8px 14px", borderRadius: 8, background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1, fontFamily: "inherit" }}
       >
         {starting ? "Starting..." : "Re-run Audit"}
       </button>
       <button
         onClick={handleReset}
-        style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#ccc", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
       >
         New Audit
       </button>
@@ -202,7 +209,7 @@ export default function SEOAuditPage() {
         subtitle="Site audit with a prioritized action plan"
       />
 
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className={step === STEPS.RESULTS ? "mx-auto w-full max-w-[1600px] px-6 py-8" : "mx-auto max-w-5xl px-6 py-10"}>
         {/* ── Step 0: Configure ──────────────────────────────────────────── */}
         {step === STEPS.CONFIGURE && (
           <div style={{ maxWidth: 640, margin: "0 auto" }}>
@@ -342,7 +349,7 @@ export default function SEOAuditPage() {
                 })}
               </div>
 
-              <AdvancedOptions value={advanced} onChange={setAdvanced} auditType={auditType} />
+              <AdvancedOptions value={advanced} onChange={setAdvanced} auditType={auditType} domain={domain} />
 
               {/* Submit button */}
               <button
@@ -511,7 +518,7 @@ export default function SEOAuditPage() {
 
         {/* ── Step 2: Results (v2 or v1 view, by version) ────────────────── */}
         {step === STEPS.RESULTS && auditResult && (
-          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} />
+          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} onBack={handleBackToAudits} />
         )}
       </div>
     </div>

@@ -4,16 +4,17 @@
 
 import { useMemo, useState } from "react";
 import { tasksToCsv } from "@/lib/seoAuditV2/tasks";
+import p from "./plan.module.css";
 
 export const CATEGORY_META = {
-  technical:  { label: "Technical",  bg: "#e8f0fe", color: "#0c3473" },
-  content:    { label: "Content",    bg: "#f3e8ff", color: "#6b21a8" },
-  local:      { label: "Local",      bg: "#e6f9f0", color: "#1a7a4a" },
-  aeo:        { label: "Answers",    bg: "#fef3cd", color: "#7d5a00" },
-  conversion: { label: "Conversion", bg: "#fde8e8", color: "#c0392b" },
+  technical:  { label: "Technical",  bg: "#e6edf3", color: "#60a5fa" },
+  content:    { label: "Content",    bg: "#ece8f4", color: "#a78bfa" },
+  local:      { label: "Local",      bg: "#dcebe7", color: "#34d399" },
+  aeo:        { label: "Answers",    bg: "#f5ecd7", color: "#fbbf24" },
+  conversion: { label: "Conversion", bg: "#f6e3df", color: "#fb7185" },
 };
 
-const CONFIDENCE_COLOR = { high: "#1a7a4a", medium: "#b7791f", low: "#888" };
+const CONFIDENCE_COLOR = { high: "var(--up)", medium: "var(--amber)", low: "var(--muted)" };
 
 // "https://acme.com/services/turf?x=1" -> "/services/turf"; "site-wide" stays as is.
 export function pagePath(page) {
@@ -57,10 +58,25 @@ export function tasksToChecklist(tasks) {
 export const TOP_COUNT = 10;
 const taskPages = (t) => (t.group ? childrenOf(t).map((c) => c.page) : [t.page, ...childrenOf(t).map((c) => c.page)]);
 
-export const isQuickWin = (t) => t.impact >= 4 && t.effort <= 2;
+// One quick-win rule and effort wording for the app and the downloaded report.
+export { isQuickWin, effortLabel } from "@/lib/seoAuditV2/overview";
+import { isQuickWin, effortLabel } from "@/lib/seoAuditV2/overview";
+
+function ImpactMeter({ value }) {
+  return (
+    <span className={p.meter} role="img" aria-label={`Impact ${value} of 5`} title={`Impact ${value} of 5`}>
+      {[1, 2, 3, 4, 5].map((i) => <i key={i} className={i <= value ? p.meterOn : undefined} />)}
+    </span>
+  );
+}
+
+function Area({ category }) {
+  const m = CATEGORY_META[category] || { label: category, color: "var(--ink-2)" };
+  return <span className={p.area}><i style={{ background: m.color }} aria-hidden />{m.label}</span>;
+}
 
 export function CategoryChip({ category }) {
-  const m = CATEGORY_META[category] || { label: category, bg: "#f0f0f0", color: "#555" };
+  const m = CATEGORY_META[category] || { label: category, bg: "var(--line)", color: "var(--ink-2)" };
   return (
     <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: m.bg, color: m.color, whiteSpace: "nowrap" }}>
       {m.label}
@@ -68,24 +84,7 @@ export function CategoryChip({ category }) {
   );
 }
 
-// Impact: higher is better. Effort: lower is better.
-function ScaleChip({ value, kind }) {
-  const good = kind === "impact" ? value >= 4 : value <= 2;
-  const bad = kind === "impact" ? value <= 2 : value >= 4;
-  const s = good ? { bg: "#e6f9f0", color: "#1a7a4a" } : bad ? { bg: "#fef3cd", color: "#7d5a00" } : { bg: "#e8f0fe", color: "#0c3473" };
-  return (
-    <span
-      title={`${kind === "impact" ? "Impact" : "Effort"} ${value} of 5`}
-      style={{ display: "inline-block", minWidth: 34, padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, textAlign: "center" }}
-    >
-      {value}/5
-    </span>
-  );
-}
-
-const TH = { textAlign: "left", padding: "10px 12px", fontWeight: 700, color: "#555", borderBottom: "2px solid #eee", fontSize: 12, whiteSpace: "nowrap" };
-const TD = { padding: "11px 12px", verticalAlign: "top" };
-const SELECT = { padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, color: "#333", background: "#fff", maxWidth: 260 };
+const SELECT = { padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, color: "var(--ink)", background: "var(--panel)", maxWidth: 260, fontFamily: "inherit" };
 const BUTTON = { padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
 
 const COPY_FAILED = "Couldn't copy. Your browser blocked the clipboard.";
@@ -118,24 +117,24 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
     <div style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "4px 4px 8px" }}>
       <div style={{ flex: "1 1 320px", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#1a7a4a" }}>Exact change</p>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)" }}>Exact change</p>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {copyNotice && !copyNotice.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{copyNotice.text}</span>}
+            {copyNotice && !copyNotice.ok && <span role="status" style={{ fontSize: 11, color: "var(--down)" }}>{copyNotice.text}</span>}
             <button
               onClick={(e) => { e.stopPropagation(); onCopy(); }}
-              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #cde7d8", background: "#fff", color: "#1a7a4a" }}
+              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)" }}
             >
               {copyNotice?.ok ? "Copied" : "Copy change"}
             </button>
           </span>
         </div>
-        <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#f0fdf4", border: "1px solid #cde7d8", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
+        <p style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.6, background: "var(--soft)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
           {task.change}
         </p>
         {task.why && (
           <>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginTop: 12, marginBottom: 4 }}>Why it matters</p>
-            <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>{task.why}</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginTop: 12, marginBottom: 4 }}>Why it matters</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>{task.why}</p>
           </>
         )}
         {href && (
@@ -144,21 +143,26 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#0f3460", wordBreak: "break-all" }}
+            style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "var(--ink)", wordBreak: "break-all" }}
           >
             Open {href} &#8599;
           </a>
         )}
       </div>
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 6 }}>Evidence</p>
+        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>Evidence</p>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           {(task.evidence || []).map((e, i) => (
-            <li key={i} style={{ fontSize: 12, color: "#444", lineHeight: 1.6, marginBottom: 2, wordBreak: "break-word" }}>{e}</li>
+            <li key={i} style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 2, wordBreak: "break-word" }}>{e}</li>
           ))}
         </ul>
+        {task.confidence && (
+          <p style={{ fontSize: 12, color: CONFIDENCE_COLOR[task.confidence] || "var(--muted)", marginTop: 8, fontWeight: 600 }}>
+            {task.confidence[0].toUpperCase() + task.confidence.slice(1)} confidence, impact {task.impact} of 5, effort {task.effort} of 5
+          </p>
+        )}
         {task.source_ids?.length > 0 && !task.group && (
-          <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>From findings {task.source_ids.join(", ")}</p>
+          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>From findings {task.source_ids.join(", ")}</p>
         )}
       </div>
     </div>
@@ -169,8 +173,8 @@ function SubTasks({ task, domain, notice, onCopy }) {
   const children = childrenOf(task);
   if (!children.length) return null;
   return (
-    <div style={{ marginTop: 6, borderTop: "1px solid #eee", paddingTop: 10 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 8 }}>
+    <div style={{ marginTop: 6, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>
         {task.group ? `Each page (${children.length})` : "Do together with this task"}
       </p>
       <ol style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "grid", gap: 10 }}>
@@ -178,31 +182,31 @@ function SubTasks({ task, domain, notice, onCopy }) {
           const href = pageHref(c.page, domain);
           const n = notice?.key === `change-${c.id}` ? notice : null;
           return (
-            <li key={c.id} style={{ border: "1px solid #eef0f4", borderRadius: 8, padding: "10px 12px", background: "#fff" }}>
+            <li key={c.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", background: "var(--panel)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a2e" }}>
-                  <span style={{ color: "#0f3460", marginRight: 6 }}>{c.id}</span>{c.title}
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+                  <span style={{ color: "var(--ink)", marginRight: 6 }}>{c.id}</span>{c.title}
                 </p>
                 <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {n && !n.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{n.text}</span>}
+                  {n && !n.ok && <span role="status" style={{ fontSize: 11, color: "var(--down)" }}>{n.text}</span>}
                   <button
                     onClick={(e) => { e.stopPropagation(); onCopy(c); }}
-                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #cde7d8", background: "#fff", color: "#1a7a4a" }}
+                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)" }}
                   >
                     {n?.ok ? "Copied" : "Copy change"}
                   </button>
                 </span>
               </div>
               {href ? (
-                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "#0f3460", wordBreak: "break-all" }}>
+                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "var(--ink)", wordBreak: "break-all" }}>
                   {pagePath(c.page)} &#8599;
                 </a>
-              ) : <span style={{ fontSize: 12, color: "#555" }}>{pagePath(c.page)}</span>}
-              <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#f0fdf4", border: "1px solid #cde7d8", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
+              ) : <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{pagePath(c.page)}</span>}
+              <p style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.6, background: "var(--soft)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
                 {c.change}
               </p>
               {c.evidence?.length > 0 && (
-                <p style={{ fontSize: 12, color: "#666", marginTop: 6, lineHeight: 1.5 }}>Evidence: {c.evidence.join(" · ")}</p>
+                <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>Evidence: {c.evidence.join(" · ")}</p>
               )}
             </li>
           );
@@ -264,7 +268,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
   }
 
   if (!tasks.length) {
-    return <p style={{ color: "#999", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>;
+    return <p style={{ color: "var(--muted)", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>;
   }
 
   return (
@@ -272,7 +276,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       {/* Filters + export */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
             Category
             <select value={category} onChange={(e) => setCategory(e.target.value)} style={SELECT}>
               <option value="">All categories</option>
@@ -281,7 +285,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
               ))}
             </select>
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
             Page
             <select value={page} onChange={(e) => setPage(e.target.value)} style={SELECT}>
               <option value="">All pages</option>
@@ -289,7 +293,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
             </select>
           </label>
           {quickCount > 0 && (
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#444", paddingBottom: 7, cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-2)", paddingBottom: 7, cursor: "pointer" }}>
               <input type="checkbox" checked={quickOnly} onChange={(e) => setQuickOnly(e.target.checked)} />
               Quick wins only ({quickCount})
             </label>
@@ -297,87 +301,75 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
           {filtered && (
             <button
               onClick={() => { setCategory(""); setPage(""); setQuickOnly(false); }}
-              style={{ ...BUTTON, padding: "7px 10px", border: "none", background: "transparent", color: "#0f3460", textDecoration: "underline" }}
+              style={{ ...BUTTON, padding: "7px 10px", border: "none", background: "transparent", color: "var(--ink)", textDecoration: "underline" }}
             >
               Clear filters
             </button>
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "#1a7a4a" : "#c0392b" }}>{notice.text}</span>}
-          <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid #0f3460", background: "#fff", color: "#0f3460" }}>
+          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "var(--ink)" : "var(--down)" }}>{notice.text}</span>}
+          <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)" }}>
             Copy as checklist
           </button>
-          <button onClick={handleCsv} disabled={!visible.length} style={{ ...BUTTON, border: "none", background: "#0f3460", color: "#fff" }}>
+          <button onClick={handleCsv} disabled={!visible.length} style={{ ...BUTTON, border: "none", background: "var(--btn-bg)", color: "var(--btn-ink)" }}>
             Download CSV
           </button>
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
+      <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
         {filtered
           ? `Showing ${visible.length} of ${tasks.length} tasks`
           : collapsed ? `Do these first: the top ${TOP_COUNT} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
-        {" · "}open a task for the evidence and the exact change
+        {". "}Open a task for the evidence and the exact change.
       </p>
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "#f8f9fb" }}>
-              <th style={{ ...TH, width: 44 }}>#</th>
-              <th style={TH}>Task</th>
-              <th style={TH}>Page</th>
-              <th style={TH}>Category</th>
-              <th style={{ ...TH, textAlign: "center" }}>Impact</th>
-              <th style={{ ...TH, textAlign: "center" }}>Effort</th>
-              <th style={TH}>Confidence</th>
-              <th style={{ ...TH, width: 24 }}><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Details</span></th>
+            <tr>
+              <th className={p.th} style={{ width: 52 }}>#</th>
+              <th className={p.th}>Task</th>
+              <th className={p.th}>Area</th>
+              <th className={p.th}>Impact</th>
+              <th className={p.th}>Effort</th>
+              <th className={p.th} style={{ width: 36 }}><span className={p.srOnly}>Details</span></th>
             </tr>
           </thead>
           <tbody>
             {shown.map((t) => {
               const isOpen = open.has(t.id);
               return [
-                <tr
-                  key={t.id}
-                  onClick={() => toggle(t.id)}
-                  style={{ borderBottom: isOpen ? "none" : "1px solid #f0f0f0", cursor: "pointer", background: isOpen ? "#fafbff" : "transparent" }}
-                >
-                  <td style={{ ...TD, fontWeight: 700, color: "#0f3460" }}>{t.id}</td>
-                  <td style={{ ...TD, fontWeight: 600, color: "#1a1a2e", lineHeight: 1.45, minWidth: 220 }}>
-                    {t.title}
-                    {t.group && (
-                      <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#0c3473", background: "#e8f0fe", padding: "1px 6px", borderRadius: 8, whiteSpace: "nowrap" }}>{t.items.length} pages</span>
-                    )}
-                    {t.follow_ups?.length > 0 && (
-                      <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#555", background: "#f0f0f0", padding: "1px 6px", borderRadius: 8, whiteSpace: "nowrap" }}>+{t.follow_ups.length} related</span>
-                    )}
-                    {isQuickWin(t) && (
-                      <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#1a7a4a", background: "#e6f9f0", padding: "1px 6px", borderRadius: 8, whiteSpace: "nowrap" }}>Quick win</span>
-                    )}
+                <tr key={t.id} onClick={() => toggle(t.id)} className={isOpen ? `${p.row} ${p.rowOpen}` : p.row}>
+                  <td className={`${p.td} ${p.rank}`}>{t.id}</td>
+                  <td className={`${p.td} ${p.taskCell}`}>
+                    <span className={p.title}>{t.title}</span>
+                    <span className={p.sub} title={t.group ? t.pages?.join(", ") : t.page}>
+                      <span className={p.path}>{t.group ? `${t.items.length} pages` : pagePath(t.page)}</span>
+                      {t.follow_ups?.length > 0 && <span className={p.tag}>+{t.follow_ups.length} related</span>}
+                      {isQuickWin(t) && <span className={`${p.tag} ${p.tagWin}`}>Quick win</span>}
+                    </span>
                   </td>
-                  <td style={{ ...TD, color: "#555", maxWidth: 200, wordBreak: "break-all" }} title={t.group ? t.pages?.join(", ") : t.page}>{t.group ? `${t.items.length} pages` : pagePath(t.page)}</td>
-                  <td style={TD}><CategoryChip category={t.category} /></td>
-                  <td style={{ ...TD, textAlign: "center" }}><ScaleChip value={t.impact} kind="impact" /></td>
-                  <td style={{ ...TD, textAlign: "center" }}><ScaleChip value={t.effort} kind="effort" /></td>
-                  <td style={{ ...TD, color: CONFIDENCE_COLOR[t.confidence] || "#888", fontWeight: 600, textTransform: "capitalize" }}>{t.confidence}</td>
-                  <td style={{ ...TD, textAlign: "center", padding: "6px 8px" }}>
+                  <td className={p.td}><Area category={t.category} /></td>
+                  <td className={p.td}><ImpactMeter value={t.impact} /></td>
+                  <td className={`${p.td} ${p.effort}`}>{effortLabel(t.effort)}</td>
+                  <td className={p.td}>
                     <button
                       type="button"
                       aria-expanded={isOpen}
                       aria-label={`Show details for ${t.id}`}
                       onClick={(e) => { e.stopPropagation(); toggle(t.id); }}
-                      style={{ border: "none", background: "transparent", color: "#888", cursor: "pointer", padding: "4px 6px", borderRadius: 6, fontSize: 13 }}
+                      className={p.chev}
                     >
                       <span aria-hidden style={{ display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>&#9656;</span>
                     </button>
                   </td>
                 </tr>,
                 isOpen && (
-                  <tr key={`${t.id}-detail`} style={{ borderBottom: "1px solid #f0f0f0", background: "#fafbff" }}>
+                  <tr key={`${t.id}-detail`} className={p.detailRow}>
                     <td />
-                    <td colSpan={7} style={{ padding: "0 12px 14px" }}>
+                    <td colSpan={5} style={{ padding: "0 12px 18px" }}>
                       <ExpandedTask task={t} domain={domain} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
                       <SubTasks task={t} domain={domain} notice={notice} onCopy={handleCopyChange} />
                     </td>
@@ -391,12 +383,12 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       {collapsed && (
         <button
           onClick={() => setShowAll(true)}
-          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed #c9d3e6", background: "#f8f9fb", color: "#0f3460" }}
+          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed var(--line)", background: "var(--soft)", color: "var(--ink)" }}
         >
           Show {visible.length - TOP_COUNT} more task{visible.length - TOP_COUNT === 1 ? "" : "s"}
         </button>
       )}
-      {!visible.length && <p style={{ color: "#999", fontSize: 13, marginTop: 12 }}>No tasks match these filters.</p>}
+      {!visible.length && <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 12 }}>No tasks match these filters.</p>}
     </div>
   );
 }

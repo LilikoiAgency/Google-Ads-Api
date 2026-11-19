@@ -13,6 +13,7 @@ import { runStructured } from './llm';
 import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
 import { pageLimit, filterSkipped } from './options';
+import { buildSearchSummary } from './overview';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -52,7 +53,7 @@ async function crawlWith(job) {
   const listed = o.pages || [];
   const fromGsc = o.onlyListed
     ? []
-    : filterSkipped(await seedPages(job.domain, job.auditType, Math.min(25, Math.max(5, Math.ceil(limit / 2)))), o.skip)
+    : filterSkipped(await seedPages(job.domain, job.auditType, Math.min(25, Math.max(5, Math.ceil(limit / 2))), { gscSite: o.gscSite }), o.skip)
       .filter((u) => !listed.includes(u));
   return crawlSite(job.domain, job.auditType, o.onlyListed ? listed : null, {
     seedUrls: o.onlyListed ? [] : [...listed, ...fromGsc], deadlineMs: CRAWL_DEADLINE_MS, pageLimit: limit, skip: o.skip || [],
@@ -79,7 +80,11 @@ async function runGather(job) {
   const crawl = job.data?.crawl;
   const o = job.options;
   const { data, gaps } = await gatherAll(o
-    ? { domain: job.domain, crawl, profile: job.auditType, priorityUrls: o.pages || [], onlyListed: !!o.onlyListed, skip: o.skip || [] }
+    ? {
+      domain: job.domain, crawl, profile: job.auditType, priorityUrls: o.pages || [], onlyListed: !!o.onlyListed, skip: o.skip || [],
+      ...(o.gscSite ? { gscSite: o.gscSite } : {}),
+      ...(o.ga4Property ? { ga4Property: o.ga4Property } : {}),
+    }
     : { domain: job.domain, crawl, profile: job.auditType });
   const pages = crawl?.pages_crawled || [];
   const homepage = pages.find((p) => p.page_type === 'homepage') || pages[0] || null;
@@ -156,6 +161,11 @@ function dataSources(job) {
     const gap = gaps.find((g) => g.source === name);
     out[name] = { status: sources[field] != null ? 'ok' : gap?.status || 'no_data' };
   }
+  // Which properties the numbers came from, so a wrong match is easy to spot.
+  if (sources.gsc?.site) out.search_console.site = sources.gsc.site;
+  else if (job.options?.gscSite) out.search_console.site = job.options.gscSite;
+  if (sources.ga4Property) out.ga4.property = sources.ga4Property;
+  else if (job.options?.ga4Property?.name) out.ga4.property = job.options.ga4Property.name;
   return out;
 }
 
@@ -230,6 +240,8 @@ async function runSynthesize(job) {
     passes_completed: Object.fromEntries(PASSES.map((p) => [p, done.includes(p)])),
     data_gaps: dataGaps,
     data_sources: dataSources(job),
+    // Headline search numbers and index counts for the overview.
+    ...buildSearchSummary(job.data?.sources?.gsc, job.data?.sources?.inspection),
   };
   return { ok: true, patch: { result } };
 }

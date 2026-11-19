@@ -9,8 +9,18 @@ export function isV2Audit(audit) {
   return Number(audit?.version) === 2;
 }
 
-export default function ResultsView({ audit, crawlData, domain, actions }) {
+// onBack: return to the audit list (shown as "All audits").
+export default function ResultsView({ audit, crawlData, domain, actions, onBack }) {
   if (!audit) return null;
-  if (isV2Audit(audit)) return <V2Results result={audit} domain={domain} actions={actions} />;
-  return <V1Results audit={audit} crawlData={crawlData} domain={domain} actions={actions} />;
+  if (isV2Audit(audit)) return <V2Results result={audit} domain={domain} actions={actions} onBack={onBack} />;
+  const back = onBack ? (
+    <button
+      type="button"
+      onClick={onBack}
+      style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#ddd", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+    >
+      ← All audits
+    </button>
+  ) : null;
+  return <V1Results audit={audit} crawlData={crawlData} domain={domain} actions={<div style={{ display: "flex", gap: 10 }}>{back}{actions}</div>} />;
 }

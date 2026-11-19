@@ -145,11 +145,19 @@ async function gscSites(auth) {
 }
 
 // The Search Console site for a domain plus the authed client to query it with.
-// status: ok | not_connected | no_site. Throws only on an API failure.
-export async function findGscSite(domain) {
+// A chosen site (options.site) is used as is when our login can access it, and
+// reported as 'permission' when it can't; otherwise the site is matched to the domain.
+// status: ok | not_connected | no_site | permission. Throws only on an API failure.
+export async function findGscSite(domain, { site: chosen } = {}) {
   const auth = await createAuthedGscClient();
   if (!auth) return { status: 'not_connected', site: null, auth: null };
-  const site = pickGscSite(domain, await gscSites(auth));
+  const sites = await gscSites(auth);
+  if (chosen) {
+    return sites.includes(chosen)
+      ? { status: 'ok', site: chosen, auth }
+      : { status: 'permission', site: null, auth, error: `No access to ${chosen}` };
+  }
+  const site = pickGscSite(domain, sites);
   if (!site) return { status: 'no_site', site: null, auth };
   return { status: 'ok', site, auth };
 }

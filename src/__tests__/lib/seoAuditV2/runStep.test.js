@@ -55,7 +55,7 @@ describe('runStep', () => {
     m.crawlSite.mockResolvedValue(crawl);
     const options = { pages: ['https://acme.com/money'], onlyListed: false, skip: ['/blog/*'], pageCount: 10 };
     await runStep(job({}, { options }), 'crawl');
-    expect(m.seedPages).toHaveBeenCalledWith('acme.com', 'full', 5);
+    expect(m.seedPages).toHaveBeenCalledWith('acme.com', 'full', 5, { gscSite: undefined });
     expect(m.crawlSite).toHaveBeenCalledWith('acme.com', 'full', null, {
       seedUrls: ['https://acme.com/money', 'https://acme.com/a'], deadlineMs: 200_000, pageLimit: 10, skip: ['/blog/*'],
     });
@@ -343,5 +343,18 @@ describe('runStep', () => {
   it('never throws', async () => {
     m.seedPages.mockRejectedValue(new Error('boom'));
     expect(await runStep(job(), 'crawl')).toEqual({ ok: false, error: 'boom' });
+  });
+});
+
+describe('runStep with picked data sources', () => {
+  it('passes a chosen Search Console property to seeding and gathering, and a chosen GA4 property to gathering', async () => {
+    m.seedPages.mockResolvedValue([]);
+    m.crawlSite.mockResolvedValue(crawl);
+    const options = { pages: [], onlyListed: false, skip: [], pageCount: null, gscSite: 'sc-domain:acme.com', ga4Property: { id: 'properties/9', name: 'Acme', account: 'A' } };
+    await runStep(job({}, { options }), 'crawl');
+    expect(m.seedPages.mock.calls[0][3]).toEqual({ gscSite: 'sc-domain:acme.com' });
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [] });
+    await runStep(job({}, { data: { crawl }, options }), 'gather');
+    expect(m.gatherAll.mock.calls[0][0]).toMatchObject({ gscSite: 'sc-domain:acme.com', ga4Property: { id: 'properties/9' } });
   });
 });
