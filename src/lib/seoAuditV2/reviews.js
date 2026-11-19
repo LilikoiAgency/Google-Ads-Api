@@ -30,13 +30,24 @@ function schemaName(page) {
   return '';
 }
 
+const ENTITIES = { '&amp;': '&', '&#39;': "'", '&quot;': '"', '&lt;': '<', '&gt;': '>' };
+export const decodeEntities = (text) => String(text || '').replace(/&(?:amp|#39|quot|lt|gt);/g, (e) => ENTITIES[e]);
+
+const GENERIC_SEGMENT = /^(home|homepage|welcome)$/i;
+
+// The brand part of a page title: the first segment that isn't "Home" / "Welcome".
+export function brandFromTitle(title) {
+  const parts = decodeEntities(title).split(/\s+(?:\||-|—)\s+/).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  return parts.find((s) => !GENERIC_SEGMENT.test(s)) || '';
+}
+
 export function brandName(crawl, domain) {
   const page = homePage(crawl);
   const fromSchema = schemaName(page);
   if (fromSchema) return fromSchema;
-  const og = page?.open_graph?.og_site_name?.trim();
+  const og = decodeEntities(page?.open_graph?.og_site_name).trim();
   if (og) return og;
-  const title = String(page?.title_tag || '').split(/ \| | - | — /)[0].trim();
+  const title = brandFromTitle(page?.title_tag);
   if (title) return title;
   return String(domain || '').toLowerCase().replace(/^www\./, '').split('.')[0];
 }
@@ -70,12 +81,33 @@ export function reviewStats(reviews, { rating, count, coverage }, now = new Date
 
 const blockedStatus = (err) => (err instanceof PlacesError && (err.code === 'not_connected' || err.code === 'permission') ? err.code : null);
 
+// Places listings whose website is this domain, found by the domain label, its
+// hyphen-split words and any brand guesses. Shared by the picker and the audit
+// so both see the same locations.
+export async function findLocationsForDomain(domain, { brands = [] } = {}) {
+  const label = String(domain || '').toLowerCase().replace(/^www\./, '').split('.')[0];
+  const queries = [];
+  const add = (q) => {
+    const text = String(q || '').trim();
+    if (text && !queries.some((x) => x.toLowerCase() === text.toLowerCase())) queries.push(text);
+  };
+  add(label);
+  if (label.includes('-')) add(label.split('-').filter(Boolean).join(' '));
+  brands.forEach(add);
+  const results = await Promise.all(queries.map((q) => searchPlaces(q)));
+  const seen = new Set();
+  const found = [];
+  for (const place of results.flat()) {
+    if (seen.has(place.id) || !matchesDomain(place.website, domain)) continue;
+    seen.add(place.id);
+    found.push(place);
+  }
+  return found.slice(0, MAX_LOCATIONS);
+}
+
 async function matchLocations(domain, crawl) {
-  const found = await searchPlaces(brandName(crawl, domain));
-  return found
-    .filter((p) => matchesDomain(p.website, domain))
-    .slice(0, MAX_LOCATIONS)
-    .map((p) => ({ source: 'places', id: p.id, name: p.name }));
+  const found = await findLocationsForDomain(domain, { brands: [brandName(crawl, domain)] });
+  return found.map((p) => ({ source: 'places', id: p.id, name: p.name }));
 }
 
 export async function fetchReviews({ domain, crawl, locations }) {

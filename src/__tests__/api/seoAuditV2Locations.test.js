@@ -73,6 +73,17 @@ describe('GET locations', () => {
     expect(places.searchPlaces).toHaveBeenCalledWith('Acme Roofing');
   });
 
+  it('uses the same brand the audit would: skips a leading Home segment and decodes entities', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      text: async () => '<html><head><title>Home | Smith &amp; Sons Electric</title></head></html>',
+    });
+    places.searchPlaces.mockResolvedValue([]);
+    await locRoute.GET(req('acme.com'));
+    expect(places.searchPlaces).toHaveBeenCalledWith('Smith & Sons Electric');
+    expect(places.searchPlaces).not.toHaveBeenCalledWith('Home');
+  });
+
   it('caps found at 10', async () => {
     places.searchPlaces.mockResolvedValue(
       Array.from({ length: 15 }, (_, i) => place(`p${i}`, 'https://acme.com')),

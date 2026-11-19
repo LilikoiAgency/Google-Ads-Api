@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAllowedSession } from "../../../../../lib/routeAuth";
-import { searchPlaces, matchesDomain, PlacesError } from "../../../../../lib/seoAuditV2/places";
+import { PlacesError } from "../../../../../lib/seoAuditV2/places";
+import { findLocationsForDomain, brandFromTitle, decodeEntities } from "../../../../../lib/seoAuditV2/reviews";
 import { getSavedLocations } from "../../../../../lib/seoAuditV2/reputationStore";
 
 export const dynamic = "force-dynamic";
 
-const MAX_FOUND = 10;
 const HOST_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 
 function normalizeDomain(raw) {
@@ -24,9 +24,8 @@ async function homepageBrand(domain) {
     const html = (await res.text()).slice(0, 200000);
     const og = html.match(/<meta[^>]+property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i)
       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:site_name["']/i);
-    const raw = og?.[1] || html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || "";
-    const brand = raw.split(/\s+[|\u2014-]\s+/)[0].replace(/\s+/g, " ").trim();
-    return brand || null;
+    const ogName = decodeEntities(og?.[1]).replace(/\s+/g, " ").trim();
+    return ogName || brandFromTitle(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]) || null;
   } catch {
     return null;
   }
@@ -51,22 +50,11 @@ export async function GET(request) {
     return null;
   });
 
-  const label = domain.split(".")[0];
-  const queries = new Set([label]);
-  if (label.includes("-")) queries.add(label.split("-").filter(Boolean).join(" "));
   const brand = await homepageBrand(domain);
-  if (brand) queries.add(brand);
 
   try {
-    const results = await Promise.all([...queries].map((q) => searchPlaces(q)));
-    const seen = new Set();
-    const found = [];
-    for (const place of results.flat()) {
-      if (seen.has(place.id) || !matchesDomain(place.website, domain)) continue;
-      seen.add(place.id);
-      found.push(place);
-    }
-    return NextResponse.json({ saved, found: found.slice(0, MAX_FOUND), status: "ok" });
+    const found = await findLocationsForDomain(domain, { brands: brand ? [brand] : [] });
+    return NextResponse.json({ saved, found, status: "ok" });
   } catch (err) {
     if (err instanceof PlacesError && err.code === "not_connected") {
       return NextResponse.json({ saved, found: [], status: "not_connected" });

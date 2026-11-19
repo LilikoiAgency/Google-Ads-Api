@@ -8,7 +8,7 @@ vi.mock('@/lib/seoAuditV2/places', async (orig) => ({
   getPlace: m.getPlace,
 }));
 
-import { brandName, reviewStats, fetchReviews } from '@/lib/seoAuditV2/reviews';
+import { brandName, reviewStats, fetchReviews, findLocationsForDomain } from '@/lib/seoAuditV2/reviews';
 import { PlacesError } from '@/lib/seoAuditV2/places';
 
 const home = (extra) => ({ pages_crawled: [{ page_type: 'homepage', title_tag: '', ...extra }] });
@@ -32,6 +32,37 @@ describe('brandName', () => {
     expect(brandName(home({ title_tag: 'Ranger Electric — Tampa' }), 'acme.com')).toBe('Ranger Electric');
     expect(brandName(home({ title_tag: '' }), 'www.acme-plumbing.com')).toBe('acme-plumbing');
     expect(brandName(null, 'acme.com')).toBe('acme');
+  });
+});
+
+describe('brandName generic leading segments and entities', () => {
+  it('skips Home / Welcome / Homepage segments and takes the next one', () => {
+    expect(brandName(home({ title_tag: 'Home | Ranger Electric' }), 'x.com')).toBe('Ranger Electric');
+    expect(brandName(home({ title_tag: 'Welcome - Acme Roofing - Tampa' }), 'x.com')).toBe('Acme Roofing');
+    expect(brandName(home({ title_tag: 'Homepage | Acme' }), 'x.com')).toBe('Acme');
+  });
+
+  it('decodes HTML entities in the title and og:site_name', () => {
+    expect(brandName(home({ title_tag: 'Smith &amp; Sons &#39;Roofing&#39; | Home' }), 'x.com')).toBe("Smith & Sons 'Roofing'");
+    expect(brandName(home({ open_graph: { og_site_name: 'A &lt;B&gt; &quot;C&quot;' } }), 'x.com')).toBe('A <B> "C"');
+  });
+});
+
+describe('findLocationsForDomain', () => {
+  const p = (id, website) => ({ id, name: id, website });
+
+  it('searches the domain label, the hyphen-split label and each brand, merges, dedupes and filters by website', async () => {
+    m.searchPlaces.mockImplementation(async (q) => (q === 'ranger electric co'
+      ? [p('a', 'https://ranger-electric-co.com'), p('x', 'https://other.com')]
+      : [p('a', 'https://ranger-electric-co.com'), p('b', 'https://www.ranger-electric-co.com/tampa')]));
+    const out = await findLocationsForDomain('ranger-electric-co.com', { brands: ['Ranger Electric', '', 'ranger electric co'] });
+    expect(out.map((l) => l.id)).toEqual(['a', 'b']);
+    expect(m.searchPlaces.mock.calls.map((c) => c[0]).sort()).toEqual(['Ranger Electric', 'ranger electric co', 'ranger-electric-co']);
+  });
+
+  it('caps at 10', async () => {
+    m.searchPlaces.mockResolvedValue(Array.from({ length: 15 }, (_, i) => p(`p${i}`, 'https://acme.com')));
+    expect(await findLocationsForDomain('acme.com', { brands: [] })).toHaveLength(10);
   });
 });
 
@@ -79,12 +110,20 @@ describe('fetchReviews', () => {
     ]);
     m.getPlace.mockImplementation(async (id) => detail(id));
     const out = await fetchReviews({ domain: 'acme.com', crawl: home({ title_tag: 'Acme | Home' }), locations: null });
-    expect(m.searchPlaces).toHaveBeenCalledWith('Acme');
+    expect(m.searchPlaces).toHaveBeenCalledWith('acme');
     expect(out.status).toBe('ok');
     expect(out.locations).toHaveLength(10);
     expect(out.locations[0]).toMatchObject({ source: 'places', id: 'p0', city: 'Tampa', region: 'FL', coverage: 'sample' });
     expect(out.locations[0]).not.toHaveProperty('reviews');
     expect(out.texts.p0).toEqual([{ stars: 5, date: '2026-11-01', text: 'Nice' }]);
+  });
+
+  it('still finds locations when the brand guess is useless, via the domain label', async () => {
+    m.searchPlaces.mockImplementation(async (q) => (q === 'ranger-electric' ? [place(1, 'https://ranger-electric.com')] : []));
+    m.getPlace.mockImplementation(async (id) => detail(id));
+    const out = await fetchReviews({ domain: 'ranger-electric.com', crawl: home({ title_tag: 'Home' }), locations: null });
+    expect(out.status).toBe('ok');
+    expect(out.locations.map((l) => l.id)).toEqual(['p1']);
   });
 
   it('no matching place gives no_data', async () => {
