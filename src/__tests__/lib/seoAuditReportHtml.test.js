@@ -65,3 +65,58 @@ describe('seo audit report html', () => {
     expect(stripConfirm('Price is [confirm: price range] per sq ft.')).toBe('Price is per sq ft.');
   });
 });
+
+const REPUTATION = {
+  locations: [
+    { name: 'Acme <Dental>', city: 'Austin', source: 'places', coverage: 'sample', stats: { rating: 4.6, count: 120, coverage: 'sample', per_month: null, star_split: null, days_since_newest: null, reply_rate: null } },
+    { name: 'Acme Downtown', city: null, source: 'gbp', coverage: 'full', stats: { rating: 4.25, count: 1, coverage: 'full', per_month: 6.4, star_split: null, days_since_newest: 1, reply_rate: 0.5 } },
+  ],
+  themes: [
+    { kind: 'praise', theme: 'Friendly staff', count: 4, location: 'Acme Downtown', quotes: ['Lovely <b>team</b>'] },
+    { kind: 'complaint', theme: 'Long waits', count: 2, location: 'Acme Downtown', quotes: ['Waited an hour'] },
+  ],
+  search: { appear_count: 1, total: 2, summary: 'Found on brand searches.', queries: [
+    { query: 'dentist austin', you_appear: false, others: ['Rival Dental', 'Other Co'] },
+    { query: 'acme dental', you_appear: true, others: [] },
+  ] },
+  attribution: 'Source: Google reviews',
+};
+
+describe('seo audit report reputation', () => {
+  it('report includes reputation section with attribution', () => {
+    for (const kind of ['client', 'full']) {
+      const html = generateSeoReportHtml({ ...RESULT, reputation: REPUTATION }, { kind });
+      expect(html).toContain('Reputation');
+      expect(html).toContain('Acme &lt;Dental&gt;');
+      expect(html).toContain('4.6 ★ · 120 reviews · (5 sample reviews)');
+      expect(html).toContain('Public data');
+      expect(html).toContain('4.3 ★ · 1 review · ≈6/month · replies 50% · newest 1 day ago');
+      expect(html).toContain('Managed');
+      expect(html).toContain('Friendly staff (4)');
+      expect(html).toContain('Lovely &lt;b&gt;team&lt;/b&gt;');
+      expect(html).not.toContain('<b>team</b>');
+      expect(html).toContain('Long waits (2)');
+      expect(html).toContain('What a web search finds');
+      expect(html).toContain('A web search run during this audit, not Google rankings.');
+      expect(html).toContain('You appear in 1 of 2 searches');
+      expect(html).toContain('Source: Google reviews');
+      expect(html.indexOf('Reputation')).toBeGreaterThan(html.indexOf('Action plan by area'));
+    }
+  });
+
+  it('report omits reputation when absent', () => {
+    const html = generateSeoReportHtml(RESULT, { kind: 'full' });
+    expect(html).not.toContain('Reputation');
+    expect(html).not.toContain('What a web search finds');
+  });
+
+  it('search rows show appear/not appear and no position', () => {
+    const html = generateSeoReportHtml({ ...RESULT, reputation: REPUTATION }, { kind: 'client' });
+    const block = html.slice(html.indexOf('What a web search finds'));
+    expect(block).toContain('dentist austin');
+    expect(block).toContain('does not appear');
+    expect(block).toContain('Rival Dental, Other Co');
+    expect(block).toContain('aria-label="appears"');
+    expect(block).not.toMatch(/position|\brank\b/i);
+  });
+});

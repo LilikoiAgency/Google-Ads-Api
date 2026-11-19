@@ -109,6 +109,46 @@ ${areas.map((a) => `<div class="hb"><span>${esc(a.label)}</span><div class="bar"
 <div class="mq"><b>${matrix.later}</b><span>Later: more work, smaller impact</span></div></div></div></div>`;
 }
 
+// Reputation section: mirrors the in-app Reputation tab (Reputation.jsx).
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function repStats(loc) {
+  const st = loc.stats || {};
+  const parts = [];
+  if (typeof st.rating === 'number') parts.push(`${st.rating.toFixed(1)} ★`);
+  if (typeof st.count === 'number') parts.push(plural(st.count, 'review'));
+  if (loc.coverage === 'sample') {
+    parts.push('(5 sample reviews)');
+  } else {
+    if (typeof st.per_month === 'number') parts.push(`≈${Math.round(st.per_month)}/month`);
+    if (typeof st.reply_rate === 'number') parts.push(`replies ${Math.round(st.reply_rate * 100)}%`);
+    if (typeof st.days_since_newest === 'number') {
+      const d = st.days_since_newest;
+      parts.push(d === 0 ? 'newest today' : d === 1 ? 'newest 1 day ago' : `newest ${d} days ago`);
+    }
+  }
+  return parts;
+}
+
+function repThemes(title, mark, items, showLocation) {
+  if (!items.length) return '';
+  return `<p class="lbl">${title}</p><ul class="rl">${items.map((t) => `<li><b>${mark} ${esc(t.theme)} (${esc(t.count)})</b>${showLocation && t.location ? ` <span class="mutd">· ${esc(t.location)}</span>` : ''}${t.quotes?.[0] ? `<p class="rq">“${esc(t.quotes[0])}”</p>` : ''}</li>`).join('')}</ul>`;
+}
+
+function reputationHtml(rep) {
+  if (!rep) return '';
+  const { locations = [], themes = [], search, attribution } = rep;
+  const multi = locations.length > 1;
+  const locs = locations.map((loc) => `<li class="rloc"><div><p class="pt">${esc(loc.name)}${loc.city ? ` <span class="mutd">· ${esc(loc.city)}</span>` : ''}</p><p class="pp">${esc(repStats(loc).join(' · '))}</p></div><span class="chip">${loc.coverage === 'sample' ? 'Public data' : 'Managed'}</span></li>`).join('');
+  const says = themes.length
+    ? `<p class="ct rsub">What customers say</p>${repThemes('Praise', '+', themes.filter((t) => t.kind === 'praise'), multi)}${repThemes('Complaints', '−', themes.filter((t) => t.kind === 'complaint'), multi)}`
+    : '';
+  const web = search
+    ? `<p class="ct rsub">What a web search finds</p><p class="cs">A web search run during this audit, not Google rankings.</p><p class="pt">You appear in ${esc(search.appear_count)} of ${esc(search.total)} searches</p>${search.summary ? `<p class="body">${esc(search.summary)}</p>` : ''}<ul class="rl">${(search.queries || []).map((q) => `<li class="rsq"><span class="${q.you_appear ? 'up' : 'muted'}" role="img" aria-label="${q.you_appear ? 'appears' : 'does not appear'}">${q.you_appear ? '✓' : '✗'}</span><span class="rqy">${esc(q.query)}</span>${!q.you_appear && q.others?.length ? `<span class="mutd">${esc(q.others.join(', '))}</span>` : ''}</li>`).join('')}</ul>`
+    : '';
+  return `<h2>Reputation</h2><div class="card"><ul class="rl rtop">${locs}</ul>${says}${web}${attribution ? `<p class="note">${esc(attribution)}</p>` : ''}</div>`;
+}
+
 const impactBars = (n) => `<span class="imp" role="img" aria-label="Impact ${n} of 5">${[1, 2, 3, 4, 5].map((i) => `<i${i <= n ? ' class="on"' : ''}></i>`).join('')}</span>`;
 
 function clientTasks(plan) {
@@ -242,6 +282,10 @@ pre.chg{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13.5p
 ul.ev{margin:0;padding-left:1.2em;color:var(--muted);font-size:13px}
 .gaps{margin-top:16px;padding:12px 16px;border-radius:12px;background:var(--warnbg);color:var(--amber);font-size:13.5px;border:1px solid var(--line)}
 .gaps p{margin:0}.gaps ul{margin:6px 0 0;padding-left:1.2em}
+.rl{list-style:none;margin:0;padding:0}.rtop{border-top:1px solid var(--line)}
+.rloc{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+.rsub{margin:20px 0 6px}.rl li{margin:0 0 8px}.rq{font-size:13px;font-style:italic;color:var(--muted);margin:2px 0 0}
+.rsq{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;margin:0!important}.rsq>span:first-child{font-weight:700;width:14px}.rqy{flex:0 1 45%}
 footer{color:var(--dim);font-size:12.5px;margin-top:28px;border-top:1px solid var(--line);padding-top:14px}
 @media (max-width:1100px){.kpis,.kpis.k5,.kpis.k4{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:860px){.grid,.grid3{grid-template-columns:1fr}}
@@ -253,6 +297,7 @@ ${kpisHtml(r)}
 <div class="${opp ? 'grid' : 'grid one'}">${opp}${scoresCard}</div>
 ${movesHtml(r.top_moves, clean)}
 ${breakdownHtml(plan)}
+${reputationHtml(r.reputation)}
 ${body}
 <footer>Based on ${esc(sources.join(', '))}${r.audit_date ? `, ${esc(formatDate(r.audit_date))}` : ''}.</footer>
 </main></body></html>`;
