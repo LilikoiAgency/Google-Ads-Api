@@ -5,6 +5,7 @@ import { ADMIN_EMAILS } from "../../../../../lib/admins";
 import { getMonthlyClaudeCost, getClaudeBudgetCap } from "../../../../../lib/usageLogger";
 import { checkRateLimit } from "../../../../../lib/seoRateLimit";
 import { newJob } from "../../../../../lib/seoAuditV2/jobs";
+import { saveLocations } from "../../../../../lib/seoAuditV2/reputationStore";
 import { parseAuditOptions } from "../../../../../lib/seoAuditV2/options";
 import {
   findReusable, getDailyUsage, incrementUsage, createJob, refundUsage,
@@ -98,6 +99,11 @@ export async function POST(request) {
     const job = { ...newJob({ email, domain, auditType, now: new Date() }), usageDate, ...(options ? { options } : {}) };
     try {
       const jobId = await createJob(job);
+      if (options?.locations?.length) {
+        // Remember the picks for next time; never blocks the audit starting.
+        await saveLocations(domain, options.locations.map(({ source, id, name }) => ({ source, id, name })))
+          .catch((err) => console.error("[seo-audit/v2/jobs] saving location picks failed:", err?.message));
+      }
       return NextResponse.json({ jobId, reused: false });
     } catch (err) {
       await refundUsage({ email, usageDate }).catch(() => {});
