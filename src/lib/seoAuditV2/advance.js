@@ -12,10 +12,12 @@ import {
 export const STEP_LABELS = {
   crawl: 'Crawling pages',
   gather: 'Reading Search Console, Analytics & page speed',
+  search: 'Searching the web for the business',
   'pass:technical': 'Technical & indexing',
   'pass:content': 'Content & keywords',
   'pass:local': 'Local & AI search',
   'pass:conversion': 'Conversion',
+  'pass:reputation': 'Reviews & reputation',
   synthesize: 'Building action plan',
 };
 
@@ -28,11 +30,12 @@ export function toProgress(job) {
     auditType: job.auditType,
     status: job.status,
     createdAt: job.createdAt,
-    steps: STEP_KEYS.map((key) => {
-      const s = job.steps.find((x) => x.key === key) || { status: 'pending' };
+    steps: STEP_KEYS.flatMap((key) => {
+      const s = job.steps.find((x) => x.key === key);
+      if (!s || s.skipped) return []; // skipped (quick audit) or absent (job predates the step)
       const step = { key, label: STEP_LABELS[key], status: UI_STATUS[s.status] || s.status };
       if (step.status === 'failed' && s.error) step.error = s.error;
-      return step;
+      return [step];
     }),
     dataGaps: [...new Set([...describeGaps(job.data?.gaps), ...(job.gaps || [])])],
   };

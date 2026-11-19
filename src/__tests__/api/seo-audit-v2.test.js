@@ -280,9 +280,9 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
       return { ok: true, patch: { [`passes.${key.slice(5)}`]: { tasks: [] } } };
     });
     await advanceRoute.POST({}, params());
-    expect(runStep.mock.calls.map((c) => c[1]).sort()).toEqual(['pass:content', 'pass:conversion', 'pass:local', 'pass:technical']);
-    expect(maxInFlight).toBe(4);
-    expect(store.saveStep).toHaveBeenCalledTimes(4);
+    expect(runStep.mock.calls.map((c) => c[1]).sort()).toEqual(['pass:content', 'pass:conversion', 'pass:local', 'pass:technical', 'search']);
+    expect(maxInFlight).toBe(5);
+    expect(store.saveStep).toHaveBeenCalledTimes(5);
   });
 
   it('one failing pass does not stop the others from being saved', async () => {
@@ -307,9 +307,9 @@ describe('POST /api/seo-audit/v2/jobs/[id]/advance', () => {
       : { attempts: 1, startedAt: now.toISOString() }));
     runStep.mockResolvedValue({ ok: true, patch: {} });
     await advanceRoute.POST({}, params());
-    expect(store.claimStep).toHaveBeenCalledTimes(4);
-    expect(runStep.mock.calls.map((c) => c[1]).sort()).toEqual(['pass:conversion', 'pass:local']);
-    expect(store.saveStep.mock.calls.map((c) => c[1]).sort()).toEqual(['pass:conversion', 'pass:local']);
+    expect(store.claimStep).toHaveBeenCalledTimes(5);
+    expect(runStep.mock.calls.map((c) => c[1]).sort()).toEqual(['pass:conversion', 'pass:local', 'search']);
+    expect(store.saveStep.mock.calls.map((c) => c[1]).sort()).toEqual(['pass:conversion', 'pass:local', 'search']);
   });
 
   it('the second of two concurrent claims returns false so the step runs once', async () => {
@@ -429,8 +429,8 @@ describe('GET /api/seo-audit/v2/jobs/[id]', () => {
     expect(res.body.result).toBeUndefined();
     expect(res.body.jobId).toBe('job1');
     expect(res.body.steps.map((s) => s.label)).toEqual([
-      'Crawling pages', 'Reading Search Console, Analytics & page speed', 'Technical & indexing',
-      'Content & keywords', 'Local & AI search', 'Conversion', 'Building action plan',
+      'Crawling pages', 'Reading Search Console, Analytics & page speed', 'Searching the web for the business', 'Technical & indexing',
+      'Content & keywords', 'Local & AI search', 'Conversion', 'Reviews & reputation', 'Building action plan',
     ]);
     expect(res.body.steps.find((s) => s.key === 'pass:local').status).toBe('failed');
     expect(res.body.dataGaps).toEqual(['ga4 unavailable', "Local & AI search analysis didn't complete — rerun to include it"]);
