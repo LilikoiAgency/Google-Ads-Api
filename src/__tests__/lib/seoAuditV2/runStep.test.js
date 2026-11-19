@@ -650,6 +650,28 @@ describe('runStep search', () => {
     expect(res).toEqual({ ok: true, patch: { 'data.sources.aiSearch': value } });
   });
 
+  it('falls back to the crawl contact address for city and region when no review location has one', async () => {
+    m.runWebSearch.mockResolvedValue({ status: 'ok', queries: [], notes: '' });
+    const withAddress = (address) => job({}, { data: {
+      crawl: { ...crawl, site_wide: { contact_info: { addresses: [address] } } },
+      sources: { ...sources, reviews: [] },
+    } });
+    await runStep(withAddress('123 Main St, Tampa, FL 33602'), 'search');
+    expect(m.runWebSearch.mock.calls[0][0]).toMatchObject({ city: 'Tampa', region: 'FL' });
+    await runStep(withAddress('Suite 4, Fort Worth, TX'), 'search');
+    expect(m.runWebSearch.mock.calls[1][0]).toMatchObject({ city: 'Fort Worth', region: 'TX' });
+    await runStep(withAddress('somewhere along the highway'), 'search');
+    expect(m.runWebSearch.mock.calls[2][0]).toMatchObject({ city: null, region: null });
+    await runStep(job({}, { data: { crawl, sources: { ...sources, reviews: null } } }), 'search');
+    expect(m.runWebSearch.mock.calls[3][0]).toMatchObject({ city: null, region: null });
+  });
+
+  it('review location city wins over the crawl address', async () => {
+    m.runWebSearch.mockResolvedValue({ status: 'ok', queries: [], notes: '' });
+    await runStep(job({}, { data: { crawl: { ...crawl, site_wide: { contact_info: { addresses: ['1 A St, Tampa, FL 33602'] } } }, sources } }), 'search');
+    expect(m.runWebSearch.mock.calls[0][0]).toMatchObject({ city: 'Austin', region: 'TX' });
+  });
+
   it('turns an API error into a gap, not a failed step', async () => {
     m.runWebSearch.mockResolvedValue({ status: 'error', error: 'boom', queries: [], notes: '' });
     expect(await runStep(searchJob(), 'search')).toEqual({

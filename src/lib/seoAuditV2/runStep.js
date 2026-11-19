@@ -117,12 +117,19 @@ async function runGather(job) {
 
 const SEARCH_GAP = "Web search check didn't complete.";
 
+// "123 Main St, Tampa, FL 33602" -> { city: 'Tampa', region: 'FL' }; null when it isn't a US "City, ST" address.
+function cityFromAddress(address) {
+  const m = /(?:^|,)[ ]*([A-Za-z][A-Za-z.' -]*?)[ ]*,[ ]*([A-Z]{2})(?![A-Za-z])(?:[ ]+[0-9]{5}(?:-[0-9]{4})?)?(?:[ ]*,?[ ]*(?:USA|US|United States))?[ ]*$/.exec(String(address || '').trim());
+  return m ? { city: m[1], region: m[2] } : null;
+}
+
 // A search or API failure only leaves a gap; a timeout fails the step so it retries.
 async function runSearch(job) {
   const sources = job.data?.sources || {};
   const crawl = job.data?.crawl;
   const brand = brandName(crawl, job.domain);
-  const loc = (sources.reviews || []).find((r) => r?.city);
+  const loc = (sources.reviews || []).find((r) => r?.city)
+    || cityFromAddress(crawl?.site_wide?.contact_info?.addresses?.[0]);
   const city = loc?.city || null;
   const region = loc?.region || null;
   const queries = buildSearchQueries({ gscPages: sources.gscPages, crawl, brand, city });
