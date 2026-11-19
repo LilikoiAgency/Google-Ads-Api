@@ -67,16 +67,28 @@ function SearchBlock({ search }) {
     <div style={{ marginTop: 24 }}>
       <SectionTitle>What a web search finds</SectionTitle>
       <p style={{ ...muted, marginBottom: 8 }}>A web search run during this audit, not Google rankings.</p>
-      <p style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 6 }}>
-        You appear in {search.appear_count} of {search.total} searches
-      </p>
+      {search.total > 0 && (
+        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 6 }}>
+          You appear in {search.appear_count} of {search.total} searches
+        </p>
+      )}
       {search.summary && <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 8 }}>{search.summary}</p>}
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {(search.queries || []).map((q, i) => (
           <li key={i} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
-            <span aria-label={q.you_appear ? "appears" : "does not appear"} style={{ fontWeight: 800, color: q.you_appear ? "var(--up)" : "var(--muted)", width: 14 }}>{q.you_appear ? "✓" : "✗"}</span>
-            <span style={{ color: "var(--ink)", flex: "0 1 45%" }}>{q.query}</span>
-            {!q.you_appear && q.others?.length > 0 && <span style={{ ...muted, flex: 1 }}>{q.others.join(", ")}</span>}
+            {q.error ? (
+              <>
+                <span style={{ width: 14 }} />
+                <span style={{ color: "var(--ink)", flex: "0 1 45%" }}>{q.query}</span>
+                <span style={{ ...muted, flex: 1 }}>couldn&apos;t check</span>
+              </>
+            ) : (
+              <>
+                <span aria-label={q.you_appear ? "appears" : "does not appear"} style={{ fontWeight: 800, color: q.you_appear ? "var(--up)" : "var(--muted)", width: 14 }}>{q.you_appear ? "✓" : "✗"}</span>
+                <span style={{ color: "var(--ink)", flex: "0 1 45%" }}>{q.query}</span>
+                {!q.you_appear && q.others?.length > 0 && <span style={{ ...muted, flex: 1 }}>{q.others.join(", ")}</span>}
+              </>
+            )}
           </li>
         ))}
       </ul>

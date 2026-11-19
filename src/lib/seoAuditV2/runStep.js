@@ -340,6 +340,7 @@ function buildReputation(job, reputationDone) {
   const pass = reputationDone ? job.passes.reputation : null;
   const domain = bareHost(job.domain);
   const queries = hasSearch ? search.queries : [];
+  const checked = queries.filter((q) => !q.error); // an errored query was never really searched
   return {
     locations: hasReviews
       ? reviews.map((l) => ({ name: l.name, city: l.city, source: l.source, coverage: l.coverage, stats: l.stats }))
@@ -347,12 +348,13 @@ function buildReputation(job, reputationDone) {
     themes: pass?.themes || [],
     search: hasSearch
       ? {
-        appear_count: queries.filter((q) => q.you_appear).length,
-        total: queries.length,
+        appear_count: checked.filter((q) => q.you_appear).length,
+        total: checked.length,
         summary: pass?.search_summary?.summary ?? null,
         queries: queries.map((q) => ({
           query: q.query,
           you_appear: !!q.you_appear,
+          ...(q.error ? { error: String(q.error) } : {}),
           others: [...new Set((q.results || []).map(resultHost).filter((h) => h && h !== domain))].slice(0, 3),
         })),
       }

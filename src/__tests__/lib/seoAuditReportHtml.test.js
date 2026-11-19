@@ -110,6 +110,23 @@ describe('seo audit report reputation', () => {
     expect(html).not.toContain('What a web search finds');
   });
 
+  it('errored queries read could-not-check and are left out of the count', () => {
+    const search = { appear_count: 1, total: 2, summary: null, queries: [
+      { query: 'acme dental', you_appear: true, others: [] },
+      { query: 'dentist waco', you_appear: false, error: 'x', others: ['Rival'] },
+      { query: 'dentist austin', you_appear: false, others: [] },
+    ] };
+    const html = generateSeoReportHtml({ ...RESULT, reputation: { ...REPUTATION, search } }, { kind: 'client' });
+    const block = html.slice(html.indexOf('What a web search finds'));
+    expect(block).toContain('You appear in 1 of 2 searches');
+    expect(block).toContain("couldn't check");
+    expect(block.match(/aria-label="does not appear"/g)).toHaveLength(1);
+    expect(block).not.toContain('Rival');
+    const none = { appear_count: 0, total: 0, summary: null, queries: [{ query: 'x', you_appear: false, error: 'x', others: [] }] };
+    const html2 = generateSeoReportHtml({ ...RESULT, reputation: { ...REPUTATION, search: none } }, { kind: 'client' });
+    expect(html2).not.toContain('You appear in');
+  });
+
   it('search rows show appear/not appear and no position', () => {
     const html = generateSeoReportHtml({ ...RESULT, reputation: REPUTATION }, { kind: 'client' });
     const block = html.slice(html.indexOf('What a web search finds'));

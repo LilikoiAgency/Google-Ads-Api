@@ -480,6 +480,36 @@ describe('runStep', () => {
       expect(r.passes_completed.reputation).toBe(true);
     });
 
+    it('queries that errored are kept with their error and left out of the counts', async () => {
+      synth();
+      const mixed = { status: 'ok', notes: [], queries: [
+        { query: 'turf austin', you_appear: true, results: [] },
+        { query: 'turf dallas', you_appear: false, results: [] },
+        { query: 'turf waco', you_appear: false, results: [], error: 'not searched' },
+      ] };
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews, aiSearch: mixed }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const s = (await runStep(j, 'synthesize')).patch.result.reputation.search;
+      expect(s.appear_count).toBe(1);
+      expect(s.total).toBe(2);
+      expect(s.queries[2]).toEqual({ query: 'turf waco', you_appear: false, error: 'not searched', others: [] });
+      expect(s.queries[0]).not.toHaveProperty('error');
+    });
+
+    it('every query erroring gives total 0', async () => {
+      synth();
+      const none = { status: 'ok', notes: [], queries: [{ query: 'a', you_appear: false, results: [], error: 'x' }] };
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews, aiSearch: none }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const s = (await runStep(j, 'synthesize')).patch.result.reputation.search;
+      expect(s.total).toBe(0);
+      expect(s.appear_count).toBe(0);
+    });
+
     it('quick result has reputation stats and no themes', async () => {
       synth();
       const j = base({ 'pass:reputation': { status: 'done', skipped: true } }, {

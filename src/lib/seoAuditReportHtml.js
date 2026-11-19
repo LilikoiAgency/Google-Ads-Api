@@ -144,7 +144,9 @@ function reputationHtml(rep) {
     ? `<p class="ct rsub">What customers say</p>${repThemes('Praise', '+', themes.filter((t) => t.kind === 'praise'), multi)}${repThemes('Complaints', '−', themes.filter((t) => t.kind === 'complaint'), multi)}`
     : '';
   const web = search
-    ? `<p class="ct rsub">What a web search finds</p><p class="cs">A web search run during this audit, not Google rankings.</p><p class="pt">You appear in ${esc(search.appear_count)} of ${esc(search.total)} searches</p>${search.summary ? `<p class="body">${esc(search.summary)}</p>` : ''}<ul class="rl">${(search.queries || []).map((q) => `<li class="rsq"><span class="${q.you_appear ? 'up' : 'muted'}" role="img" aria-label="${q.you_appear ? 'appears' : 'does not appear'}">${q.you_appear ? '✓' : '✗'}</span><span class="rqy">${esc(q.query)}</span>${!q.you_appear && q.others?.length ? `<span class="mutd">${esc(q.others.join(', '))}</span>` : ''}</li>`).join('')}</ul>`
+    ? `<p class="ct rsub">What a web search finds</p><p class="cs">A web search run during this audit, not Google rankings.</p>${search.total > 0 ? `<p class="pt">You appear in ${esc(search.appear_count)} of ${esc(search.total)} searches</p>` : ''}${search.summary ? `<p class="body">${esc(search.summary)}</p>` : ''}<ul class="rl">${(search.queries || []).map((q) => (q.error
+      ? `<li class="rsq"><span></span><span class="rqy">${esc(q.query)}</span><span class="mutd">couldn't check</span></li>`
+      : `<li class="rsq"><span class="${q.you_appear ? 'up' : 'muted'}" role="img" aria-label="${q.you_appear ? 'appears' : 'does not appear'}">${q.you_appear ? '✓' : '✗'}</span><span class="rqy">${esc(q.query)}</span>${!q.you_appear && q.others?.length ? `<span class="mutd">${esc(q.others.join(', '))}</span>` : ''}</li>`)).join('')}</ul>`
     : '';
   return `<h2>Reputation</h2><div class="card"><ul class="rl rtop">${locs}</ul>${says}${web}${attribution ? `<p class="note">${esc(attribution)}</p>` : ''}</div>`;
 }

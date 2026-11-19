@@ -690,6 +690,26 @@ describe('Reputation tab', () => {
     expect(document.body.textContent).not.toMatch(/position|rank #|ranks? \d/i);
   });
 
+  it('errored queries read could-not-check instead of does-not-appear, and the count skips them', () => {
+    const search = { appear_count: 1, total: 2, summary: null, queries: [
+      { query: 'acme turf', you_appear: true, others: [] },
+      { query: 'turf waco', you_appear: false, error: 'not searched', others: ['Angi'] },
+      { query: 'turf tampa', you_appear: false, others: [] },
+    ] };
+    render(<Reputation reputation={{ ...REPUTATION, search }} />);
+    expect(screen.getByText('You appear in 1 of 2 searches')).toBeInTheDocument();
+    expect(screen.getByText("couldn't check")).toBeInTheDocument();
+    expect(screen.getAllByLabelText('does not appear')).toHaveLength(1);
+    expect(screen.queryByText('Angi')).toBeNull();
+  });
+
+  it('hides the "You appear in" line when every query errored', () => {
+    const search = { appear_count: 0, total: 0, summary: null, queries: [{ query: 'turf waco', you_appear: false, error: 'x', others: [] }] };
+    render(<Reputation reputation={{ ...REPUTATION, search }} />);
+    expect(screen.queryByText(/You appear in/)).toBeNull();
+    expect(screen.getByText("couldn't check")).toBeInTheDocument();
+  });
+
   it('public locations show the sample label and Google attribution', () => {
     render(<Reputation reputation={REPUTATION} />);
     expect(screen.getByText('4.8 ★ · 87 reviews · (5 sample reviews)')).toBeInTheDocument();
