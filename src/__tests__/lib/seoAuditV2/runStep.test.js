@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   getSavedLocations: vi.fn(),
   saveReviewTexts: vi.fn(),
   runWebSearch: vi.fn(),
+  buildSearchQueries: vi.fn(),
 }));
 
 vi.mock('@/lib/seoCrawler', () => ({ crawlSite: m.crawlSite }));
@@ -20,8 +21,8 @@ vi.mock('@/lib/seoAuditV2/gather', () => ({
 vi.mock('@/lib/seoAuditV2/llm', () => ({ runStructured: m.runStructured }));
 vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ getSavedLocations: m.getSavedLocations, saveReviewTexts: m.saveReviewTexts }));
 
-vi.mock('@/lib/seoAuditV2/search', async () => ({
-  ...(await vi.importActual('@/lib/seoAuditV2/search')),
+vi.mock('@/lib/seoAuditV2/search', () => ({
+  buildSearchQueries: m.buildSearchQueries,
   runWebSearch: m.runWebSearch,
 }));
 
@@ -436,6 +437,7 @@ describe('runStep search', () => {
     reviews: [{ source: 'places', id: 'a', name: 'A', city: 'Austin', region: 'TX' }],
   };
   const searchJob = () => job({}, { data: { crawl, sources } });
+  beforeEach(() => { m.buildSearchQueries.mockReturnValue(['turf installation Austin']); });
 
   it('runs the web search with queries, city and region and stores the result', async () => {
     const value = { status: 'ok', queries: [], notes: 'n' };
