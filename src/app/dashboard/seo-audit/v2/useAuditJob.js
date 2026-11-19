@@ -36,7 +36,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // minIntervalMs: when an advance returns quickly (another tab holds the running step),
 // wait this long before the next call instead of hammering the server.
 export function useAuditJob(jobId, { minIntervalMs = 3000 } = {}) {
-  const [progress, setProgress] = useState(null);
+  // Progress is stored with the job it belongs to, so a new job never shows the
+  // previous job's state (or finished result) before its own first read lands.
+  const [owned, setOwned] = useState({ id: null, data: null });
   const [error, setError] = useState(null);
   const [runId, setRunId] = useState(0);
   const progressRef = useRef(null);
@@ -44,7 +46,7 @@ export function useAuditJob(jobId, { minIntervalMs = 3000 } = {}) {
 
   const update = (p) => {
     progressRef.current = p;
-    setProgress(p);
+    setOwned({ id: jobId, data: p });
   };
 
   useEffect(() => {
@@ -58,8 +60,7 @@ export function useAuditJob(jobId, { minIntervalMs = 3000 } = {}) {
     (async () => {
       const id = encodeURIComponent(jobId);
       if (loadedJobRef.current !== jobId) {
-        progressRef.current = null;
-        setProgress(null);
+        update(null);
         const first = await call(`${BASE}/${id}`, "GET");
         if (cancelled) return;
         if (first.error) { setError(first.error); return; }
@@ -94,6 +95,7 @@ export function useAuditJob(jobId, { minIntervalMs = 3000 } = {}) {
     setRunId((n) => n + 1);
   }, [jobId]);
 
+  const progress = jobId && owned.id === jobId ? owned.data : null;
   const result = progress?.status === "done" ? progress.result || null : null;
   return { progress, result, error, retry };
 }

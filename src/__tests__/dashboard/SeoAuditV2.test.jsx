@@ -262,6 +262,23 @@ describe('useAuditJob', () => {
     expect(result.current.progress.status).toBe('done');
   });
 
+  it('never exposes the previous job\'s result after switching to a new job', async () => {
+    let hangNext = false;
+    global.fetch = vi.fn(async (url) => {
+      if (hangNext) return new Promise(() => {});
+      if (String(url).endsWith('/advance')) return jsonRes({ status: 'done', steps: steps(['done']), dataGaps: [], result: V2_RESULT });
+      return jsonRes({ status: 'running', steps: steps(['running']), dataGaps: [] });
+    });
+    const { result, rerender } = renderHook(({ id }) => useAuditJob(id, { minIntervalMs: 0 }), { initialProps: { id: 'jobA' } });
+    await waitFor(() => expect(result.current.result).toEqual(V2_RESULT));
+    rerender({ id: null });
+    expect(result.current.result).toBeNull();
+    hangNext = true;
+    rerender({ id: 'jobB' });
+    expect(result.current.result).toBeNull();
+    expect(result.current.progress).toBeNull();
+  });
+
   it('stops on failed; retry posts /retry and resumes advancing', async () => {
     const failed = { status: 'failed', steps: steps(['failed'], { 0: { error: 'crawl: timeout' } }), dataGaps: [] };
     const replies = {
