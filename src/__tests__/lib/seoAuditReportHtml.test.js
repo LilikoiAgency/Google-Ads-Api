@@ -68,7 +68,7 @@ describe('seo audit report html', () => {
 
 const REPUTATION = {
   locations: [
-    { name: 'Acme <Dental>', city: 'Austin', source: 'places', coverage: 'sample', stats: { rating: 4.6, count: 120, coverage: 'sample', per_month: null, star_split: null, days_since_newest: null, reply_rate: null } },
+    { name: 'Acme <Dental>', city: 'Austin', source: 'places', coverage: 'sample', stats: { rating: 4.6, count: 120, coverage: 'sample', per_month: null, star_split: null, days_since_newest: null, reply_rate: null, sample_size: 5 } },
     { name: 'Acme Downtown', city: null, source: 'gbp', coverage: 'full', stats: { rating: 4.25, count: 1, coverage: 'full', per_month: 6.4, star_split: null, days_since_newest: 1, reply_rate: 0.5 } },
   ],
   themes: [
@@ -102,6 +102,17 @@ describe('seo audit report reputation', () => {
       expect(html).toContain('Source: Google reviews');
       expect(html.indexOf('Reputation')).toBeGreaterThan(html.indexOf('Action plan by area'));
     }
+  });
+
+  it('sample size comes from the stats, singular for one, hidden when missing', () => {
+    const withSample = (sample_size) => {
+      const loc = { ...REPUTATION.locations[0], stats: { ...REPUTATION.locations[0].stats, sample_size } };
+      return generateSeoReportHtml({ ...RESULT, reputation: { ...REPUTATION, locations: [loc] } }, { kind: 'client' });
+    };
+    expect(withSample(3)).toContain('(3 sample reviews)');
+    expect(withSample(1)).toContain('(1 sample review)');
+    expect(withSample(0)).not.toContain('sample review');
+    expect(withSample(undefined)).not.toContain('sample review');
   });
 
   it('report omits reputation when absent', () => {

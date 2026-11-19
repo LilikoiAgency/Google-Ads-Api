@@ -24,7 +24,7 @@ export function statParts(loc) {
       parts.push(d === 0 ? "newest today" : d === 1 ? "newest 1 day ago" : `newest ${d} days ago`);
     }
   } else {
-    parts.push("(5 sample reviews)");
+    if (st.sample_size > 0) parts.push(`(${plural(st.sample_size, "sample review")})`);
   }
   return parts;
 }

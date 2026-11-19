@@ -68,6 +68,7 @@ export function reviewStats(reviews, { rating, count, coverage }, now = new Date
     star_split: null,
     days_since_newest: newest,
     reply_rate: null,
+    sample_size: (reviews || []).length,
   };
   if (coverage !== 'full') return stats;
   const list = reviews || [];

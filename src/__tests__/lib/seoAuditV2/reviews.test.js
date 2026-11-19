@@ -70,7 +70,7 @@ describe('reviewStats', () => {
   it('sample coverage leaves per_month null', () => {
     const s = reviewStats([{ stars: 5, date: '2026-11-01', text: 'a' }], { rating: 4.6, count: 120, coverage: 'sample' }, NOW);
     expect(s).toEqual({
-      rating: 4.6, count: 120, coverage: 'sample', per_month: null, star_split: null, days_since_newest: 18, reply_rate: null,
+      rating: 4.6, count: 120, coverage: 'sample', per_month: null, star_split: null, days_since_newest: 18, reply_rate: null, sample_size: 1,
     });
   });
 
@@ -86,6 +86,13 @@ describe('reviewStats', () => {
     expect(s.reply_rate).toBe(0.75);
     expect(s.star_split).toEqual({ 1: 1, 2: 0, 3: 0, 4: 1, 5: 2 });
     expect(s.days_since_newest).toBe(9);
+  });
+
+  it('sample_size is the number of reviews given, for sample and full coverage', () => {
+    const five = Array.from({ length: 5 }, () => ({ stars: 5, date: '2026-11-01', text: 'a' }));
+    expect(reviewStats(five, { rating: 4, count: 90, coverage: 'sample' }, NOW).sample_size).toBe(5);
+    expect(reviewStats([], { rating: 4, count: 90, coverage: 'sample' }, NOW).sample_size).toBe(0);
+    expect(reviewStats(five.slice(0, 3), { rating: 4, count: 3, coverage: 'full' }, NOW).sample_size).toBe(3);
   });
 
   it('ignores reviews with an unparseable date for days_since_newest', () => {

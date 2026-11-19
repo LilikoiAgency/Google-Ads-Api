@@ -118,7 +118,7 @@ function repStats(loc) {
   if (typeof st.rating === 'number') parts.push(`${st.rating.toFixed(1)} ★`);
   if (typeof st.count === 'number') parts.push(plural(st.count, 'review'));
   if (loc.coverage === 'sample') {
-    parts.push('(5 sample reviews)');
+    if (st.sample_size > 0) parts.push(`(${plural(st.sample_size, 'sample review')})`);
   } else {
     if (typeof st.per_month === 'number') parts.push(`≈${Math.round(st.per_month)}/month`);
     if (typeof st.reply_rate === 'number') parts.push(`replies ${Math.round(st.reply_rate * 100)}%`);

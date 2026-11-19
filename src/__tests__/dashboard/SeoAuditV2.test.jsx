@@ -13,7 +13,7 @@ vi.mock('@/lib/seoAuditV2/tasks', async (importOriginal) => {
 
 import { tasksToCsv } from '@/lib/seoAuditV2/tasks';
 import ActionPlan, { tasksToChecklist, pagePath } from '@/app/dashboard/seo-audit/v2/ActionPlan.jsx';
-import Reputation from '@/app/dashboard/seo-audit/v2/Reputation.jsx';
+import Reputation, { statParts } from '@/app/dashboard/seo-audit/v2/Reputation.jsx';
 import ProgressSteps from '@/app/dashboard/seo-audit/v2/ProgressSteps.jsx';
 import ClientSummary from '@/app/dashboard/seo-audit/v2/ClientSummary.jsx';
 import PageCards from '@/app/dashboard/seo-audit/v2/PageCards.jsx';
@@ -642,7 +642,7 @@ describe('results back button', () => {
 const REPUTATION = {
   locations: [
     { name: 'Acme Turf Tampa', city: 'Tampa', source: 'gbp', coverage: 'full', stats: { rating: 4.9, count: 212, coverage: 'full', per_month: 8.6, star_split: {}, days_since_newest: 3, reply_rate: 0.64 } },
-    { name: 'Acme Turf Villages', city: 'The Villages', source: 'places', coverage: 'sample', stats: { rating: 4.8, count: 87, coverage: 'sample', per_month: null, star_split: null, days_since_newest: 2, reply_rate: null } },
+    { name: 'Acme Turf Villages', city: 'The Villages', source: 'places', coverage: 'sample', stats: { rating: 4.8, count: 87, coverage: 'sample', per_month: null, star_split: null, days_since_newest: 2, reply_rate: null, sample_size: 5 } },
   ],
   themes: [
     { kind: 'praise', theme: 'On time, clean work', count: 31, location: 'Acme Turf Tampa', quotes: ['Showed up on time and left it spotless.'] },
@@ -715,6 +715,14 @@ describe('Reputation tab', () => {
     expect(screen.getByText('4.8 ★ · 87 reviews · (5 sample reviews)')).toBeInTheDocument();
     expect(screen.getByText('Public data')).toBeInTheDocument();
     expect(screen.getByText('Source: Google reviews')).toBeInTheDocument();
+  });
+
+  it('sample size is read from the stats: singular, and nothing when 0 or missing', () => {
+    const loc = (sample_size) => ({ name: 'X', source: 'places', coverage: 'sample', stats: { rating: 4, count: 9, coverage: 'sample', ...(sample_size === undefined ? {} : { sample_size }) } });
+    expect(statParts(loc(3))).toContain('(3 sample reviews)');
+    expect(statParts(loc(1))).toContain('(1 sample review)');
+    expect(statParts(loc(0)).join(' ')).not.toMatch(/sample/);
+    expect(statParts(loc()).join(' ')).not.toMatch(/sample/);
   });
 
   it('a quick audit (no themes, no search) and the "today" wording render cleanly', () => {
