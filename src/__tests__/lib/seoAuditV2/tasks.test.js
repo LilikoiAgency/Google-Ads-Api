@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { TASK_JSON_SCHEMA, priorityScore, mergeTasks, isGenericTask, tasksToCsv, pathKey, mergeKey, isEmptyTask } from '@/lib/seoAuditV2/tasks';
+import {
+  TASK_JSON_SCHEMA, priorityScore, mergeTasks, isGenericTask, tasksToCsv, pathKey, mergeKey, isEmptyTask,
+  isMeasured, effectiveImpact, flattenTasks,
+} from '@/lib/seoAuditV2/tasks';
 
 const t = (o = {}) => ({
   id: 'x', title: 'Rewrite title tag', category: 'content', page: '/a',
@@ -23,9 +26,13 @@ describe('TASK_JSON_SCHEMA', () => {
 
 describe('priorityScore', () => {
   it('computes impact * confidence weight / effort', () => {
-    expect(priorityScore(t({ impact: 5, effort: 1, confidence: 'high' }))).toBe(5);
-    expect(priorityScore(t({ impact: 5, effort: 2, confidence: 'medium' }))).toBeCloseTo(1.75);
-    expect(priorityScore(t({ impact: 4, effort: 2, confidence: 'low' }))).toBeCloseTo(0.8);
+    expect(priorityScore(t({ impact: 5, effort: 1, confidence: 'high' }))).toBe(12.5);
+    expect(priorityScore(t({ impact: 5, effort: 2, confidence: 'medium' }))).toBeCloseTo(5.833, 2);
+    expect(priorityScore(t({ impact: 4, effort: 2, confidence: 'low' }))).toBeCloseTo(2.133, 2);
+  });
+  it('a big fix outranks a cosmetic quick one (impact counts more than effort)', () => {
+    expect(priorityScore(t({ impact: 5, effort: 3 }))).toBeGreaterThan(priorityScore(t({ impact: 3, effort: 1 })));
+    expect(priorityScore(t({ impact: 5, effort: 1 }))).toBeGreaterThan(priorityScore(t({ impact: 5, effort: 3 })));
   });
 });
 
@@ -67,17 +74,56 @@ describe('isGenericTask', () => {
   });
 });
 
+describe('isMeasured / effectiveImpact', () => {
+  it('counts search, analytics, inspection and speed numbers as measured evidence', () => {
+    expect(isMeasured(t({ evidence: ['"turf x" 5 clicks, 3964 impressions, position 8.9 (Search Console, 2026-08-17 to 2026-11-14)'] }))).toBe(true);
+    expect(isMeasured(t({ evidence: ['coverage "URL is unknown to Google" (URL Inspection)'] }))).toBe(true);
+    expect(isMeasured(t({ evidence: ['Mobile performance 41 (PageSpeed)'] }))).toBe(true);
+    expect(isMeasured(t({ evidence: ['Current title: "Alpine Artificial Grass"'] }))).toBe(false);
+  });
+  it('caps unmeasured content and answer tasks at impact 2, leaves others alone', () => {
+    expect(effectiveImpact(t({ category: 'content', impact: 4, evidence: ['Current title: "x"'] }))).toBe(2);
+    expect(effectiveImpact(t({ category: 'aeo', impact: 3, evidence: ['no FAQ'] }))).toBe(2);
+    expect(effectiveImpact(t({ category: 'content', impact: 1, evidence: ['x'] }))).toBe(1);
+    expect(effectiveImpact(t({ category: 'content', impact: 5, evidence: ['4,760 impressions (Search Console)'] }))).toBe(5);
+    expect(effectiveImpact(t({ category: 'local', impact: 3, evidence: ['wrong phone number'] }))).toBe(3);
+  });
+});
+
+describe('flattenTasks', () => {
+  it('lists each task followed by its group items and follow-ups', () => {
+    const plan = [
+      t({ id: 'T1', items: [t({ id: 'T1.1' }), t({ id: 'T1.2' })] }),
+      t({ id: 'T2', follow_ups: [t({ id: 'T2.1' })] }),
+      t({ id: 'T3' }),
+    ];
+    expect(flattenTasks(plan).map((x) => [x.id, x.parent_id || null])).toEqual([
+      ['T1', null], ['T1.1', 'T1'], ['T1.2', 'T1'], ['T2', null], ['T2.1', 'T2'], ['T3', null],
+    ]);
+  });
+});
+
 describe('tasksToCsv', () => {
   it('has the expected header and joins evidence', () => {
     const csv = tasksToCsv([t({ evidence: ['a', 'b'] })]);
     const [head, row] = csv.split('\n');
-    expect(head).toBe('ID,Priority,Task,Page,Category,Impact,Effort,Confidence,Change,Why,Evidence');
+    expect(head).toBe('ID,Priority,Task,Page,Category,Impact,Effort,Confidence,Change,Why,Evidence,Part of');
     expect(row).toContain('a | b');
   });
   it('puts the task id first and the rank (1 = first, in received order) in Priority', () => {
     const rows = tasksToCsv([t({ id: 'T3', title: 'one' }), t({ id: 'T7', title: 'two' })]).split('\n');
     expect(rows[1].startsWith('T3,1,one,')).toBe(true);
     expect(rows[2].startsWith('T7,2,two,')).toBe(true);
+  });
+  it('adds a row per group item and follow-up, ranked with its parent', () => {
+    const rows = tasksToCsv([
+      t({ id: 'T1', title: 'group', page: 'multiple pages', items: [t({ id: 'T1.1', title: 'a' })] }),
+      t({ id: 'T2', title: 'two' }),
+    ]).split('\n');
+    expect(rows[1].startsWith('T1,1,group,multiple pages,')).toBe(true);
+    expect(rows[2].startsWith('T1.1,1,a,/a,')).toBe(true);
+    expect(rows[2].endsWith(',T1')).toBe(true);
+    expect(rows[3].startsWith('T2,2,two,')).toBe(true);
   });
   it('escapes quotes, commas and newlines per RFC 4180', () => {
     const csv = tasksToCsv([t({ title: 'Say "hi", ok', change: 'line1\nline2' })]);

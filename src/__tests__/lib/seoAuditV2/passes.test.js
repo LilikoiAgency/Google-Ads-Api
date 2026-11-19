@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PASSES, PASS_SYSTEM, SYNTH_SYSTEM, CONTENT_CHUNK_SIZE, buildPassInput, buildSharedContext, passSchema, synthSchema,
-  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves, resolveContentChunk,
+  normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves, resolveContentChunk, fixPageCount,
 } from '@/lib/seoAuditV2/passes';
 
 const page = (i, extra = {}) => ({
@@ -254,7 +254,9 @@ describe('schemas', () => {
 
   it('synth schema returns decisions, not rewritten tasks', () => {
     checkSchema(synthSchema);
-    expect(Object.keys(synthSchema.properties).sort()).toEqual(['client_summary', 'drop_task_ids', 'scores', 'top_moves']);
+    expect(Object.keys(synthSchema.properties).sort()).toEqual(['client_summary', 'drop_task_ids', 'follow_ups', 'groups', 'scores', 'top_moves']);
+    expect(Object.keys(synthSchema.properties.groups.items.properties).sort()).toEqual(['task_ids', 'title', 'why']);
+    expect(Object.keys(synthSchema.properties.follow_ups.items.properties).sort()).toEqual(['parent_id', 'task_ids']);
     expect(SYNTH_SYSTEM).not.toMatch(/data_gaps:/);
     expect(Object.keys(synthSchema.properties.top_moves.items.properties).sort()).toEqual(['headline', 'task_id']);
     expect(synthSchema.properties.drop_task_ids).toEqual({ type: 'array', items: { type: 'string' } });
@@ -322,6 +324,66 @@ describe('buildActionPlan', () => {
 
   it('keeps everything when synthesis output is missing', () => {
     expect(buildActionPlan([task('A'), task('B')], null)).toHaveLength(2);
+  });
+
+  const measured = (id, o = {}) => task(id, { evidence: ['4,760 impressions, position 9.6 (Search Console, 2026-08-17 to 2026-11-14)'], ...o });
+
+  it('caps unmeasured content tasks at impact 2 so a measured big fix ranks first', () => {
+    const cosmetic = task('CONT-1-1', { title: 'Rewrite Alpine title', impact: 3, effort: 1 });
+    const big = measured('CONT-1-2', { title: 'Restore the cost guide', impact: 5, effort: 3 });
+    const plan = buildActionPlan([cosmetic, big], {});
+    expect(plan.map((t) => t.title)).toEqual(['Restore the cost guide', 'Rewrite Alpine title']);
+    expect(plan[1].impact).toBe(2);
+  });
+
+  it('folds follow-up tasks into their parent with nested ids', () => {
+    const parent = measured('CONT-1-1', { title: 'Restore the cost guide', page: '/cost', impact: 5 });
+    const a = task('CONT-1-2', { title: 'Add a 400 sq ft example', page: '/cost' });
+    const b = task('CONT-1-3', { title: 'Add a price table', page: '/cost' });
+    const other = task('TECH-1', { title: 'Other', page: '/x', impact: 1 });
+    const plan = buildActionPlan([parent, a, b, other], { follow_ups: [{ parent_id: 'CONT-1-1', task_ids: ['CONT-1-2', 'CONT-1-3', 'CONT-1-1', 'NOPE'] }] });
+    expect(plan.map((t) => t.title)).toEqual(['Restore the cost guide', 'Other']);
+    expect(plan[0].follow_ups.map((t) => [t.id, t.title])).toEqual([['T1.1', 'Add a 400 sq ft example'], ['T1.2', 'Add a price table']]);
+  });
+
+  it('groups the same fix across pages into one task with one item per page', () => {
+    const lists = ['/a', '/b', '/c'].map((p, i) => task(`CONT-1-${i + 1}`, { title: `Remove the keyword list on ${p}`, page: p, impact: 2, effort: 1, change: `Delete "kw ${p}"\nsecond line` }));
+    const lone = measured('TECH-1', { title: 'Fix the redirect', page: '/z', impact: 4, effort: 1, category: 'technical' });
+    const plan = buildActionPlan([...lists, lone], {
+      groups: [{ title: 'Remove visible keyword lists', why: 'Reads as stuffing.', task_ids: ['CONT-1-1', 'CONT-1-2', 'CONT-1-3'] }],
+    });
+    expect(plan).toHaveLength(2);
+    const g = plan.find((t) => t.group);
+    expect(g).toMatchObject({ title: 'Remove visible keyword lists', why: 'Reads as stuffing.', page: 'multiple pages', pages: ['/a', '/b', '/c'], category: 'content', impact: 2, effort: 1 });
+    expect(g.items.map((t) => t.page)).toEqual(['/a', '/b', '/c']);
+    expect(g.items[0].id).toBe(`${g.id}.1`);
+    expect(g.change).toBe('Apply this on each page:\n/a: Delete "kw /a"\n/b: Delete "kw /b"\n/c: Delete "kw /c"');
+    expect([...g.source_ids].sort()).toEqual(['CONT-1-1', 'CONT-1-2', 'CONT-1-3']);
+  });
+
+  it('a top move naming a folded follow-up resolves to its parent', () => {
+    const plan = buildActionPlan([measured('P', { impact: 5 }), task('C')], { follow_ups: [{ parent_id: 'P', task_ids: ['C'] }] });
+    const moves = resolveTopMoves(plan, { top_moves: [{ task_id: 'C', headline: 'h' }] });
+    expect(moves[0]).toMatchObject({ headline: 'h', task: { id: 'T1' } });
+  });
+
+  it('a group title states the real page count', () => {
+    const ts = ['/a', '/b'].map((p, i) => task(`C${i}`, { page: p }));
+    const plan = buildActionPlan(ts, { groups: [{ title: 'Remove the visible keyword lists from 7 pages', why: 'w', task_ids: ['C0', 'C1'] }] });
+    expect(plan[0].title).toBe('Remove the visible keyword lists from 2 pages');
+    expect(fixPageCount('Add a local FAQ section to 6 location pages', 4)).toBe('Add a local FAQ section to 4 location pages');
+    expect(fixPageCount('Rewrite titles on 9 homepage and service pages', 3)).toBe('Rewrite titles on 3 homepage and service pages');
+    expect(fixPageCount('Remove keyword lists', 3)).toBe('Remove keyword lists');
+  });
+
+  it('ignores a group with fewer than two usable tasks and never uses a task twice', () => {
+    const ts = [task('A', { page: '/a' }), task('B', { page: '/b' }), task('C', { page: '/c' })];
+    const plan = buildActionPlan(ts, {
+      follow_ups: [{ parent_id: 'A', task_ids: ['B'] }],
+      groups: [{ title: 'G1', why: 'w', task_ids: ['B', 'C'] }, { title: 'G2', why: 'w', task_ids: ['ZZ', 'C'] }],
+    });
+    expect(plan.map((t) => t.title).sort()).toEqual(['Task A', 'Task C']);
+    expect(plan.find((t) => t.title === 'Task A').follow_ups).toHaveLength(1);
   });
 });
 

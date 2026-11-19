@@ -35,7 +35,7 @@ export default function ClientSummary({ result }) {
                     <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", lineHeight: 1.45 }}>{m.headline}</p>
                     {m.task && (
                       <p style={{ fontSize: 12, color: "#888", marginTop: 2, wordBreak: "break-all" }}>
-                        {m.task.id} &middot; {pagePath(m.task.page)}
+                        {m.task.id} &middot; {m.task.group ? `${m.task.items?.length || 0} pages` : pagePath(m.task.page)}
                       </p>
                     )}
                   </div>

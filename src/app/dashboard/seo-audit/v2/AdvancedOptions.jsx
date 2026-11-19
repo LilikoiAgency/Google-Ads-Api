@@ -111,7 +111,7 @@ export default function AdvancedOptions({ value, onChange, auditType }) {
                   onChange={(e) => set({ skipText: e.target.value })}
                   style={field}
                 />
-                <p style={hint}>* matches anything. Doesn't remove pages you listed above.</p>
+                <p style={hint}>* matches anything. Doesn&apos;t remove pages you listed above.</p>
               </div>
               <div>
                 <label htmlFor="adv-count" style={label}>Number of pages</label>

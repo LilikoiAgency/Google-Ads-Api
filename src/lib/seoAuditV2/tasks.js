@@ -22,9 +22,35 @@ export const TASK_JSON_SCHEMA = {
 
 const CONFIDENCE_WEIGHT = { high: 1, medium: 0.7, low: 0.4 };
 
+// Impact counts much more than effort: a big fix (impact 5, effort 3) outranks a
+// cosmetic quick one (impact 3, effort 1).
 export function priorityScore(task) {
   const w = CONFIDENCE_WEIGHT[task.confidence] ?? CONFIDENCE_WEIGHT.low;
-  return (task.impact * w) / (task.effort || 1);
+  return (w * task.impact * task.impact) / ((task.effort || 1) + 1);
+}
+
+// Evidence backed by a measurement (Search Console, URL Inspection, GA4, PageSpeed).
+const MEASURED = /search console|impressions?\b|\bclicks?\b|url inspection|google analytics|\bga4\b|pagespeed|key events?|\bsessions\b/i;
+export const isMeasured = (task) => (task?.evidence || []).some((e) => MEASURED.test(String(e)));
+
+// Content and answer-engine tasks with no measured evidence are capped at impact 2,
+// so cosmetic rewrites don't outrank fixes with real search demand behind them.
+export const UNMEASURED_IMPACT_CAP = 2;
+export function effectiveImpact(task) {
+  if ((task.category === 'content' || task.category === 'aeo') && !isMeasured(task)) {
+    return Math.min(task.impact, UNMEASURED_IMPACT_CAP);
+  }
+  return task.impact;
+}
+
+// Plan tasks, each followed by its group items and follow-ups (with parent_id).
+export function flattenTasks(tasks) {
+  const out = [];
+  for (const t of tasks || []) {
+    out.push(t);
+    for (const c of [...(t.items || []), ...(t.follow_ups || [])]) out.push({ ...c, parent_id: t.id });
+  }
+  return out;
 }
 
 function titleKey(title) {
@@ -102,10 +128,14 @@ function csvCell(value) {
 }
 
 export function tasksToCsv(tasks) {
-  const header = ['ID', 'Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Why', 'Evidence'];
-  const rows = (tasks || []).map((t, i) => [
-    t.id, i + 1, t.title, t.page, t.category, t.impact, t.effort, t.confidence,
-    t.change, t.why, (t.evidence || []).join(' | '),
+  const header = ['ID', 'Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Why', 'Evidence', 'Part of'];
+  const row = (t, rank, parent = '') => [
+    t.id, rank, t.title, t.page, t.category, t.impact, t.effort, t.confidence,
+    t.change, t.why, (t.evidence || []).join(' | '), parent,
+  ];
+  const rows = (tasks || []).flatMap((t, i) => [
+    row(t, i + 1),
+    ...[...(t.items || []), ...(t.follow_ups || [])].map((c) => row(c, i + 1, t.id)),
   ]);
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
 }

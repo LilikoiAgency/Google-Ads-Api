@@ -116,6 +116,53 @@ describe('ActionPlan', () => {
     );
   });
 
+  const GROUP = {
+    id: 'T4', group: true, title: 'Remove the visible keyword lists from 2 pages', page: 'multiple pages', pages: ['/a', '/b'],
+    category: 'content', impact: 2, effort: 1, confidence: 'high', evidence: ['/a: kw list'], why: 'Reads as stuffing.',
+    change: 'Apply this on each page:\n/a: Delete "kw a"\n/b: Delete "kw b"',
+    items: [
+      { id: 'T4.1', title: 'Remove the keyword list on /a', page: '/a', category: 'content', impact: 2, effort: 1, confidence: 'high', evidence: ['kw a'], change: 'Delete "kw a"', why: 'w' },
+      { id: 'T4.2', title: 'Remove the keyword list on /b', page: '/b', category: 'content', impact: 2, effort: 1, confidence: 'high', evidence: ['kw b'], change: 'Delete "kw b"', why: 'w' },
+    ],
+  };
+
+  it('a group row shows its page count and lists each page when opened', () => {
+    render(<ActionPlan tasks={[...TASKS, GROUP]} domain="acme.com" />);
+    expect(screen.getAllByText('2 pages').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText(GROUP.title));
+    expect(screen.getByText('Each page (2)')).toBeInTheDocument();
+    expect(screen.getByText('Remove the keyword list on /b')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /\/b/ })).toHaveAttribute('href', 'https://acme.com/b');
+  });
+
+  it('the page filter finds a group by its item pages', () => {
+    render(<ActionPlan tasks={[...TASKS, GROUP]} domain="acme.com" />);
+    fireEvent.change(screen.getByLabelText(/^page/i), { target: { value: '/b' } });
+    expect(screen.getByText(GROUP.title)).toBeInTheDocument();
+    expect(screen.queryByText('Fix canonical pointing to staging')).not.toBeInTheDocument();
+  });
+
+  it('checklist nests group items and follow-ups under their task', () => {
+    const parent = { ...TASKS[1], follow_ups: [{ ...TASKS[0], id: 'T2.1', page: '/x', change: 'Add a table' }] };
+    expect(tasksToChecklist([GROUP, parent])).toBe(
+      '- [ ] T4 · multiple pages · Remove the visible keyword lists from 2 pages\n'
+      + '  - [ ] T4.1 · /a · Remove the keyword list on /a — Delete "kw a"\n'
+      + '  - [ ] T4.2 · /b · Remove the keyword list on /b — Delete "kw b"\n'
+      + '- [ ] T2 · / · Fix canonical pointing to staging — Set the canonical to https://acme.com/.\n'
+      + '  - [ ] T2.1 · /x · Add pricing section to turf page — Add a table',
+    );
+  });
+
+  it('shows the top 10 first and the rest behind Show more; filters show everything', () => {
+    const many = Array.from({ length: 13 }, (_, i) => ({ ...TASKS[1], id: `T${i + 1}`, title: `Task number ${i + 1}` }));
+    render(<ActionPlan tasks={many} domain="acme.com" />);
+    expect(screen.getByText(/Do these first: the top 10 of 13 tasks/)).toBeInTheDocument();
+    expect(screen.getByText('Task number 10')).toBeInTheDocument();
+    expect(screen.queryByText('Task number 11')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more tasks' }));
+    expect(screen.getByText('Task number 13')).toBeInTheDocument();
+  });
+
   it('Copy as checklist copies the visible tasks', async () => {
     const writeText = vi.fn().mockResolvedValue();
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

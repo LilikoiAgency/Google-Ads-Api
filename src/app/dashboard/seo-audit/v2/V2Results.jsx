@@ -9,6 +9,7 @@ import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
+import { flattenTasks } from "../../../../lib/seoAuditV2/tasks";
 
 const SOURCES = [
   ["crawl", "Site crawl"],
@@ -64,6 +65,8 @@ export default function V2Results({ result, domain, actions }) {
   const [tab, setTab] = useState("plan");
   if (!result) return null;
   const tasks = result.action_plan || [];
+  // Page cards list each page's own fixes, including ones nested in groups.
+  const pageTasks = flattenTasks(tasks).filter((t) => !t.group);
   const findings = result.findings || {};
   const pagesCrawled = result.data_sources?.crawl?.pages;
   // Older results have no passes_completed; treat every area as complete there.
@@ -105,7 +108,7 @@ export default function V2Results({ result, domain, actions }) {
         {tab === "pages" && (
           <>
             {incomplete("content") && <IncompleteNotice area="Content" />}
-            {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={tasks} domain={result.domain || domain} />}
+            {(!incomplete("content") || result.pages?.length > 0) && <PageCards pages={result.pages} tasks={pageTasks} domain={result.domain || domain} />}
             {findings.content?.length > 0 && (
               <>
                 <SectionTitle>Content findings</SectionTitle>
