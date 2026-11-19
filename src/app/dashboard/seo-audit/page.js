@@ -342,7 +342,7 @@ export default function SEOAuditPage() {
                 })}
               </div>
 
-              <AdvancedOptions value={advanced} onChange={setAdvanced} auditType={auditType} />
+              <AdvancedOptions value={advanced} onChange={setAdvanced} auditType={auditType} domain={domain} />
 
               {/* Submit button */}
               <button

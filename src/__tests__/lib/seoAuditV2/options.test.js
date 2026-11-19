@@ -47,6 +47,22 @@ describe('parseAuditOptions', () => {
   });
 });
 
+describe('parseAuditOptions data source picks', () => {
+  it('keeps a chosen Search Console property and GA4 property', () => {
+    const { options } = parseAuditOptions({ gscSite: 'sc-domain:sempersolaris.com', ga4Property: { id: 'properties/123', name: 'Semper Solaris', account: 'Semper' } }, 'sempersolaris.com');
+    expect(options).toMatchObject({ gscSite: 'sc-domain:sempersolaris.com', ga4Property: { id: 'properties/123', name: 'Semper Solaris', account: 'Semper' } });
+    expect(hasOptions(options)).toBe(true);
+    expect(parseAuditOptions({ gscSite: 'https://www.acme.com/' }, 'acme.com').options.gscSite).toBe('https://www.acme.com/');
+  });
+  it('rejects malformed picks', () => {
+    expect(parseAuditOptions({ gscSite: 'not a site' }, 'acme.com').error).toMatch(/Search Console/);
+    expect(parseAuditOptions({ ga4Property: { id: '123' } }, 'acme.com').error).toMatch(/Google Analytics/);
+  });
+  it('leaves the keys out when nothing is picked', () => {
+    expect(parseAuditOptions({ pageCount: 10, gscSite: '' }, 'acme.com').options).toEqual({ pages: [], onlyListed: false, skip: [], pageCount: 10 });
+  });
+});
+
 describe('matchesSkip / filterSkipped', () => {
   it('matches path patterns with * wildcards, ignoring a trailing slash', () => {
     expect(matchesSkip('https://site.com/blog/post-1', ['/blog/*'])).toBe(true);

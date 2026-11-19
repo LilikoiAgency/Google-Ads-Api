@@ -110,6 +110,20 @@ describe('gather fix round 1', () => {
     m.summarizeGa4.mockReturnValue({ ga4: true });
   };
 
+  it('uses a chosen Search Console property and GA4 property instead of matching by domain', async () => {
+    gscOk(); ga4Ok();
+    await gatherAll({ domain: 'x.com', crawl, profile: 'quick', gscSite: 'https://www.x.com/', ga4Property: { id: 'properties/77', name: 'Picked', account: 'Acct' } });
+    expect(m.findGscSite).toHaveBeenCalledWith('x.com', { site: 'https://www.x.com/' });
+    expect(m.findGa4Property).not.toHaveBeenCalled();
+    expect(m.fetchTrafficReport.mock.calls[0][0].property).toEqual({ id: 'properties/77', name: 'Picked', account: 'Acct' });
+  });
+
+  it('records which GA4 property the numbers came from', async () => {
+    gscOk(); ga4Ok();
+    const { data } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
+    expect(data.ga4Property).toBe('p');
+  });
+
   it('GA4 ok path populates ga4 and ga4Pages', async () => {
     gscOk(); ga4Ok();
     m.ga4PerPage.mockReturnValue([{ page: '/a', sessions: 3 }]);

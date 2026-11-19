@@ -40,7 +40,8 @@ export function KpiRow({ result }) {
   );
 }
 
-export function Opportunities({ search }) {
+// gscStatus: the audit's Search Console status, to explain an empty table correctly.
+export function Opportunities({ search, gscStatus }) {
   const rows = search?.opportunities || [];
   const max = Math.max(1, ...rows.map((r) => r.impressions || 0));
   return (
@@ -67,7 +68,11 @@ export function Opportunities({ search }) {
           </tbody>
         </table>
       ) : (
-        <p className={s.empty}>Search Console data wasn&apos;t available for this audit, so there are no search opportunities to show. Re-run the audit once Search Console is connected.</p>
+        <p className={s.empty}>
+          {gscStatus === "ok"
+            ? "This audit was saved before search numbers were added here. Re-run it to see them."
+            : "Search Console data wasn't available for this audit. Check the property under Advanced, then re-run."}
+        </p>
       )}
     </div>
   );
@@ -162,7 +167,7 @@ export default function ClientSummary({ result }) {
     <div>
       <KpiRow result={result} />
       <div className={s.grid}>
-        <Opportunities search={result.search} />
+        <Opportunities search={result.search} gscStatus={result.data_sources?.search_console?.status} />
         <ScoresCard scores={result.scores} summary={result.client_summary} />
       </div>
       <TopMoves moves={result.top_moves} />

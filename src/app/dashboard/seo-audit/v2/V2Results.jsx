@@ -54,7 +54,8 @@ function AboutAudit({ sources, gaps }) {
           {items.map(([k, label]) => {
             const src = sources[k];
             const ok = src.status === "ok";
-            const detail = ok && k === "crawl" && src.pages ? `, ${src.pages} pages` : "";
+            const detail = ok && k === "crawl" && src.pages ? `, ${src.pages} pages`
+              : src.site ? `: ${src.site}` : src.property ? `: ${src.property}` : "";
             return (
               <li key={k} className={ok ? s.ok : s.off}>
                 {label}{detail}{!ok ? ` (${STATUS_TEXT[src.status] || src.status})` : ""}
@@ -119,7 +120,7 @@ export default function V2Results({ result, domain, actions }) {
 
       <KpiRow result={result} />
       <div className={s.grid}>
-        <Opportunities search={result.search} />
+        <Opportunities search={result.search} gscStatus={result.data_sources?.search_console?.status} />
         <ScoresCard scores={result.scores} summary={result.client_summary} />
       </div>
       <TopMoves moves={result.top_moves} />

@@ -19,7 +19,7 @@ import PageCards from '@/app/dashboard/seo-audit/v2/PageCards.jsx';
 import PassFindings from '@/app/dashboard/seo-audit/v2/PassFindings.jsx';
 import { useAuditJob, friendlyError } from '@/app/dashboard/seo-audit/v2/useAuditJob.js';
 import ResultsView, { isV2Audit } from '@/app/dashboard/seo-audit/ResultsView.jsx';
-import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from '@/app/dashboard/seo-audit/v2/AdvancedOptions.jsx';
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions, autoGscSite } from '@/app/dashboard/seo-audit/v2/AdvancedOptions.jsx';
 
 const TASKS = [
   {
@@ -531,7 +531,7 @@ describe('AdvancedOptions', () => {
 
   it('fromAuditOptions turns saved URLs back into paths', () => {
     expect(fromAuditOptions({ pages: ['https://acme.com/pet-turf'], onlyListed: true, skip: ['/blog/*'], pageCount: null }))
-      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '' });
+      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '', gscSite: '', ga4Property: null });
     expect(fromAuditOptions(null)).toEqual(EMPTY_ADVANCED);
   });
 
@@ -587,7 +587,38 @@ describe('v2 dashboard overview', () => {
   it('an older audit without search data still renders, with a plain note instead of the table', () => {
     render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
     expect(screen.queryByText('Search clicks · 90 days')).not.toBeInTheDocument();
-    expect(screen.getByText(/Search Console data wasn.t available for this audit/)).toBeInTheDocument();
+    expect(screen.getByText('This audit was saved before search numbers were added here. Re-run it to see them.')).toBeInTheDocument();
     expect(screen.getByText('Action plan')).toBeInTheDocument();
+  });
+});
+
+describe('Advanced: data source pickers', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('autoGscSite matches the domain the same way the server does', () => {
+    const sites = ['https://www.other.com/', 'sc-domain:sempersolaris.com', 'https://sempersolaris.com/'];
+    expect(autoGscSite('https://www.SemperSolaris.com/about', sites)).toBe('sc-domain:sempersolaris.com');
+    expect(autoGscSite('nomatch.com', sites)).toBeNull();
+  });
+
+  it('toRequestOptions carries the picked properties', () => {
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, gscSite: 'sc-domain:a.com', ga4Property: { id: 'properties/1', name: 'A', account: 'X' } }))
+      .toEqual({ pages: [], skip: [], onlyListed: false, gscSite: 'sc-domain:a.com', ga4Property: { id: 'properties/1', name: 'A', account: 'X' } });
+  });
+
+  it('loads both lists when opened, shows what Automatic picks, and reports a GA4 choice', async () => {
+    global.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('gsc-sites')
+        ? { connected: true, sites: [{ url: 'sc-domain:sempersolaris.com' }, { url: 'https://www.bigbullyturf.com/' }] }
+        : { properties: [{ id: 'properties/42', name: 'Semper Solaris', account: 'Semper' }] }),
+    }));
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="quick" domain="sempersolaris.com" />);
+    expect(global.fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    expect(await screen.findByRole('option', { name: 'Automatic: sc-domain:sempersolaris.com' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Google Analytics property'), { target: { value: 'properties/42' } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_ADVANCED, ga4Property: { id: 'properties/42', name: 'Semper Solaris', account: 'Semper' } });
   });
 });

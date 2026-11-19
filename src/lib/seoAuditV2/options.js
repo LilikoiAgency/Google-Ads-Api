@@ -56,11 +56,31 @@ export function parseAuditOptions(raw, domain) {
   const onlyListed = raw.onlyListed === true;
   if (onlyListed && !pages.length) return { error: 'List at least one page to audit only those pages.' };
 
-  if (!pages.length && !skip.length && pageCount == null) return { options: null };
-  return { options: { pages, onlyListed, skip, pageCount } };
+  // Data sources picked by hand instead of matched by domain.
+  let gscSite = null;
+  if (raw.gscSite != null && raw.gscSite !== "") {
+    const site = String(raw.gscSite).trim();
+    if (!/^(sc-domain:[a-z0-9.-]+|https?:\/\/\S+)$/i.test(site)) return { error: "Pick a Search Console property from the list." };
+    gscSite = site;
+  }
+  let ga4Property = null;
+  if (raw.ga4Property && typeof raw.ga4Property === "object" && raw.ga4Property.id) {
+    const id = String(raw.ga4Property.id).trim();
+    if (!/^properties\/\d+$/.test(id)) return { error: "Pick a Google Analytics property from the list." };
+    ga4Property = { id, name: String(raw.ga4Property.name || id).slice(0, 200), account: String(raw.ga4Property.account || "").slice(0, 200) };
+  }
+
+  if (!pages.length && !skip.length && pageCount == null && !gscSite && !ga4Property) return { options: null };
+  return {
+    options: {
+      pages, onlyListed, skip, pageCount,
+      ...(gscSite ? { gscSite } : {}),
+      ...(ga4Property ? { ga4Property } : {}),
+    },
+  };
 }
 
-export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null);
+export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property);
 
 // How many pages the crawl may fetch.
 export function pageLimit(auditType, options) {
@@ -97,6 +117,8 @@ export function describeOptions(o) {
   const parts = [];
   if (o.pages?.length) parts.push(o.onlyListed ? `only ${o.pages.length} listed page${o.pages.length === 1 ? '' : 's'}` : `${o.pages.length} priority page${o.pages.length === 1 ? '' : 's'}`);
   if (o.skip?.length) parts.push(`skip ${o.skip.join(', ')}`);
+  if (o.gscSite) parts.push(`Search Console ${o.gscSite}`);
+  if (o.ga4Property) parts.push(`Analytics ${o.ga4Property.name}`);
   if (o.pageCount && !o.onlyListed) parts.push(`${o.pageCount} pages`);
   return parts.join(' · ');
 }
