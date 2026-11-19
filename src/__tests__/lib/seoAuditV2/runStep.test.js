@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   runStructured: vi.fn(),
   getSavedLocations: vi.fn(),
   saveReviewTexts: vi.fn(),
+  runWebSearch: vi.fn(),
 }));
 
 vi.mock('@/lib/seoCrawler', () => ({ crawlSite: m.crawlSite }));
@@ -18,6 +19,11 @@ vi.mock('@/lib/seoAuditV2/gather', () => ({
 }));
 vi.mock('@/lib/seoAuditV2/llm', () => ({ runStructured: m.runStructured }));
 vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ getSavedLocations: m.getSavedLocations, saveReviewTexts: m.saveReviewTexts }));
+
+vi.mock('@/lib/seoAuditV2/search', async () => ({
+  ...(await vi.importActual('@/lib/seoAuditV2/search')),
+  runWebSearch: m.runWebSearch,
+}));
 
 const { runStep } = await import('@/lib/seoAuditV2/runStep');
 const { newJob } = await import('@/lib/seoAuditV2/jobs');
@@ -421,5 +427,38 @@ describe('runStep gather reviews', () => {
     const res = await runStep(job({}, { data: { crawl } }), 'gather');
     expect(m.gatherAll.mock.calls[2][0].locations).toBeNull();
     expect(res.ok).toBe(true);
+  });
+});
+
+describe('runStep search', () => {
+  const sources = {
+    gscPages: [{ page: 'https://acme.com/', queries: [{ query: 'turf installation', impressions: 50 }] }],
+    reviews: [{ source: 'places', id: 'a', name: 'A', city: 'Austin', region: 'TX' }],
+  };
+  const searchJob = () => job({}, { data: { crawl, sources } });
+
+  it('runs the web search with queries, city and region and stores the result', async () => {
+    const value = { status: 'ok', queries: [], notes: 'n' };
+    m.runWebSearch.mockResolvedValue(value);
+    const res = await runStep(searchJob(), 'search');
+    const arg = m.runWebSearch.mock.calls[0][0];
+    expect(arg).toMatchObject({ domain: 'acme.com', city: 'Austin', region: 'TX', email: 'a@lilikoiagency.com' });
+    expect(arg.queries[0]).toBe('turf installation Austin');
+    expect(res).toEqual({ ok: true, patch: { 'data.sources.aiSearch': value } });
+  });
+
+  it('turns an API error into a gap, not a failed step', async () => {
+    m.runWebSearch.mockResolvedValue({ status: 'error', error: 'boom', queries: [], notes: '' });
+    expect(await runStep(searchJob(), 'search')).toEqual({
+      ok: true, patch: { 'data.sources.aiSearch': null }, gaps: ["Web search check didn't complete."],
+    });
+    m.runWebSearch.mockRejectedValue(new Error('network'));
+    expect((await runStep(searchJob(), 'search')).ok).toBe(true);
+  });
+
+  it('fails the step on a timeout so it retries', async () => {
+    m.runWebSearch.mockRejectedValue(Object.assign(new Error('The request timed out'), { code: 'timeout' }));
+    const res = await runStep(searchJob(), 'search');
+    expect(res.ok).toBe(false);
   });
 });

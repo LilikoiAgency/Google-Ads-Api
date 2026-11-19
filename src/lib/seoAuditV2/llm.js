@@ -15,7 +15,7 @@ const RATES = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 };
 
 // Server-side refusal fallback: on a policy decline the same request is re-run
 // on a fallback model inside the same call.
-const FALLBACK = { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' };
+export const FALLBACK = { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' };
 const USE_FALLBACK = true;
 
 export class PassError extends Error {
@@ -26,7 +26,7 @@ export class PassError extends Error {
   }
 }
 
-async function resolveApiKey() {
+export async function resolveApiKey() {
   let creds = null;
   try {
     creds = await getCredentials();
@@ -36,14 +36,14 @@ async function resolveApiKey() {
   return creds?.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
 }
 
-function estimateCost(u) {
+export function estimateCost(u) {
   return ((u.input_tokens || 0) * RATES.input
     + (u.cache_creation_input_tokens || 0) * RATES.cacheWrite
     + (u.cache_read_input_tokens || 0) * RATES.cacheRead
     + (u.output_tokens || 0) * RATES.output) / 1_000_000;
 }
 
-function usageOf(message) {
+export function usageOf(message) {
   const u = message?.usage || {};
   return {
     model: message?.model || AUDIT_MODEL,
@@ -54,7 +54,7 @@ function usageOf(message) {
   };
 }
 
-const isAbort = (err, signal) => signal?.aborted
+export const isAbort = (err, signal) => signal?.aborted
   || err?.name === 'AbortError'
   || err instanceof Anthropic.APIUserAbortError
   || /aborted|timed? ?out/i.test(err?.message || '');

@@ -15,6 +15,8 @@ import { effortForAttempt } from './jobs';
 import { pageLimit, filterSkipped } from './options';
 import { buildSearchSummary } from './overview';
 import { getSavedLocations, saveReviewTexts } from './reputationStore';
+import { brandName } from './reviews';
+import { buildSearchQueries, runWebSearch } from './search';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -23,6 +25,7 @@ const SOURCES = {
   ga4: 'ga4',
   pagespeed: 'pagespeed',
   reviews: 'reviews',
+  ai_search: 'aiSearch',
 };
 
 const PASS_AREA = {
@@ -109,6 +112,33 @@ async function runGather(job) {
   const homepage = pages.find((p) => p.page_type === 'homepage') || pages[0] || null;
   const sharedContext = buildSharedContext({ domain: job.domain, profile: job.auditType, homepage, gaps: describeGaps(gaps) });
   return { ok: true, patch: { 'data.sources': data, 'data.gaps': gaps, 'data.sharedContext': sharedContext } };
+}
+
+const SEARCH_GAP = "Web search check didn't complete.";
+
+// A search or API failure only leaves a gap; a timeout fails the step so it retries.
+async function runSearch(job) {
+  const sources = job.data?.sources || {};
+  const crawl = job.data?.crawl;
+  const brand = brandName(crawl, job.domain);
+  const loc = (sources.reviews || []).find((r) => r?.city);
+  const city = loc?.city || null;
+  const region = loc?.region || null;
+  const queries = buildSearchQueries({ gscPages: sources.gscPages, crawl, brand, city });
+  const failed = { ok: true, patch: { 'data.sources.aiSearch': null }, gaps: [SEARCH_GAP] };
+  if (!queries.length) return failed;
+  try {
+    const out = await runWebSearch({ queries, brand, domain: job.domain, city, region, email: job.email });
+    if (out.status === 'error') {
+      console.warn('[seo-audit-v2] web search failed:', out.error);
+      return failed;
+    }
+    return { ok: true, patch: { 'data.sources.aiSearch': out } };
+  } catch (err) {
+    if (err?.code === 'timeout') return { ok: false, error: errText(err) };
+    console.warn('[seo-audit-v2] web search failed:', errText(err));
+    return failed;
+  }
 }
 
 async function runPass(job, key) {
@@ -292,6 +322,7 @@ export async function runStep(job, key) {
   try {
     if (key === 'crawl') return await runCrawl(job);
     if (key === 'gather') return await runGather(job);
+    if (key === 'search') return await runSearch(job);
     if (key.startsWith('pass:')) return await runPass(job, key);
     if (key === 'synthesize') return await runSynthesize(job);
     return { ok: false, error: `Unknown step: ${key}` };
