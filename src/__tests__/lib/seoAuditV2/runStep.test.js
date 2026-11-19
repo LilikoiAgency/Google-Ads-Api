@@ -50,6 +50,36 @@ describe('runStep', () => {
     expect(res).toEqual({ ok: true, patch: { 'data.crawl': crawl } });
   });
 
+  it('crawl with options: listed pages first, Search Console seeds minus skipped, page limit and skip passed on', async () => {
+    m.seedPages.mockResolvedValue(['https://acme.com/blog/x', 'https://acme.com/a']);
+    m.crawlSite.mockResolvedValue(crawl);
+    const options = { pages: ['https://acme.com/money'], onlyListed: false, skip: ['/blog/*'], pageCount: 10 };
+    await runStep(job({}, { options }), 'crawl');
+    expect(m.seedPages).toHaveBeenCalledWith('acme.com', 'full', 5);
+    expect(m.crawlSite).toHaveBeenCalledWith('acme.com', 'full', null, {
+      seedUrls: ['https://acme.com/money', 'https://acme.com/a'], deadlineMs: 200_000, pageLimit: 10, skip: ['/blog/*'],
+    });
+  });
+
+  it('crawl with only listed pages skips discovery and Search Console seeding', async () => {
+    m.crawlSite.mockResolvedValue(crawl);
+    const options = { pages: ['https://acme.com/a', 'https://acme.com/b'], onlyListed: true, skip: [], pageCount: null };
+    await runStep(job({}, { options }), 'crawl');
+    expect(m.seedPages).not.toHaveBeenCalled();
+    expect(m.crawlSite).toHaveBeenCalledWith('acme.com', 'full', options.pages, {
+      seedUrls: [], deadlineMs: 200_000, pageLimit: 2, skip: [],
+    });
+  });
+
+  it('gather passes listed pages and skip patterns when the job has options', async () => {
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [] });
+    const options = { pages: ['https://acme.com/money'], onlyListed: false, skip: ['/blog/*'], pageCount: null };
+    await runStep(job({}, { data: { crawl }, options }), 'gather');
+    expect(m.gatherAll).toHaveBeenCalledWith({
+      domain: 'acme.com', crawl, profile: 'full', priorityUrls: options.pages, onlyListed: false, skip: ['/blog/*'],
+    });
+  });
+
   it('a crawl cut short by the deadline becomes a job gap', async () => {
     m.seedPages.mockResolvedValue([]);
     const truncated = { ...crawl, crawl_truncated: true };

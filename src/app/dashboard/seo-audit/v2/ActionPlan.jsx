@@ -36,17 +36,26 @@ export function pageHref(page, domain) {
   return null;
 }
 
-// "- [ ] T1 · /page · title — change"; a multi-line change (summary plus the
-// exact text of each fix) keeps its extra lines as indented sub-items.
-export function tasksToChecklist(tasks) {
-  return (tasks || [])
-    .map((t) => {
-      const [first = "", ...rest] = String(t.change || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      const head = `- [ ] ${t.id} · ${pagePath(t.page)} · ${oneLine(t.title)} — ${first}`;
-      return [head, ...rest.map((l) => `  - ${l}`)].join("\n");
-    })
-    .join("\n");
+// Sub-tasks of a task: a group's per-page items and folded follow-ups.
+export const childrenOf = (t) => [...(t.items || []), ...(t.follow_ups || [])];
+
+function checklistLines(t, indent) {
+  const [first = "", ...rest] = String(t.change || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  // A group's change only lists its items, which follow as their own lines.
+  const lines = t.group ? [] : rest;
+  const head = `${indent}- [ ] ${t.id} · ${pagePath(t.page)} · ${oneLine(t.title)}${t.group ? "" : ` — ${first}`}`;
+  return [head, ...lines.map((l) => `${indent}  - ${l}`), ...childrenOf(t).flatMap((c) => checklistLines(c, `${indent}  `))];
 }
+
+// "- [ ] T1 · /page · title — change"; a multi-line change (summary plus the
+// exact text of each fix) keeps its extra lines as indented sub-items, and a
+// task's group items and follow-ups follow as nested checkboxes.
+export function tasksToChecklist(tasks) {
+  return (tasks || []).flatMap((t) => checklistLines(t, "")).join("\n");
+}
+
+export const TOP_COUNT = 10;
+const taskPages = (t) => (t.group ? childrenOf(t).map((c) => c.page) : [t.page, ...childrenOf(t).map((c) => c.page)]);
 
 export const isQuickWin = (t) => t.impact >= 4 && t.effort <= 2;
 
@@ -148,10 +157,57 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
             <li key={i} style={{ fontSize: 12, color: "#444", lineHeight: 1.6, marginBottom: 2, wordBreak: "break-word" }}>{e}</li>
           ))}
         </ul>
-        {task.source_ids?.length > 0 && (
+        {task.source_ids?.length > 0 && !task.group && (
           <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>From findings {task.source_ids.join(", ")}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function SubTasks({ task, domain, notice, onCopy }) {
+  const children = childrenOf(task);
+  if (!children.length) return null;
+  return (
+    <div style={{ marginTop: 6, borderTop: "1px solid #eee", paddingTop: 10 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 8 }}>
+        {task.group ? `Each page (${children.length})` : "Do together with this task"}
+      </p>
+      <ol style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "grid", gap: 10 }}>
+        {children.map((c) => {
+          const href = pageHref(c.page, domain);
+          const n = notice?.key === `change-${c.id}` ? notice : null;
+          return (
+            <li key={c.id} style={{ border: "1px solid #eef0f4", borderRadius: 8, padding: "10px 12px", background: "#fff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a2e" }}>
+                  <span style={{ color: "#0f3460", marginRight: 6 }}>{c.id}</span>{c.title}
+                </p>
+                <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {n && !n.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{n.text}</span>}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onCopy(c); }}
+                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #cde7d8", background: "#fff", color: "#1a7a4a" }}
+                  >
+                    {n?.ok ? "Copied" : "Copy change"}
+                  </button>
+                </span>
+              </div>
+              {href ? (
+                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "#0f3460", wordBreak: "break-all" }}>
+                  {pagePath(c.page)} &#8599;
+                </a>
+              ) : <span style={{ fontSize: 12, color: "#555" }}>{pagePath(c.page)}</span>}
+              <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#f0fdf4", border: "1px solid #cde7d8", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
+                {c.change}
+              </p>
+              {c.evidence?.length > 0 && (
+                <p style={{ fontSize: 12, color: "#666", marginTop: 6, lineHeight: 1.5 }}>Evidence: {c.evidence.join(" · ")}</p>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -162,18 +218,23 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
   const [quickOnly, setQuickOnly] = useState(false);
   const [open, setOpen] = useState(() => new Set());
   const [notice, setNotice] = useState(null); // { key, text, ok }
+  const [showAll, setShowAll] = useState(false);
 
   const categories = useMemo(() => {
     const counts = new Map();
     for (const t of tasks) counts.set(t.category, (counts.get(t.category) || 0) + 1);
     return [...counts.entries()];
   }, [tasks]);
-  const pages = useMemo(() => [...new Set(tasks.map((t) => t.page))], [tasks]);
+  const pages = useMemo(() => [...new Set(tasks.flatMap(taskPages))], [tasks]);
 
   const visible = tasks.filter(
-    (t) => (!category || t.category === category) && (!page || t.page === page) && (!quickOnly || isQuickWin(t)),
+    (t) => (!category || t.category === category) && (!page || taskPages(t).includes(page)) && (!quickOnly || isQuickWin(t)),
   );
   const filtered = Boolean(category || page || quickOnly);
+  // Unfiltered: the first TOP_COUNT tasks; the rest behind "Show more". Copy and
+  // download always cover every matching task.
+  const collapsed = !filtered && !showAll && visible.length > TOP_COUNT;
+  const shown = collapsed ? visible.slice(0, TOP_COUNT) : visible;
   const quickCount = tasks.filter(isQuickWin).length;
 
   const flash = (key, text, ok = true) => {
@@ -254,7 +315,9 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       </div>
 
       <p style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
-        {filtered ? `Showing ${visible.length} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
+        {filtered
+          ? `Showing ${visible.length} of ${tasks.length} tasks`
+          : collapsed ? `Do these first: the top ${TOP_COUNT} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
         {" · "}open a task for the evidence and the exact change
       </p>
 
@@ -273,7 +336,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
             </tr>
           </thead>
           <tbody>
-            {visible.map((t) => {
+            {shown.map((t) => {
               const isOpen = open.has(t.id);
               return [
                 <tr
@@ -284,11 +347,17 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
                   <td style={{ ...TD, fontWeight: 700, color: "#0f3460" }}>{t.id}</td>
                   <td style={{ ...TD, fontWeight: 600, color: "#1a1a2e", lineHeight: 1.45, minWidth: 220 }}>
                     {t.title}
+                    {t.group && (
+                      <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#0c3473", background: "#e8f0fe", padding: "1px 6px", borderRadius: 8, whiteSpace: "nowrap" }}>{t.items.length} pages</span>
+                    )}
+                    {t.follow_ups?.length > 0 && (
+                      <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#555", background: "#f0f0f0", padding: "1px 6px", borderRadius: 8, whiteSpace: "nowrap" }}>+{t.follow_ups.length} related</span>
+                    )}
                     {isQuickWin(t) && (
                       <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#1a7a4a", background: "#e6f9f0", padding: "1px 6px", borderRadius: 8, whiteSpace: "nowrap" }}>Quick win</span>
                     )}
                   </td>
-                  <td style={{ ...TD, color: "#555", maxWidth: 200, wordBreak: "break-all" }} title={t.page}>{pagePath(t.page)}</td>
+                  <td style={{ ...TD, color: "#555", maxWidth: 200, wordBreak: "break-all" }} title={t.group ? t.pages?.join(", ") : t.page}>{t.group ? `${t.items.length} pages` : pagePath(t.page)}</td>
                   <td style={TD}><CategoryChip category={t.category} /></td>
                   <td style={{ ...TD, textAlign: "center" }}><ScaleChip value={t.impact} kind="impact" /></td>
                   <td style={{ ...TD, textAlign: "center" }}><ScaleChip value={t.effort} kind="effort" /></td>
@@ -310,6 +379,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
                     <td />
                     <td colSpan={7} style={{ padding: "0 12px 14px" }}>
                       <ExpandedTask task={t} domain={domain} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
+                      <SubTasks task={t} domain={domain} notice={notice} onCopy={handleCopyChange} />
                     </td>
                   </tr>
                 ),
@@ -318,6 +388,14 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
           </tbody>
         </table>
       </div>
+      {collapsed && (
+        <button
+          onClick={() => setShowAll(true)}
+          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed #c9d3e6", background: "#f8f9fb", color: "#0f3460" }}
+        >
+          Show {visible.length - TOP_COUNT} more task{visible.length - TOP_COUNT === 1 ? "" : "s"}
+        </button>
+      )}
       {!visible.length && <p style={{ color: "#999", fontSize: 13, marginTop: 12 }}>No tasks match these filters.</p>}
     </div>
   );

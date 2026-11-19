@@ -12,6 +12,7 @@ import {
 import { runStructured } from './llm';
 import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
+import { pageLimit, filterSkipped } from './options';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -40,9 +41,26 @@ const effortFor = (job, key) => effortForAttempt(profileOf(job).effort, stepOf(j
 // Overall time budget for fetching pages, leaving room in the 300s request for the rest.
 export const CRAWL_DEADLINE_MS = 200_000;
 
+async function crawlWith(job) {
+  const o = job.options;
+  if (!o) {
+    const seedUrls = await seedPages(job.domain, job.auditType);
+    return crawlSite(job.domain, job.auditType, null, { seedUrls, deadlineMs: CRAWL_DEADLINE_MS });
+  }
+  // Listed pages first (never skipped), then Search Console pages minus skip patterns.
+  const limit = pageLimit(job.auditType, o);
+  const listed = o.pages || [];
+  const fromGsc = o.onlyListed
+    ? []
+    : filterSkipped(await seedPages(job.domain, job.auditType, Math.min(25, Math.max(5, Math.ceil(limit / 2)))), o.skip)
+      .filter((u) => !listed.includes(u));
+  return crawlSite(job.domain, job.auditType, o.onlyListed ? listed : null, {
+    seedUrls: o.onlyListed ? [] : [...listed, ...fromGsc], deadlineMs: CRAWL_DEADLINE_MS, pageLimit: limit, skip: o.skip || [],
+  });
+}
+
 async function runCrawl(job) {
-  const seedUrls = await seedPages(job.domain, job.auditType);
-  const crawl = await crawlSite(job.domain, job.auditType, null, { seedUrls, deadlineMs: CRAWL_DEADLINE_MS });
+  const crawl = await crawlWith(job);
   if (!crawl?.pages_crawled?.length) {
     return { ok: false, error: `No pages could be crawled on ${job.domain}` };
   }
@@ -59,7 +77,10 @@ async function runCrawl(job) {
 
 async function runGather(job) {
   const crawl = job.data?.crawl;
-  const { data, gaps } = await gatherAll({ domain: job.domain, crawl, profile: job.auditType });
+  const o = job.options;
+  const { data, gaps } = await gatherAll(o
+    ? { domain: job.domain, crawl, profile: job.auditType, priorityUrls: o.pages || [], onlyListed: !!o.onlyListed, skip: o.skip || [] }
+    : { domain: job.domain, crawl, profile: job.auditType });
   const pages = crawl?.pages_crawled || [];
   const homepage = pages.find((p) => p.page_type === 'homepage') || pages[0] || null;
   const sharedContext = buildSharedContext({ domain: job.domain, profile: job.auditType, homepage, gaps: describeGaps(gaps) });
@@ -198,6 +219,7 @@ async function runSynthesize(job) {
     version: 2,
     domain: job.domain,
     audit_type: job.auditType,
+    ...(job.options ? { audit_options: job.options } : {}),
     audit_date: new Date().toISOString().slice(0, 10),
     client_summary: synth.client_summary,
     top_moves: resolveTopMoves(plan, synth),

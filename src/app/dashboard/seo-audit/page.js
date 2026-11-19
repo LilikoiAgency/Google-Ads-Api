@@ -10,6 +10,7 @@ import { SEOAuditIcon } from "../components/DashboardIcons";
 import ResultsView from "./ResultsView";
 import ProgressSteps from "./v2/ProgressSteps";
 import { useAuditJob, friendlyError } from "./v2/useAuditJob";
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from "./v2/AdvancedOptions";
 import "../../globals.css";
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ export default function SEOAuditPage() {
   // Form state
   const [domain, setDomain] = useState("");
   const [auditType, setAuditType] = useState("full");
+  const [advanced, setAdvanced] = useState(EMPTY_ADVANCED);
 
   // Flow state
   const [step, setStep] = useState(STEPS.CONFIGURE);
@@ -90,7 +92,7 @@ export default function SEOAuditPage() {
         res = await fetch("/api/seo-audit/v2/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain: target, auditType, forceRerun }),
+          body: JSON.stringify({ domain: target, auditType, forceRerun, options: toRequestOptions(advanced) }),
         });
       } catch {
         throw new Error("Couldn't reach the server. Check your connection and try again.");
@@ -117,6 +119,7 @@ export default function SEOAuditPage() {
     setJobId(null);
     setError(null);
     setDomain("");
+    setAdvanced(EMPTY_ADVANCED);
   }
 
   function handleBackFromProgress() {
@@ -131,6 +134,7 @@ export default function SEOAuditPage() {
     if (isOpenJob(item)) {
       setDomain(item.domain || "");
       setAuditType(item.auditType || "full");
+      setAdvanced(EMPTY_ADVANCED);
       setJobId(item.jobId || item._id);
       setStep(STEPS.PROGRESS);
       return;
@@ -146,6 +150,8 @@ export default function SEOAuditPage() {
       setAuditResult(doc.version === 2 && result && !result.version ? { ...result, version: 2 } : result);
       setDomain(doc.domain || "");
       setAuditType(doc.auditType || "full");
+      // "Run again" repeats the same page selection.
+      setAdvanced(fromAuditOptions(result?.audit_options));
       setStep(STEPS.RESULTS);
     } catch (err) {
       setError(err.message);
@@ -336,6 +342,8 @@ export default function SEOAuditPage() {
                 })}
               </div>
 
+              <AdvancedOptions value={advanced} onChange={setAdvanced} auditType={auditType} />
+
               {/* Submit button */}
               <button
                 onClick={() => handleRunAudit()}
@@ -437,7 +445,7 @@ export default function SEOAuditPage() {
                               </>
                             )}
                             <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: 4 }}>
-                              {a.auditType === "quick" ? "Quick" : "Full"}{!open && <> &middot; {a.pagesCrawled}p</>} &middot; {new Date(a.createdAt).toLocaleDateString()}
+                              {a.auditType === "quick" ? "Quick" : "Full"}{a.optionsSummary && <span title={a.optionsSummary}> &middot; Custom pages</span>}{!open && <> &middot; {a.pagesCrawled}p</>} &middot; {new Date(a.createdAt).toLocaleDateString()}
                             </span>
                           </div>
                         </div>

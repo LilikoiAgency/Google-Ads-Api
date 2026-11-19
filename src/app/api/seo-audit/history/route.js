@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import { authOptions, allowedEmailDomain } from "../../../../lib/auth";
 import dbConnect from "../../../../lib/mongoose";
 import { listOpenJobs } from "../../../../lib/seoAuditV2/jobStore";
+import { describeOptions } from "../../../../lib/seoAuditV2/options";
 
 const DB = "tokensApi";
 const COLLECTION = "SeoAudits";
@@ -80,6 +81,7 @@ export async function GET(request) {
     status: job.status,
     scores: null,
     pagesCrawled: 0,
+    ...(job.options ? { optionsSummary: describeOptions(job.options) } : {}),
     createdAt: job.createdAt,
   }));
 

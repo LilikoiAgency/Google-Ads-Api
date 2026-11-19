@@ -7,6 +7,7 @@ import { findGscSite, findGa4Property, summarizeGsc, summarizeGa4, auditRanges }
 import { fetchTrafficReport } from '../ga4Client';
 import { joinPagesToQueries, inspectUrls, listGoogleSitemaps, ga4PerPage } from './gsc';
 import { fetchPageSpeed } from './pagespeed';
+import { filterSkipped } from './options';
 
 export const AUDIT_PROFILES = {
   quick: { pages: 5, inspect: 5, pagespeed: 2, effort: 'medium' },
@@ -55,13 +56,13 @@ export const SEED_TIMEOUT_MS = 30000;
 
 // Top Search Console pages (query-free URLs) to seed the crawl, or [] (also
 // when Search Console takes longer than SEED_TIMEOUT_MS).
-export async function seedPages(domain, profile = 'quick') {
+export async function seedPages(domain, profile = 'quick', count) {
   try {
     return await withTimeout((async () => {
       const { status, site, auth } = await findGscSite(domain);
       if (status !== 'ok') return [];
       const rows = await pageQueryRows(auth, site, auditRanges(today()).current);
-      const n = profile === 'full' ? 25 : 5;
+      const n = count || (profile === 'full' ? 25 : 5);
       return joinPagesToQueries(rows, { topPages: n, perPage: 1 }).map((p) => p.page);
     })(), SEED_TIMEOUT_MS);
   } catch (err) {
@@ -117,7 +118,9 @@ async function runPageSpeed(urls) {
   return { status: 'ok', results };
 }
 
-export async function gatherAll({ domain, crawl, profile = 'quick' } = {}) {
+// priorityUrls (listed by the user) are inspected and speed-tested first; skip
+// patterns drop Search Console pages; onlyListed limits targets to the crawl.
+export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [] } = {}) {
   try {
     const prof = profileOf(profile);
     const ranges = auditRanges(today());
@@ -126,8 +129,9 @@ export async function gatherAll({ domain, crawl, profile = 'quick' } = {}) {
     const gscP = siteP.then((s) => (s.status === 'ok' ? settle(() => fetchGsc({ ...s, domain, ranges })) : blocked(s)));
     const sitemapsP = siteP.then((s) => (s.status === 'ok' ? settle(() => listGoogleSitemaps(s.auth, s.site)) : blocked(s)));
     const targetsP = gscP.then((g) => {
-      const fromGsc = (g.gscPages || []).map((p) => p.page);
-      return fromGsc.length ? fromGsc : crawlUrls(crawl);
+      const fromGsc = filterSkipped((g.gscPages || []).map((p) => p.page), skip);
+      const base = onlyListed || !fromGsc.length ? crawlUrls(crawl) : fromGsc;
+      return [...new Set([...(priorityUrls || []), ...base])];
     });
     const inspectionP = Promise.all([siteP, targetsP]).then(([s, urls]) => (s.status === 'ok'
       ? settle(() => inspectUrls(s.auth, s.site, urls.slice(0, prof.inspect), { concurrency: 5 }))

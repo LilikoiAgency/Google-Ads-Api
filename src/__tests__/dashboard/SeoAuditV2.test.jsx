@@ -19,6 +19,7 @@ import PageCards from '@/app/dashboard/seo-audit/v2/PageCards.jsx';
 import PassFindings from '@/app/dashboard/seo-audit/v2/PassFindings.jsx';
 import { useAuditJob, friendlyError } from '@/app/dashboard/seo-audit/v2/useAuditJob.js';
 import ResultsView, { isV2Audit } from '@/app/dashboard/seo-audit/ResultsView.jsx';
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from '@/app/dashboard/seo-audit/v2/AdvancedOptions.jsx';
 
 const TASKS = [
   {
@@ -113,6 +114,53 @@ describe('ActionPlan', () => {
       + '  - Replace the title with: "Turf Installation in Las Vegas, NV | Acme"\n'
       + '  - Replace the meta description with: "Turf in Las Vegas."',
     );
+  });
+
+  const GROUP = {
+    id: 'T4', group: true, title: 'Remove the visible keyword lists from 2 pages', page: 'multiple pages', pages: ['/a', '/b'],
+    category: 'content', impact: 2, effort: 1, confidence: 'high', evidence: ['/a: kw list'], why: 'Reads as stuffing.',
+    change: 'Apply this on each page:\n/a: Delete "kw a"\n/b: Delete "kw b"',
+    items: [
+      { id: 'T4.1', title: 'Remove the keyword list on /a', page: '/a', category: 'content', impact: 2, effort: 1, confidence: 'high', evidence: ['kw a'], change: 'Delete "kw a"', why: 'w' },
+      { id: 'T4.2', title: 'Remove the keyword list on /b', page: '/b', category: 'content', impact: 2, effort: 1, confidence: 'high', evidence: ['kw b'], change: 'Delete "kw b"', why: 'w' },
+    ],
+  };
+
+  it('a group row shows its page count and lists each page when opened', () => {
+    render(<ActionPlan tasks={[...TASKS, GROUP]} domain="acme.com" />);
+    expect(screen.getAllByText('2 pages').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText(GROUP.title));
+    expect(screen.getByText('Each page (2)')).toBeInTheDocument();
+    expect(screen.getByText('Remove the keyword list on /b')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /\/b/ })).toHaveAttribute('href', 'https://acme.com/b');
+  });
+
+  it('the page filter finds a group by its item pages', () => {
+    render(<ActionPlan tasks={[...TASKS, GROUP]} domain="acme.com" />);
+    fireEvent.change(screen.getByLabelText(/^page/i), { target: { value: '/b' } });
+    expect(screen.getByText(GROUP.title)).toBeInTheDocument();
+    expect(screen.queryByText('Fix canonical pointing to staging')).not.toBeInTheDocument();
+  });
+
+  it('checklist nests group items and follow-ups under their task', () => {
+    const parent = { ...TASKS[1], follow_ups: [{ ...TASKS[0], id: 'T2.1', page: '/x', change: 'Add a table' }] };
+    expect(tasksToChecklist([GROUP, parent])).toBe(
+      '- [ ] T4 · multiple pages · Remove the visible keyword lists from 2 pages\n'
+      + '  - [ ] T4.1 · /a · Remove the keyword list on /a — Delete "kw a"\n'
+      + '  - [ ] T4.2 · /b · Remove the keyword list on /b — Delete "kw b"\n'
+      + '- [ ] T2 · / · Fix canonical pointing to staging — Set the canonical to https://acme.com/.\n'
+      + '  - [ ] T2.1 · /x · Add pricing section to turf page — Add a table',
+    );
+  });
+
+  it('shows the top 10 first and the rest behind Show more; filters show everything', () => {
+    const many = Array.from({ length: 13 }, (_, i) => ({ ...TASKS[1], id: `T${i + 1}`, title: `Task number ${i + 1}` }));
+    render(<ActionPlan tasks={many} domain="acme.com" />);
+    expect(screen.getByText(/Do these first: the top 10 of 13 tasks/)).toBeInTheDocument();
+    expect(screen.getByText('Task number 10')).toBeInTheDocument();
+    expect(screen.queryByText('Task number 11')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more tasks' }));
+    expect(screen.getByText('Task number 13')).toBeInTheDocument();
   });
 
   it('Copy as checklist copies the visible tasks', async () => {
@@ -260,6 +308,23 @@ describe('useAuditJob', () => {
     expect(global.fetch.mock.calls[1][1]).toMatchObject({ method: 'POST' });
     expect(maxInFlight).toBe(1);
     expect(result.current.progress.status).toBe('done');
+  });
+
+  it('never exposes the previous job\'s result after switching to a new job', async () => {
+    let hangNext = false;
+    global.fetch = vi.fn(async (url) => {
+      if (hangNext) return new Promise(() => {});
+      if (String(url).endsWith('/advance')) return jsonRes({ status: 'done', steps: steps(['done']), dataGaps: [], result: V2_RESULT });
+      return jsonRes({ status: 'running', steps: steps(['running']), dataGaps: [] });
+    });
+    const { result, rerender } = renderHook(({ id }) => useAuditJob(id, { minIntervalMs: 0 }), { initialProps: { id: 'jobA' } });
+    await waitFor(() => expect(result.current.result).toEqual(V2_RESULT));
+    rerender({ id: null });
+    expect(result.current.result).toBeNull();
+    hangNext = true;
+    rerender({ id: 'jobB' });
+    expect(result.current.result).toBeNull();
+    expect(result.current.progress).toBeNull();
   });
 
   it('stops on failed; retry posts /retry and resumes advancing', async () => {
@@ -451,5 +516,46 @@ describe('ResultsView picks the view by version', () => {
       });
     }
     expect(hits).toEqual([]);
+  });
+});
+
+describe('AdvancedOptions', () => {
+  it('toRequestOptions: nothing set is undefined; lines and commas split; onlyListed needs pages', () => {
+    expect(toRequestOptions(EMPTY_ADVANCED)).toBeUndefined();
+    expect(toRequestOptions({ pagesText: '/a\n /b \n', skipText: '/blog/*, /tag/*', onlyListed: true, pageCount: '10' }))
+      .toEqual({ pages: ['/a', '/b'], skip: ['/blog/*', '/tag/*'], onlyListed: true, pageCount: 10 });
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, onlyListed: true, skipText: '/x' }).onlyListed).toBe(false);
+  });
+
+  it('fromAuditOptions turns saved URLs back into paths', () => {
+    expect(fromAuditOptions({ pages: ['https://acme.com/pet-turf'], onlyListed: true, skip: ['/blog/*'], pageCount: null }))
+      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '' });
+    expect(fromAuditOptions(null)).toEqual(EMPTY_ADVANCED);
+  });
+
+  it('starts collapsed, opens on click and reports edits', () => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="quick" />);
+    expect(screen.queryByLabelText('Pages to audit first')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    fireEvent.change(screen.getByLabelText('Pages to audit first'), { target: { value: '/pet-turf' } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_ADVANCED, pagesText: '/pet-turf' });
+    expect(screen.getByRole('option', { name: 'Default (5)' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  it('shows a summary when collapsed and Clear resets', () => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={{ pagesText: '/a\n/b', onlyListed: false, skipText: '/blog/*', pageCount: '10' }} onChange={onChange} auditType="full" />);
+    expect(screen.getByText('· 2 priority pages · skip /blog/* · 10 pages')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(onChange).toHaveBeenCalledWith(EMPTY_ADVANCED);
+  });
+
+  it('only-listed hides skip and page count', () => {
+    render(<AdvancedOptions value={{ ...EMPTY_ADVANCED, pagesText: '/a', onlyListed: true }} onChange={() => {}} auditType="full" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    expect(screen.queryByLabelText('Skip pages matching')).toBeNull();
+    expect(screen.queryByLabelText('Number of pages')).toBeNull();
   });
 });

@@ -138,6 +138,21 @@ describe('gather fix round 1', () => {
     expect(m.fetchPageSpeed).toHaveBeenCalledTimes(AUDIT_PROFILES.quick.pagespeed);
   });
 
+  it('listed pages are inspected and speed-tested first; skipped Search Console pages are left out', async () => {
+    gscOk();
+    m.joinPagesToQueries.mockReturnValue([{ page: 'https://x.com/blog/a' }, { page: 'https://x.com/p1' }]);
+    await gatherAll({ domain: 'x.com', crawl, profile: 'quick', priorityUrls: ['https://x.com/money'], skip: ['/blog/*'] });
+    expect(m.inspectUrls.mock.calls[0][2]).toEqual(['https://x.com/money', 'https://x.com/p1']);
+    expect(m.fetchPageSpeed.mock.calls.map((c) => c[0])).toEqual(['https://x.com/money', 'https://x.com/p1']);
+  });
+
+  it('only listed pages: targets are just the crawled pages', async () => {
+    gscOk();
+    m.joinPagesToQueries.mockReturnValue([{ page: 'https://x.com/p1' }]);
+    await gatherAll({ domain: 'x.com', crawl, profile: 'full', priorityUrls: ['https://x.com/b'], onlyListed: true });
+    expect(m.inspectUrls.mock.calls[0][2]).toEqual(['https://x.com/b', 'https://x.com/home', 'https://x.com/c']);
+  });
+
   it('a URL containing 429 in a non-quota detail is not worded as quota', () => {
     const [text] = describeGaps([{ source: 'pagespeed', status: 'error', detail: 'https://x.com/p429: boom' }]);
     expect(text).not.toMatch(/quota/);

@@ -107,6 +107,32 @@ describe('POST /api/seo-audit/v2/jobs', () => {
     expect(store.incrementUsage).toHaveBeenCalledWith(USER, job.usageDate);
   });
 
+  it('stores validated advanced options and never reuses an earlier job for them', async () => {
+    store.findReusable.mockResolvedValue({ id: 'old1', status: 'done' });
+    const res = await jobsRoute.POST(post({
+      domain: 'acme.com', auditType: 'quick',
+      options: { pages: ['/pet-turf', 'https://www.acme.com/vegas/'], skip: ['blog/*'], pageCount: 10, onlyListed: false },
+    }));
+    expect(res.body).toMatchObject({ jobId: 'newjob', reused: false });
+    expect(store.findReusable).not.toHaveBeenCalled();
+    expect(store.createJob.mock.calls[0][0].options).toEqual({
+      pages: ['https://acme.com/pet-turf', 'https://acme.com/vegas'], onlyListed: false, skip: ['/blog/*'], pageCount: 10,
+    });
+  });
+
+  it('400 lists pages that are not on the audited domain, without using an audit', async () => {
+    const res = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full', options: { pages: ['https://other.com/x'] } }));
+    expect(res.init.status).toBe(400);
+    expect(res.body.error).toMatch(/other\.com\/x/);
+    expect(store.incrementUsage).not.toHaveBeenCalled();
+  });
+
+  it('empty options behave like no options (reuse allowed, nothing stored)', async () => {
+    await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full', options: { pages: [], skip: [] } }));
+    expect(store.findReusable).toHaveBeenCalled();
+    expect(store.createJob.mock.calls[0][0].options).toBeUndefined();
+  });
+
   it('reuse returns the existing job without a new use', async () => {
     store.findReusable.mockResolvedValue({ id: 'old1', status: 'running' });
     const res = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full' }));
@@ -546,6 +572,7 @@ describe('jobStore (Mongo calls)', () => {
     expect(filter).toEqual({
       domain: 'acme.com',
       auditType: 'full',
+      options: null,
       status: { $in: ['queued', 'running', 'done'] },
       createdAt: { $gte: '2026-11-18T00:00:00.000Z' },
     });

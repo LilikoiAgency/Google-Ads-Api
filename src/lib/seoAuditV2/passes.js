@@ -3,7 +3,7 @@
 // Pure: no server imports. A source that is unavailable is left out of the
 // input entirely, never sent as an empty list.
 
-import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask } from './tasks';
+import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask, effectiveImpact, priorityScore } from './tasks';
 
 export const PASSES = ['technical', 'content', 'local', 'conversion'];
 
@@ -336,6 +336,8 @@ ${RULES_REMINDER}`,
 export const SYNTH_SYSTEM = `This is the final step. The writing rules in the audit instructions above apply. The input has every task from four focused analysis passes (technical, content, local and answer-engine, conversion), each shown compactly with its id, title, page, category, impact, effort, confidence and first evidence item, plus the passes' findings and any passes that did not complete. The action plan is built from these tasks as they are; you do not rewrite them. Return:
 
 - drop_task_ids: the ids of tasks to leave out of the action plan: duplicates of another task (keep the more specific one), tasks outside their pass's area that another pass already covers, tasks that depend on a data gap, generic tasks, and tasks whose evidence does not support them. Leave every other task in.
+- follow_ups: tasks that can only be done as part of another task, as { parent_id, task_ids }. Example: a page returns 404 and one task restores it, while other tasks add sections to that same page; those additions are follow-ups of the restore task. Use only when the dependency is real; most tasks have none.
+- groups: the same kind of fix repeated across three or more pages, as { title, why, task_ids }, so the plan shows it once with one item per page. Examples: removing visible keyword lists, adding an FAQ section, adding a cost section, fixing copy pasted from another city, title and meta rewrites that have no page-specific search numbers behind them. The title names the fix ("Remove the visible keyword lists from 6 pages"); why is one sentence. Do not group a task whose own Search Console numbers make it urgent on its own; leave it separate. A task may appear in at most one group or follow-up list, and never in drop_task_ids as well.
 - top_moves: exactly three items, the three highest-value tasks that are not dropped: task_id (copied exactly from the input) and a one-sentence headline for the business owner on what it does for them.
 - client_summary: three to five plain sentences a business owner understands. State the most important opportunity and the biggest problem.
 - scores: SEO (search visibility and technical health), GEO (readiness for AI-powered search: clear entity facts, structured data, quotable content) and AEO (readiness for answer engines: direct answers to questions, question coverage), each an integer 0 to 10 with a one-line reason that cites the evidence. Base scores only on the input; where data gaps limit a score, say so in the reason.
@@ -386,6 +388,8 @@ export const synthSchema = closed({
   top_moves: { type: 'array', items: closed({ task_id: str, headline: str }) },
   scores: closed({ seo: SCORE, geo: SCORE, aeo: SCORE }),
   drop_task_ids: strList,
+  follow_ups: { type: 'array', items: closed({ parent_id: str, task_ids: strList }) },
+  groups: { type: 'array', items: closed({ title: str, why: str, task_ids: strList }) },
 });
 
 // ── task ids, synthesis input, action plan ───────────────────────────────────
@@ -467,23 +471,95 @@ export function buildSynthInput(passOutputs, extra = {}) {
 
 // passTasks: a flat task list or a list of lists. The merged tasks carry
 // source_ids: the pass task ids folded into each one.
+// "…from 7 pages" -> the real number of pages in the group.
+export function fixPageCount(title, n) {
+  return String(title).replace(/\b\d+(?=(?:\s+[\w-]+){0,3}?\s+pages?\b)/i, String(n));
+}
+
+// Unmeasured content/answer tasks are capped (effectiveImpact). The synthesis's
+// follow_ups fold tasks into their parent (task.follow_ups) and its groups turn
+// the same fix across pages into one task (group: true, items, pages). Top-level
+// tasks are numbered T1..Tn by priority; nested ones T<n>.<k>.
 export function buildActionPlan(passTasks, synthOutput) {
   const drop = new Set(synthOutput?.drop_task_ids || []);
-  const kept = (passTasks || []).flat().filter((t) => t && !drop.has(t.id)).map((t) => ({ ...t, page: pathKey(t.page) }));
+  const kept = (passTasks || []).flat().filter((t) => t && !drop.has(t.id))
+    .map((t) => ({ ...t, page: pathKey(t.page), impact: effectiveImpact(t) }));
   const idsByKey = new Map();
   for (const t of kept) {
     const key = mergeKey(t);
     if (!idsByKey.has(key)) idsByKey.set(key, []);
     idsByKey.get(key).push(t.id);
   }
-  return mergeTasks([kept]).map((t) => ({ ...t, source_ids: idsByKey.get(mergeKey(t)) || [] }));
+  const merged = mergeTasks([kept]).map((t) => ({ ...t, source_ids: idsByKey.get(mergeKey(t)) || [] }));
+
+  const find = (id) => merged.find((t) => t.source_ids.includes(id));
+  const used = new Set(); // tasks folded into a parent or a group
+  const pick = (ids, exclude) => {
+    const out = [];
+    for (const id of ids || []) {
+      const t = find(id);
+      if (t && t !== exclude && !used.has(t) && !out.includes(t)) out.push(t);
+    }
+    return out;
+  };
+
+  const followUps = new Map();
+  for (const fu of synthOutput?.follow_ups || []) {
+    const parent = find(fu?.parent_id);
+    if (!parent || used.has(parent)) continue;
+    const children = pick(fu.task_ids, parent).filter((c) => !followUps.has(c));
+    if (!children.length) continue;
+    children.forEach((c) => used.add(c));
+    followUps.set(parent, [...(followUps.get(parent) || []), ...children]);
+  }
+
+  const groups = [];
+  for (const g of synthOutput?.groups || []) {
+    const items = pick(g?.task_ids).filter((t) => !followUps.has(t));
+    if (items.length < 2) continue;
+    items.forEach((t) => used.add(t));
+    const best = [...items].sort((a, b) => priorityScore(b) - priorityScore(a))[0];
+    const counts = new Map();
+    for (const t of items) counts.set(t.category, (counts.get(t.category) || 0) + 1);
+    const firstLine = (s) => String(s || '').split(/\r?\n/).map((l) => l.trim()).find(Boolean) || '';
+    groups.push({
+      group: true,
+      title: fixPageCount(g.title || best.title, items.length),
+      why: g.why || best.why,
+      category: [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0],
+      page: 'multiple pages',
+      pages: [...new Set(items.map((t) => t.page))],
+      impact: Math.max(...items.map((t) => t.impact)),
+      effort: Math.max(...items.map((t) => t.effort)),
+      confidence: best.confidence,
+      evidence: items.slice(0, 6).map((t) => `${t.page}: ${(t.evidence || [])[0] || ''}`),
+      change: ['Apply this on each page:', ...items.map((t) => `${t.page}: ${firstLine(t.change)}`)].join('\n'),
+      source_ids: items.flatMap((t) => t.source_ids),
+      items,
+    });
+  }
+
+  const top = [...merged.filter((t) => !used.has(t)), ...groups]
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => priorityScore(b.t) - priorityScore(a.t) || a.i - b.i)
+    .map(({ t }) => t);
+  const number = (children, id) => children.map((c, k) => ({ ...c, id: `${id}.${k + 1}` }));
+  return top.map((t, i) => {
+    const id = `T${i + 1}`;
+    const out = { ...t, id };
+    if (t.items) out.items = number(t.items, id);
+    if (followUps.has(t)) out.follow_ups = number(followUps.get(t), id);
+    return out;
+  });
 }
 
 // -> [{ headline, task }] (at most 3). Ids the plan doesn't have (unknown or
 // dropped) are skipped and the remaining slots are filled in plan order.
 export function resolveTopMoves(plan, synthOutput) {
   const tasks = plan || [];
-  const find = (id) => tasks.find((t) => t.id === id || (t.source_ids || []).includes(id));
+  // A move naming a task folded into a follow-up list resolves to its parent.
+  const isTask = (t, id) => t.id === id || (t.source_ids || []).includes(id);
+  const find = (id) => tasks.find((t) => isTask(t, id) || (t.follow_ups || []).some((c) => isTask(c, id)));
   const moves = [];
   const used = new Set();
   for (const mv of synthOutput?.top_moves || []) {

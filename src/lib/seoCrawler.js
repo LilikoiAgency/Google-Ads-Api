@@ -9,6 +9,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { filterSkipped } from "./seoAuditV2/options";
 
 const USER_AGENT = "LilikoiSEOAudit/1.0 (+https://lilikoiagency.com)";
 const FETCH_TIMEOUT_MS = 15_000;
@@ -551,11 +552,15 @@ function isHomepageUrl(url) {
  *   to the cap. deadlineMs is an overall time budget from the start of the call:
  *   once it is used up no new page is fetched, the pages gathered so far are
  *   returned and crawl_truncated is set.
+ *   pageLimit overrides the page cap for the audit type; skip drops discovered
+ *   (nav/sitemap) pages matching those path patterns — seeds are not filtered.
  */
-export async function crawlSite(domain, auditType = "full", customUrls = null, { seedUrls, deadlineMs } = {}) {
+export async function crawlSite(domain, auditType = "full", customUrls = null, { seedUrls, deadlineMs, pageLimit, skip } = {}) {
   const startedAt = Date.now();
   const overDeadline = () => Number.isFinite(deadlineMs) && Date.now() - startedAt >= deadlineMs;
-  const maxPages = auditType === "quick" ? MAX_PAGES_QUICK : MAX_PAGES_FULL;
+  const maxPages = Number.isInteger(pageLimit) && pageLimit > 0
+    ? pageLimit
+    : auditType === "quick" ? MAX_PAGES_QUICK : MAX_PAGES_FULL;
   const baseUrl = `https://${domain}`;
 
   // Discover pages
@@ -579,7 +584,7 @@ export async function crawlSite(domain, auditType = "full", customUrls = null, {
       if (seeds.length >= maxPages) break;
     }
     const rest = prioritizePages(
-      discovery.urls.filter((u) => !seen.has(u)),
+      filterSkipped(discovery.urls.filter((u) => !seen.has(u)), skip),
       domain,
       maxPages - seeds.length
     );
