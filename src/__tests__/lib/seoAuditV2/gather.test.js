@@ -185,6 +185,15 @@ describe('gather fix round 1', () => {
 });
 
 describe('describeGaps', () => {
+  it('words the reviews source without Search Console or period language', () => {
+    const say = (status) => describeGaps([{ source: 'reviews', status, detail: 'x' }])[0];
+    expect(say('not_connected')).toBe('Google reviews: not connected (no Places API key).');
+    expect(say('no_data')).toBe('Google reviews: no Google listing found that links to this website.');
+    expect(say('permission')).toBe("Google reviews: the Places API key isn't allowed to read this data.");
+    expect(say('error')).toBe('Google reviews unavailable: it could not be loaded.');
+    expect(say('timeout')).toBe('Google reviews unavailable: the request took too long.');
+  });
+
   it('words each status', () => {
     const out = describeGaps([
       { source: 'url_inspection', status: 'permission', detail: '' },

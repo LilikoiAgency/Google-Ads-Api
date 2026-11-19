@@ -42,11 +42,12 @@ export function brandName(crawl, domain) {
 }
 
 const ageDays = (date, now) => Math.floor((now.getTime() - new Date(`${date}T00:00:00Z`).getTime()) / DAY_MS);
+const uniqueById = (list) => [...new Map(list.map((l) => [l.id, l])).values()];
 
 // per_month, star_split and reply_rate need every review, so they exist only for
 // coverage 'full'; a Places sample (5 reviews) would make them misleading.
 export function reviewStats(reviews, { rating, count, coverage }, now = new Date()) {
-  const dated = (reviews || []).filter((r) => r.date);
+  const dated = (reviews || []).filter((r) => r.date && Number.isFinite(ageDays(r.date, now)));
   const newest = dated.length ? Math.min(...dated.map((r) => ageDays(r.date, now))) : null;
   const stats = {
     rating: rating ?? null,
@@ -81,8 +82,8 @@ export async function fetchReviews({ domain, crawl, locations }) {
   let picked;
   try {
     picked = locations
-      ? locations.filter((l) => l.source === 'places').slice(0, MAX_LOCATIONS) // 'gbp' arrives in phase 2
-      : await matchLocations(domain, crawl);
+      ? uniqueById(locations.filter((l) => l.source === 'places')).slice(0, MAX_LOCATIONS) // 'gbp' arrives in phase 2
+      : uniqueById(await matchLocations(domain, crawl));
   } catch (err) {
     return { status: blockedStatus(err) || 'error', error: err?.message || String(err), locations: [], texts: {} };
   }

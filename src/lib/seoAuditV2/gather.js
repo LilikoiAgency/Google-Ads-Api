@@ -245,6 +245,11 @@ export function describeGaps(gaps) {
       }
     }
     if (source === 'ga4' && status === 'no_property') return 'No Google Analytics property was found for this website.';
+    if (source === 'reviews') {
+      if (status === 'not_connected') return 'Google reviews: not connected (no Places API key).';
+      if (status === 'no_data') return 'Google reviews: no Google listing found that links to this website.';
+      if (status === 'permission') return "Google reviews: the Places API key isn't allowed to read this data.";
+    }
     const label = SOURCE_LABEL[source] || source;
     let reason = REASON[status];
     if (source === 'ga4' && status === 'not_connected') reason = 'Google Analytics is not connected.';

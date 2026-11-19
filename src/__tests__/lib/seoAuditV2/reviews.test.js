@@ -57,6 +57,12 @@ describe('reviewStats', () => {
     expect(s.days_since_newest).toBe(9);
   });
 
+  it('ignores reviews with an unparseable date for days_since_newest', () => {
+    const s = reviewStats([{ stars: 5, date: 'garbage' }, { stars: 4, date: '2026-11-09' }], { rating: 4, count: 2, coverage: 'sample' }, NOW);
+    expect(s.days_since_newest).toBe(10);
+    expect(reviewStats([{ stars: 5, date: 'garbage' }], { rating: 4, count: 1, coverage: 'sample' }, NOW).days_since_newest).toBeNull();
+  });
+
   it('handles no reviews', () => {
     expect(reviewStats([], { rating: null, count: null, coverage: 'sample' }, NOW).days_since_newest).toBeNull();
   });
@@ -94,6 +100,20 @@ describe('fetchReviews', () => {
     });
     expect(m.searchPlaces).not.toHaveBeenCalled();
     expect(out.locations.map((l) => l.id)).toEqual(['a']);
+  });
+
+  it('dedupes locations by id before fetching', async () => {
+    m.getPlace.mockImplementation(async (id) => detail(id));
+    const out = await fetchReviews({
+      domain: 'a.com', crawl: null,
+      locations: [{ source: 'places', id: 'a', name: 'A' }, { source: 'places', id: 'a', name: 'A again' }],
+    });
+    expect(m.getPlace).toHaveBeenCalledTimes(1);
+    expect(out.locations.map((l) => l.id)).toEqual(['a']);
+    m.searchPlaces.mockResolvedValue([place(1, 'https://acme.com'), place(1, 'https://acme.com')]);
+    m.getPlace.mockClear();
+    expect((await fetchReviews({ domain: 'acme.com', crawl: null, locations: null })).locations).toHaveLength(1);
+    expect(m.getPlace).toHaveBeenCalledTimes(1);
   });
 
   it('every location failing is an error with the first message; not_connected and permission pass through', async () => {
