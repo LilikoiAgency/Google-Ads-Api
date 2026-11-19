@@ -101,6 +101,19 @@ describe('places client', () => {
     expect(out.map((p) => p.id)).toEqual(['P1']);
   });
 
+  it('tolerates a malformed percent escape in a Maps place name', async () => {
+    global.fetch.mockResolvedValueOnce(json({ places: [{ id: 'P2', displayName: { text: 'Bad' } }] }));
+    const out = await resolveLocationInput('https://www.google.com/maps/place/Bad%ZZName/@27.9,-82.4,17z');
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).textQuery).toBe('Bad%ZZName');
+    expect(out.map((p) => p.id)).toEqual(['P2']);
+  });
+
+  it('never lets Next cache Places requests', async () => {
+    global.fetch.mockResolvedValueOnce(json({}));
+    await searchPlaces('x');
+    expect(global.fetch.mock.calls[0][1].cache).toBe('no-store');
+  });
+
   it('falls back to text search when a short link has no location header', async () => {
     global.fetch
       .mockResolvedValueOnce({ status: 200, ok: true, headers: new Headers() })

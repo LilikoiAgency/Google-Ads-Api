@@ -21,6 +21,7 @@ async function placesFetch(url, init, fieldMask) {
   try {
     res = await fetch(url, {
       ...init,
+      cache: 'no-store',
       headers: { ...(init.headers || {}), 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': fieldMask },
     });
   } catch (e) {
@@ -111,7 +112,13 @@ export async function resolveLocationInput(input) {
     if (placeId) return [await getPlace(placeId)];
     const m = url.pathname.match(/\/maps\/place\/([^/@]+)\/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
     if (m) {
-      const name = decodeURIComponent(m[1].replace(/\+/g, ' '));
+      const segment = m[1].replace(/\+/g, ' ');
+      let name;
+      try {
+        name = decodeURIComponent(segment);
+      } catch {
+        name = segment;
+      }
       return (await searchPlaces(name, { bias: { lat: Number(m[2]), lng: Number(m[3]) } })).slice(0, MAX_RESULTS);
     }
   }
