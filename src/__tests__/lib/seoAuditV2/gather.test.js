@@ -160,6 +160,14 @@ describe('gather fix round 1', () => {
     expect(m.fetchPageSpeed.mock.calls.map((c) => c[0])).toEqual(['https://x.com/money', 'https://x.com/p1']);
   });
 
+  it('checks each page once: a listed or crawled variant of a Search Console page uses the Search Console address', async () => {
+    gscOk();
+    m.joinPagesToQueries.mockReturnValue([{ page: 'https://www.x.com/' }, { page: 'https://www.x.com/p1' }]);
+    await gatherAll({ domain: 'x.com', crawl, profile: 'quick', priorityUrls: ['https://x.com/', 'https://x.com/money'] });
+    expect(m.inspectUrls.mock.calls[0][2]).toEqual(['https://www.x.com/', 'https://x.com/money', 'https://www.x.com/p1']);
+    expect(m.fetchPageSpeed.mock.calls.map((c) => c[0])).toEqual(['https://www.x.com/', 'https://x.com/money']);
+  });
+
   it('only listed pages: targets are just the crawled pages', async () => {
     gscOk();
     m.joinPagesToQueries.mockReturnValue([{ page: 'https://x.com/p1' }]);
