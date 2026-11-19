@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 
-const m = vi.hoisted(() => ({ getJob: vi.fn(), saveFinished: vi.fn(), dropReviewTexts: vi.fn() }));
-vi.mock('@/lib/seoAuditV2/jobStore', () => ({ getJob: m.getJob, saveFinished: m.saveFinished }));
-vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ dropReviewTexts: m.dropReviewTexts }));
+const m = vi.hoisted(() => ({
+  getJob: vi.fn(), saveFinished: vi.fn(), refundUsage: vi.fn(), dropReviewTexts: vi.fn(), slimReviewSources: vi.fn(),
+}));
+vi.mock('@/lib/seoAuditV2/jobStore', () => ({ getJob: m.getJob, saveFinished: m.saveFinished, refundUsage: m.refundUsage }));
+vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ dropReviewTexts: m.dropReviewTexts, slimReviewSources: m.slimReviewSources }));
 vi.mock('@/lib/seoAuditV2/gather', () => ({ describeGaps: () => [] }));
 vi.mock('@/lib/seoAuditV2/runStep', () => ({ runStep: vi.fn() }));
 
@@ -44,6 +46,26 @@ describe('advanceJob on a done job', () => {
     const p = await advanceJob('j1');
     expect(m.dropReviewTexts).toHaveBeenCalledWith('j1');
     expect(p.auditId).toBe('a1');
+  });
+
+  it('done job slims public Places data off the job document', async () => {
+    m.getJob.mockResolvedValue({ ...mk('full'), status: 'done', result: { version: 2 } });
+    m.saveFinished.mockResolvedValue('a1');
+    m.slimReviewSources.mockResolvedValue(true);
+    await advanceJob('j1');
+    expect(m.slimReviewSources).toHaveBeenCalledWith('j1');
+  });
+
+  it('failed job slims too, and a failing slim is logged without breaking the response', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    m.slimReviewSources.mockClear();
+    m.slimReviewSources.mockRejectedValue(new Error('db down'));
+    m.getJob.mockResolvedValue({ ...mk('full'), status: 'failed' });
+    const p = await advanceJob('j1');
+    expect(m.slimReviewSources).toHaveBeenCalledWith('j1');
+    expect(p.status).toBe('failed');
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it('a failed cache drop is logged and does not break the response', async () => {

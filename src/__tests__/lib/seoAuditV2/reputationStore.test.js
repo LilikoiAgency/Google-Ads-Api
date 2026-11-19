@@ -61,6 +61,30 @@ describe('reputationStore (Mongo calls)', () => {
     expect(await store.getReviewTexts('j')).toEqual({ a: [] });
   });
 
+  describe('slimReviewSources', () => {
+    const ID = '507f1f77bcf86cd799439011';
+    const found = (reviews) => coll('SeoAuditJobs').findOne.mockResolvedValueOnce({ data: { sources: { reviews } } });
+
+    it('keeps only source, id, name and coverage for places locations; gbp entries untouched', async () => {
+      const gbp = { source: 'gbp', id: 'locations/1', name: 'G', city: 'Tampa', coverage: 'full', stats: { rating: 5 } };
+      found([{ source: 'places', id: 'p1', name: 'A', city: 'Tampa', region: 'FL', coverage: 'sample', stats: { rating: 4 } }, gbp]);
+      coll('SeoAuditJobs').updateOne.mockResolvedValueOnce({ modifiedCount: 1 });
+      expect(await store.slimReviewSources(ID)).toBe(true);
+      const [filter, update] = coll('SeoAuditJobs').updateOne.mock.calls[0];
+      expect(filter.status).toEqual({ $in: ['done', 'failed'] });
+      expect(update.$set['data.sources.reviews']).toEqual([{ source: 'places', id: 'p1', name: 'A', coverage: 'sample' }, gbp]);
+    });
+
+    it('is idempotent: already slim, absent or bad id writes nothing', async () => {
+      found([{ source: 'places', id: 'p1', name: 'A', coverage: 'sample' }]);
+      expect(await store.slimReviewSources(ID)).toBe(false);
+      found(null);
+      expect(await store.slimReviewSources(ID)).toBe(false);
+      expect(await store.slimReviewSources('nope')).toBe(false);
+      expect(coll('SeoAuditJobs').updateOne).not.toHaveBeenCalled();
+    });
+  });
+
   it('dropReviewTexts deletes by job id', async () => {
     await store.dropReviewTexts('job1');
     expect(coll('SeoAuditPlacesCache').deleteOne).toHaveBeenCalledWith({ jobId: 'job1' });

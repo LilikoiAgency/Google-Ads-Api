@@ -5,7 +5,7 @@
 import * as store from './jobStore';
 import { runStep } from './runStep';
 import { describeGaps } from './gather';
-import { dropReviewTexts } from './reputationStore';
+import { dropReviewTexts, slimReviewSources } from './reputationStore';
 import {
   STEP_KEYS, runnableSteps, applyStepResult, expireStale, resetFailed, jobStatus, shouldRefund,
 } from './jobs';
@@ -82,6 +82,14 @@ async function settleJob(id, fresh, now) {
 // store (historySaved / refunded flags), so calling again on every advance of a
 // finished job retries a follow-up that failed earlier and is a no-op otherwise.
 async function finishFollowUps(job) {
+  if (job.status === 'done' || job.status === 'failed') {
+    // Public Places data is trimmed off the job once it is over; the saved result keeps the audit-date numbers.
+    try {
+      await slimReviewSources(job.id);
+    } catch (err) {
+      console.error('[seo-audit-v2] slimming review data failed:', err?.message || err);
+    }
+  }
   if (job.status === 'done') {
     const auditId = await store.saveFinished(job);
     // Cached review text is only needed while the audit runs. The store has no

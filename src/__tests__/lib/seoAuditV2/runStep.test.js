@@ -498,6 +498,18 @@ describe('runStep', () => {
       expect(s.queries[0]).not.toHaveProperty('error');
     });
 
+    it('tolerates review locations slimmed off the job (no stats, no city), e.g. a retried failed job', async () => {
+      synth();
+      const slim = [{ source: 'places', id: 'p1', name: 'Acme Turf', coverage: 'sample' }];
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews: slim, aiSearch }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const res = await runStep(j, 'synthesize');
+      expect(res.ok).toBe(true);
+      expect(res.patch.result.reputation.locations).toEqual([{ name: 'Acme Turf', city: undefined, source: 'places', coverage: 'sample', stats: undefined }]);
+    });
+
     it('every query erroring gives total 0', async () => {
       synth();
       const none = { status: 'ok', notes: [], queries: [{ query: 'a', you_appear: false, results: [], error: 'x' }] };
