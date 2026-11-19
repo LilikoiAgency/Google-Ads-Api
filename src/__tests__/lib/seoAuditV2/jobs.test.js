@@ -86,6 +86,21 @@ describe('failures', () => {
     expect(job.gaps).toHaveLength(1);
   });
 
+  it('a search step that fails for good leaves a gap, once', () => {
+    let job = finish(finish(mk(), 'crawl'), 'gather');
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'search', T0), 'search', fail, T0);
+    expect(step(job, 'search').status).toBe('failed_final');
+    expect(job.gaps).toEqual(["Web search check didn't complete."]);
+    const twice = { ...job, gaps: ["Web search check didn't complete."] };
+    expect([...new Set(twice.gaps)]).toHaveLength(1);
+  });
+
+  it('does not repeat the search gap when the step already added it', () => {
+    let job = { ...finish(finish(mk(), 'crawl'), 'gather'), gaps: ["Web search check didn't complete."] };
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'search', T0), 'search', fail, T0);
+    expect(job.gaps).toEqual(["Web search check didn't complete."]);
+  });
+
   it('names each area in its gap', () => {
     let job = finish(finish(mk(), 'crawl'), 'gather');
     for (const p of PASSES) {

@@ -14,6 +14,8 @@ const MAX_ATTEMPTS = 3; // 1 try + 2 retries
 const STALE_MS = 6 * 60 * 1000;
 const EFFORTS = ['high', 'medium', 'low'];
 
+const SEARCH_GAP = "Web search check didn't complete."; // same text runStep adds on a soft failure
+
 const PASS_AREA = {
   'pass:technical': 'Technical & indexing',
   'pass:content': 'Content & keywords',
@@ -120,6 +122,7 @@ function failFinal(job, key, error, now) {
   if (PASS_AREA[key]) {
     next.gaps = [...(job.gaps || []), `${PASS_AREA[key]} analysis didn't complete — rerun to include it`];
   }
+  if (key === 'search' && !(job.gaps || []).includes(SEARCH_GAP)) next.gaps = [...(job.gaps || []), SEARCH_GAP];
   return next;
 }
 
