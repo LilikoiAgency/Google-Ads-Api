@@ -1,9 +1,10 @@
 "use client";
-// Report pieces for the top of a v2 audit: the summary split into a headline and
-// the rest (for the cover), the three 0–10 scales, and the three top moves.
+// Report pieces for the top of a v2 audit: the stat strip (three 0–10 scores and
+// the plan size), the summary box (first sentence as the lead, then the rest and
+// the reason behind each score), and the three top moves.
 
 import s from "./audit.module.css";
-import { pagePath } from "./ActionPlan";
+import { pagePath, isQuickWin } from "./ActionPlan";
 
 export const SCORES = [
   { key: "seo", name: "Search visibility", abbr: "SEO" },
@@ -11,7 +12,7 @@ export const SCORES = [
   { key: "aeo", name: "Answer readiness", abbr: "AEO" },
 ];
 
-// The first sentence leads as the headline; the rest follows as body text.
+// The first sentence leads; the rest follows as body text.
 export function splitSummary(text) {
   const t = String(text || "").trim();
   const m = t.match(/^(.+?[.!?])\s+(?=[A-Z0-9"'“‘(])/s);
@@ -19,27 +20,54 @@ export function splitSummary(text) {
   return { headline: m[1], rest: t.slice(m[0].length).trim() };
 }
 
-export function ScoreScales({ scores }) {
-  const shown = SCORES.filter((x) => Number.isFinite(scores?.[x.key]?.score));
-  if (!shown.length) return null;
+const scored = (scores) => SCORES.filter((x) => Number.isFinite(scores?.[x.key]?.score));
+
+export function StatStrip({ scores, tasks }) {
+  const shown = scored(scores);
+  const plan = tasks || [];
+  if (!shown.length && !plan.length) return null;
+  const quick = plan.filter(isQuickWin).length;
   return (
-    <div className={s.scores}>
+    <div className={s.stats}>
       {shown.map(({ key, name, abbr }) => {
-        const { score, reason } = scores[key];
+        const score = scores[key].score;
         return (
-          <div key={key}>
-            <div className={s.scoreHead}>
-              <span className={s.scoreNum}>{score}</span>
-              <span className={s.scoreOf}>out of 10</span>
+          <div key={key} className={s.stat}>
+            <p className={s.statLabel}><abbr>{abbr}</abbr> {name}</p>
+            <p className={s.statValue}>{score}<small>/10</small></p>
+            <div className={s.bar} role="img" aria-label={`${name}: ${score} out of 10`}>
+              <i style={{ width: `${Math.max(0, Math.min(10, score)) * 10}%` }} />
             </div>
-            <p className={s.scoreName}>{name} <abbr>({abbr})</abbr></p>
-            <div className={s.scale} role="img" aria-label={`${name}: ${score} out of 10`}>
-              {Array.from({ length: 10 }, (_, i) => <i key={i} className={i < score ? s.on : undefined} />)}
-            </div>
-            {reason && <p className={s.scoreWhy} title={reason}>{reason}</p>}
           </div>
         );
       })}
+      {plan.length > 0 && (
+        <div className={s.stat}>
+          <p className={s.statLabel}>Action plan</p>
+          <p className={s.statValue}>{plan.length}<small> tasks</small></p>
+          <p className={s.statNote}>{quick > 0 ? `${quick} quick win${quick === 1 ? "" : "s"}` : "Ranked by value"}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function SummaryBox({ summary, scores }) {
+  const { headline, rest } = splitSummary(summary);
+  const reasons = scored(scores).filter((x) => scores[x.key].reason);
+  if (!headline && !reasons.length) return null;
+  return (
+    <div className={s.summary}>
+      {headline && <p className={s.headline}>{headline}</p>}
+      {rest && <p className={s.summaryRest}>{rest}</p>}
+      {reasons.length > 0 && (
+        <details className={s.why}>
+          <summary>Why these scores</summary>
+          <ul className={s.scoreWhyList}>
+            {reasons.map(({ key, abbr }) => <li key={key}><b>{abbr}:</b> {scores[key].reason}</li>)}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
@@ -48,7 +76,7 @@ export function TopMoves({ moves }) {
   if (!moves?.length) return null;
   return (
     <section className={s.section}>
-      <h3 className={s.sectionHead}>The moves that matter most</h3>
+      <h3 className={s.sectionHead}>Top {moves.length} moves</h3>
       <ol className={s.moves}>
         {moves.map((m, i) => (
           <li key={m.task?.id || i} className={s.move}>
@@ -56,7 +84,7 @@ export function TopMoves({ moves }) {
             <p className={s.moveText}>{m.headline}</p>
             {m.task && (
               <p className={s.movePage} title={m.task.page}>
-                {m.task.id}, {m.task.group ? `${m.task.items?.length || 0} pages` : pagePath(m.task.page)}
+                {m.task.id} · {m.task.group ? `${m.task.items?.length || 0} pages` : pagePath(m.task.page)}
               </p>
             )}
           </li>
@@ -66,13 +94,12 @@ export function TopMoves({ moves }) {
   );
 }
 
-// Kept for callers that want the whole block in one piece.
 export default function ClientSummary({ result }) {
   if (!result) return null;
   return (
     <div>
-      {result.client_summary && <p className={s.summaryRest}>{result.client_summary}</p>}
-      <ScoreScales scores={result.scores} />
+      <StatStrip scores={result.scores} tasks={result.action_plan} />
+      <SummaryBox summary={result.client_summary} scores={result.scores} />
       <TopMoves moves={result.top_moves} />
     </div>
   );

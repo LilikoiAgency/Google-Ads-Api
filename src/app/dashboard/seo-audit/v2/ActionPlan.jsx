@@ -14,7 +14,7 @@ export const CATEGORY_META = {
   conversion: { label: "Conversion", bg: "#f6e3df", color: "#a5473a" },
 };
 
-const CONFIDENCE_COLOR = { high: "#1f4a46", medium: "#b7791f", low: "#888" };
+const CONFIDENCE_COLOR = { high: "#09090b", medium: "#b7791f", low: "#888" };
 
 // "https://acme.com/services/turf?x=1" -> "/services/turf"; "site-wide" stays as is.
 export function pagePath(page) {
@@ -85,7 +85,7 @@ export function CategoryChip({ category }) {
   );
 }
 
-const SELECT = { padding: "8px 10px", borderRadius: 8, border: "1px solid #d5ddda", fontSize: 13.5, color: "#16211f", background: "#fff", maxWidth: 260, fontFamily: "inherit" };
+const SELECT = { padding: "8px 10px", borderRadius: 8, border: "1px solid #e4e4e7", fontSize: 13.5, color: "#09090b", background: "#fff", maxWidth: 260, fontFamily: "inherit" };
 const BUTTON = { padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
 
 const COPY_FAILED = "Couldn't copy. Your browser blocked the clipboard.";
@@ -118,18 +118,18 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
     <div style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "4px 4px 8px" }}>
       <div style={{ flex: "1 1 320px", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#1f4a46" }}>Exact change</p>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "#09090b" }}>Exact change</p>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {copyNotice && !copyNotice.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{copyNotice.text}</span>}
             <button
               onClick={(e) => { e.stopPropagation(); onCopy(); }}
-              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #d3e1dc", background: "#fff", color: "#1f4a46" }}
+              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #e4e4e7", background: "#fff", color: "#09090b" }}
             >
               {copyNotice?.ok ? "Copied" : "Copy change"}
             </button>
           </span>
         </div>
-        <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#f1f6f4", border: "1px solid #d3e1dc", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
+        <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#fafafa", border: "1px solid #e4e4e7", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
           {task.change}
         </p>
         {task.why && (
@@ -144,7 +144,7 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#1f4a46", wordBreak: "break-all" }}
+            style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#09090b", wordBreak: "break-all" }}
           >
             Open {href} &#8599;
           </a>
@@ -183,27 +183,27 @@ function SubTasks({ task, domain, notice, onCopy }) {
           const href = pageHref(c.page, domain);
           const n = notice?.key === `change-${c.id}` ? notice : null;
           return (
-            <li key={c.id} style={{ border: "1px solid #eef0f4", borderRadius: 8, padding: "10px 12px", background: "#fff" }}>
+            <li key={c.id} style={{ border: "1px solid #e4e4e7", borderRadius: 8, padding: "10px 12px", background: "#fff" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a2e" }}>
-                  <span style={{ color: "#1f4a46", marginRight: 6 }}>{c.id}</span>{c.title}
+                  <span style={{ color: "#09090b", marginRight: 6 }}>{c.id}</span>{c.title}
                 </p>
                 <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {n && !n.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{n.text}</span>}
                   <button
                     onClick={(e) => { e.stopPropagation(); onCopy(c); }}
-                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #d3e1dc", background: "#fff", color: "#1f4a46" }}
+                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #e4e4e7", background: "#fff", color: "#09090b" }}
                   >
                     {n?.ok ? "Copied" : "Copy change"}
                   </button>
                 </span>
               </div>
               {href ? (
-                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "#1f4a46", wordBreak: "break-all" }}>
+                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "#09090b", wordBreak: "break-all" }}>
                   {pagePath(c.page)} &#8599;
                 </a>
               ) : <span style={{ fontSize: 12, color: "#555" }}>{pagePath(c.page)}</span>}
-              <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#f1f6f4", border: "1px solid #d3e1dc", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
+              <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#fafafa", border: "1px solid #e4e4e7", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
                 {c.change}
               </p>
               {c.evidence?.length > 0 && (
@@ -277,7 +277,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       {/* Filters + export */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "#5c6b68" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "#71717a" }}>
             Category
             <select value={category} onChange={(e) => setCategory(e.target.value)} style={SELECT}>
               <option value="">All categories</option>
@@ -286,7 +286,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
               ))}
             </select>
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "#5c6b68" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "#71717a" }}>
             Page
             <select value={page} onChange={(e) => setPage(e.target.value)} style={SELECT}>
               <option value="">All pages</option>
@@ -302,18 +302,18 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
           {filtered && (
             <button
               onClick={() => { setCategory(""); setPage(""); setQuickOnly(false); }}
-              style={{ ...BUTTON, padding: "7px 10px", border: "none", background: "transparent", color: "#1f4a46", textDecoration: "underline" }}
+              style={{ ...BUTTON, padding: "7px 10px", border: "none", background: "transparent", color: "#09090b", textDecoration: "underline" }}
             >
               Clear filters
             </button>
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "#1f4a46" : "#c0392b" }}>{notice.text}</span>}
-          <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid #1f4a46", background: "#fff", color: "#1f4a46" }}>
+          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "#09090b" : "#c0392b" }}>{notice.text}</span>}
+          <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid #09090b", background: "#fff", color: "#09090b" }}>
             Copy as checklist
           </button>
-          <button onClick={handleCsv} disabled={!visible.length} style={{ ...BUTTON, border: "none", background: "#1f4a46", color: "#fff" }}>
+          <button onClick={handleCsv} disabled={!visible.length} style={{ ...BUTTON, border: "none", background: "#09090b", color: "#fff" }}>
             Download CSV
           </button>
         </div>
@@ -384,7 +384,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       {collapsed && (
         <button
           onClick={() => setShowAll(true)}
-          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed #c9d6d2", background: "#f4f7f6", color: "#1f4a46" }}
+          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed #e4e4e7", background: "#fafafa", color: "#09090b" }}
         >
           Show {visible.length - TOP_COUNT} more task{visible.length - TOP_COUNT === 1 ? "" : "s"}
         </button>

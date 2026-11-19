@@ -6,7 +6,7 @@
 import { pagePath, pageHref } from "./ActionPlan";
 import { pathKey } from "@/lib/seoAuditV2/tasks";
 
-const LABEL = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#888", marginBottom: 4 };
+const LABEL = { fontSize: 11, fontWeight: 700, color: "#888", marginBottom: 4 };
 const ROW = { fontSize: 12, color: "#444", lineHeight: 1.6 };
 
 const seconds = (ms) => (ms == null ? null : `${(ms / 1000).toFixed(1)}s`);

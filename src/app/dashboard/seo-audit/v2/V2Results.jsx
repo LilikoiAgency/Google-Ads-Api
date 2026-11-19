@@ -1,13 +1,13 @@
 "use client";
-// The v2 results, laid out as a report: a pine cover with the domain and the main
-// finding, then a white sheet with the scores, the top moves, the Action Plan /
+// The v2 results as a clean report sheet: header (domain, details, actions), a stat
+// strip (scores and plan size), the summary, the top moves, the Action Plan /
 // Pages / per-area tabs, and "About this audit" (data sources and gaps) at the end.
 
 import { useState } from "react";
 import s from "./audit.module.css";
-import { auditSerif, auditSans } from "./fonts";
+import { auditSans } from "./fonts";
 import { SectionTitle } from "../ui";
-import { splitSummary, ScoreScales, TopMoves } from "./ClientSummary";
+import { StatStrip, SummaryBox, TopMoves } from "./ClientSummary";
 import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
@@ -81,7 +81,6 @@ export default function V2Results({ result, domain, actions }) {
   const findings = result.findings || {};
   const pagesCrawled = result.data_sources?.crawl?.pages;
   const site = result.domain || domain;
-  const { headline, rest } = splitSummary(result.client_summary);
   // Older results have no passes_completed; treat every area as complete there.
   const incomplete = (area) => result.passes_completed?.[area] === false;
   const flagged = (area, count) => (incomplete(area) ? { count: "!", warn: true } : { count });
@@ -95,13 +94,13 @@ export default function V2Results({ result, domain, actions }) {
   ];
   const areaLabel = (key) => tabs.find((t) => t.key === key).label;
   const meta = [
-    `${result.audit_type === "quick" ? "Quick" : "Full"} SEO audit`,
+    `${result.audit_type === "quick" ? "Quick" : "Full"} audit`,
     formatDate(result.audit_date),
     pagesCrawled ? `${pagesCrawled} pages reviewed` : null,
-  ].filter(Boolean).join(", ");
+  ].filter(Boolean).join(" · ");
 
   return (
-    <article className={`${s.doc} ${auditSerif.variable} ${auditSans.variable}`}>
+    <article className={`${s.doc} ${auditSans.variable}`}>
       <header className={s.cover}>
         <div className={s.coverTop}>
           <div style={{ minWidth: 0 }}>
@@ -114,12 +113,12 @@ export default function V2Results({ result, domain, actions }) {
             {actions}
           </div>
         </div>
-        {headline && <p className={s.headline}>{headline}</p>}
-        {rest && <p className={s.summaryRest}>{rest}</p>}
       </header>
 
+      <StatStrip scores={result.scores} tasks={tasks} />
+      <SummaryBox summary={result.client_summary} scores={result.scores} />
+
       <div className={s.sheet}>
-        <ScoreScales scores={result.scores} />
         <TopMoves moves={result.top_moves} />
 
         <div className={s.tabs} role="tablist" aria-label="Audit sections">

@@ -1,6 +1,9 @@
-import { Newsreader, Public_Sans } from "next/font/google";
+import localFont from "next/font/local";
 
-// Audit report typefaces: an editorial serif for the headline, scores and move
-// numbers; a plain public-sector sans for everything you read and click.
-export const auditSerif = Newsreader({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--audit-serif", display: "swap", adjustFontFallback: false });
-export const auditSans = Public_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--audit-sans", display: "swap" });
+// Geist (bundled with the app) for the whole audit report.
+export const auditSans = localFont({
+  src: "../../../fonts/GeistVF.woff",
+  variable: "--audit-sans",
+  weight: "100 900",
+  display: "swap",
+});

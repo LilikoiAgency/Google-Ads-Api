@@ -23,7 +23,7 @@ describe('seo audit report html', () => {
   it('client report: summary, scores, moves and the top 10 only, without evidence or confirm notes', () => {
     const html = generateSeoReportHtml(RESULT, { kind: 'client' });
     expect(html).toContain('<title>acme.com: SEO Audit</title>');
-    expect(html).toContain('Full SEO audit, November 19, 2026, 40 pages reviewed');
+    expect(html).toContain('Full SEO audit · November 19, 2026 · 40 pages reviewed');
     expect(html).toContain('Acme is &lt;strong&gt; on brand searches.');
     expect(html).toContain('Bring back the cost guide');
     expect(html).toContain('Task 10');

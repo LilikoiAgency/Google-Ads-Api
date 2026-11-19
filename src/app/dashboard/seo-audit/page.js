@@ -181,13 +181,13 @@ export default function SEOAuditPage() {
       <button
         onClick={() => handleRunAudit(true)}
         disabled={starting}
-        style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(13,148,136,0.15)", border: "1px solid rgba(13,148,136,0.3)", color: "#5eead4", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1 }}
+        style={{ padding: "8px 14px", borderRadius: 8, background: "#fff", border: "1px solid #e4e4e7", color: "#09090b", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1, fontFamily: "inherit" }}
       >
         {starting ? "Starting..." : "Re-run Audit"}
       </button>
       <button
         onClick={handleReset}
-        style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#ccc", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e4e4e7", background: "#fff", color: "#09090b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
       >
         New Audit
       </button>

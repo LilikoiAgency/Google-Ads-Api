@@ -105,7 +105,7 @@ export default function ProgressSteps({ progress, error, onRetry, onBack }) {
 
         {gaps.length > 0 && (
           <div style={{ marginTop: 16, padding: "12px 14px", background: "#fffbeb", borderRadius: 10, border: "1px solid #fde68a" }}>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#7d5a00", marginBottom: 6 }}>Data gaps so far</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "#7d5a00", marginBottom: 6 }}>Data gaps so far</p>
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {gaps.map((g) => <li key={g} style={{ fontSize: 12, color: "#6d4c00", lineHeight: 1.6 }}>{g}</li>)}
             </ul>
