@@ -14,7 +14,7 @@ describe('TASK_JSON_SCHEMA', () => {
   it('matches the task shape and uses only supported keywords', () => {
     expect(TASK_JSON_SCHEMA.additionalProperties).toBe(false);
     expect(TASK_JSON_SCHEMA.required.sort()).toEqual(Object.keys(TASK_JSON_SCHEMA.properties).sort());
-    expect(TASK_JSON_SCHEMA.properties.category.enum).toEqual(['technical', 'content', 'local', 'aeo', 'conversion']);
+    expect(TASK_JSON_SCHEMA.properties.category.enum).toEqual(['technical', 'content', 'local', 'aeo', 'conversion', 'reputation']);
     expect(TASK_JSON_SCHEMA.properties.impact).toEqual({ type: 'integer', enum: [1, 2, 3, 4, 5] });
     expect(TASK_JSON_SCHEMA.properties.effort).toEqual({ type: 'integer', enum: [1, 2, 3, 4, 5] });
     expect(TASK_JSON_SCHEMA.properties.confidence.enum).toEqual(['high', 'medium', 'low']);

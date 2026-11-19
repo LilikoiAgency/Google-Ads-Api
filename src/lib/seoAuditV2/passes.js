@@ -3,9 +3,10 @@
 // Pure: no server imports. A source that is unavailable is left out of the
 // input entirely, never sent as an empty list.
 
+import { brandName } from './reviews';
 import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask, effectiveImpact, priorityScore } from './tasks';
 
-export const PASSES = ['technical', 'content', 'local', 'conversion'];
+export const PASSES = ['technical', 'content', 'local', 'conversion', 'reputation'];
 
 export const CONTENT_CHUNK_SIZE = 4;
 const HOMEPAGE_TEXT_CHARS = 1500;
@@ -200,9 +201,43 @@ function conversionInput(crawl, data) {
   });
 }
 
+const REVIEW_TEXT_CHARS = 600;
+
+function reputationInput(crawl, data, domain) {
+  if (!has(data.reviews) && !has(data.aiSearch)) return null;
+  const texts = data.reviewTexts || {};
+  const search = data.aiSearch;
+  return {
+    brand: brandName(crawl, domain),
+    domain: domain || '',
+    locations: (data.reviews || []).map((l) => compact({
+      name: l.name,
+      city: l.city,
+      source: l.source,
+      coverage: l.coverage,
+      stats: l.stats,
+      reviews: has(texts[l.id])
+        ? texts[l.id].map((r) => compact({ stars: r.stars, date: r.date, text: String(r.text || '').slice(0, REVIEW_TEXT_CHARS), replied: r.replied }))
+        : null,
+    })),
+    search: has(search)
+      ? {
+        queries: (search.queries || []).map((q) => compact({
+          query: q.query,
+          you_appear: q.you_appear,
+          results: (q.results || []).map((r) => compact({ title: r.title, url: r.url, host: r.host })),
+          error: q.error,
+        })),
+        notes: search.notes || [],
+      }
+      : null,
+  };
+}
+
 // content -> array of chunks (may be empty); conversion -> null when GA4 is
-// unavailable (the pass is skipped); others -> one object.
-export function buildPassInput(passKey, { crawl, data } = {}) {
+// unavailable and reputation -> null when there are neither reviews nor a web
+// search (the pass is skipped); others -> one object.
+export function buildPassInput(passKey, { crawl, data, domain } = {}) {
   const c = crawl || {};
   const d = data || {};
   switch (passKey) {
@@ -210,6 +245,7 @@ export function buildPassInput(passKey, { crawl, data } = {}) {
     case 'content': return contentInput(c, d);
     case 'local': return localInput(c, d);
     case 'conversion': return conversionInput(c, d);
+    case 'reputation': return reputationInput(c, d, domain);
     default: throw new Error(`Unknown pass: ${passKey}`);
   }
 }
@@ -331,16 +367,28 @@ ${RULES_REMINDER}`,
 
 ${OWN_AREA}
 ${RULES_REMINDER}`,
+
+  reputation: `This is the reputation pass. The input has the brand and domain, Google review statistics per business location (rating, review count, coverage, reviews per month, star split, days since the newest review, reply rate), the cached text of those reviews when available (stars, date, text, whether the owner replied), and the results of a web search run during the audit (queries, whether the business appeared, the sites that came up, notes). Task category is "reputation".
+
+- Use ratings and counts only as given in the input; never estimate, round into new claims, or add figures.
+- themes: recurring praise and complaints found in the review text. count is the number of input reviews that mention the theme, counted from the input; location is the location name the reviews belong to. quotes are short customer quotes of at most one sentence, copied exactly from the input text; never paraphrase a quote and never invent one. When there is no review text, return no themes.
+- When a location's coverage is "sample", the reviews are only a sample: say "from 5 sample reviews" (use the actual number given), never present them as the full picture, and set confidence on those tasks to medium at most.
+- Look for tasks the evidence supports: a low or falling rating, a low reply rate or unanswered negative reviews (quote the review and the exact reply to write), a slow review pace or a long gap since the newest review (name the exact step to ask for reviews, for example a follow-up message after a job), recurring complaints that point to a service fix.
+- search_summary: describe the web search as "a web search run during the audit", never as Google rankings or positions or what Google shows. summary says in plain words whether the business appeared and who did; competitors and cited_sites list only businesses and sites that appear in the input results, using the host as given. If a query has an error or there are notes about missing data, say that it can't be verified rather than guessing. If there is no search in the input, leave the summary empty and both lists empty.
+- Never name an AI model or vendor.
+
+${OWN_AREA}
+${RULES_REMINDER}`,
 };
 
-export const SYNTH_SYSTEM = `This is the final step. The writing rules in the audit instructions above apply. The input has every task from four focused analysis passes (technical, content, local and answer-engine, conversion), each shown compactly with its id, title, page, category, impact, effort, confidence and first evidence item, plus the passes' findings and any passes that did not complete. The action plan is built from these tasks as they are; you do not rewrite them. Return:
+export const SYNTH_SYSTEM = `This is the final step. The writing rules in the audit instructions above apply. The input has every task from five focused analysis passes (technical, content, local and answer-engine, conversion, reputation), each shown compactly with its id, title, page, category, impact, effort, confidence and first evidence item, plus the passes' findings and any passes that did not complete. The action plan is built from these tasks as they are; you do not rewrite them. Return:
 
 - drop_task_ids: the ids of tasks to leave out of the action plan: duplicates of another task (keep the more specific one), tasks outside their pass's area that another pass already covers, tasks that depend on a data gap, generic tasks, and tasks whose evidence does not support them. Leave every other task in.
 - follow_ups: tasks that can only be done as part of another task, as { parent_id, task_ids }. Example: a page returns 404 and one task restores it, while other tasks add sections to that same page; those additions are follow-ups of the restore task. Use only when the dependency is real; most tasks have none.
 - groups: the same kind of fix repeated across three or more pages, as { title, why, task_ids }, so the plan shows it once with one item per page. Examples: removing visible keyword lists, adding an FAQ section, adding a cost section, fixing copy pasted from another city, title and meta rewrites that have no page-specific search numbers behind them. The title names the fix ("Remove the visible keyword lists from 6 pages"); why is one sentence. Do not group a task whose own Search Console numbers make it urgent on its own; leave it separate. A task may appear in at most one group or follow-up list, and never in drop_task_ids as well.
 - top_moves: exactly three items, the three highest-value tasks that are not dropped: task_id (copied exactly from the input) and a one-sentence headline for the business owner on what it does for them.
 - client_summary: three to five plain sentences a business owner understands. State the most important opportunity and the biggest problem.
-- scores: SEO (search visibility and technical health), GEO (readiness for AI-powered search: clear entity facts, structured data, quotable content) and AEO (readiness for answer engines: direct answers to questions, question coverage), each an integer 0 to 10 with a one-line reason that cites the evidence. Base scores only on the input; where data gaps limit a score, say so in the reason.
+- scores: SEO (search visibility and technical health), GEO (readiness for AI-powered search: clear entity facts, structured data, quotable content; where the reputation findings include a web search run during the audit, the reason may cite what it found about who appears for the business's key questions, described as a web search run during the audit and never as Google rankings) and AEO (readiness for answer engines: direct answers to questions, question coverage), each an integer 0 to 10 with a one-line reason that cites the evidence. Base scores only on the input; where data gaps limit a score, say so in the reason.
 
 The data gaps are listed for the client separately; do not restate them.
 
@@ -376,6 +424,13 @@ export function passSchema(passKey) {
     };
   }
   if (passKey === 'conversion') props.key_events_configured = { type: 'boolean' };
+  if (passKey === 'reputation') {
+    props.themes = {
+      type: 'array',
+      items: closed({ kind: { type: 'string', enum: ['praise', 'complaint'] }, theme: str, count: { type: 'integer' }, location: str, quotes: strList }),
+    };
+    props.search_summary = closed({ summary: str, competitors: strList, cited_sites: strList });
+  }
   return closed(props);
 }
 
@@ -394,7 +449,7 @@ export const synthSchema = closed({
 
 // ── task ids, synthesis input, action plan ───────────────────────────────────
 
-const ID_PREFIX = { technical: 'TECH', content: 'CONT', local: 'LOCAL', conversion: 'CONV' };
+const ID_PREFIX = { technical: 'TECH', content: 'CONT', local: 'LOCAL', conversion: 'CONV', reputation: 'REP' };
 
 // Pass task ids unique across passes: TECH-1, LOCAL-2, CONV-1, and CONT-<chunk>-<n>
 // for content (chunk is the 1-based chunk number from the input).

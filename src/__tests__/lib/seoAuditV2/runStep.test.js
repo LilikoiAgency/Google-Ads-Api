@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   runStructured: vi.fn(),
   getSavedLocations: vi.fn(),
   saveReviewTexts: vi.fn(),
+  getReviewTexts: vi.fn(),
   runWebSearch: vi.fn(),
   buildSearchQueries: vi.fn(),
 }));
@@ -19,7 +20,7 @@ vi.mock('@/lib/seoAuditV2/gather', () => ({
   AUDIT_PROFILES: { quick: { effort: 'medium' }, full: { effort: 'high' } },
 }));
 vi.mock('@/lib/seoAuditV2/llm', () => ({ runStructured: m.runStructured }));
-vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ getSavedLocations: m.getSavedLocations, saveReviewTexts: m.saveReviewTexts }));
+vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ getSavedLocations: m.getSavedLocations, saveReviewTexts: m.saveReviewTexts, getReviewTexts: m.getReviewTexts }));
 
 vi.mock('@/lib/seoAuditV2/search', () => ({
   buildSearchQueries: m.buildSearchQueries,
@@ -52,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.getSavedLocations.mockResolvedValue(null);
   m.saveReviewTexts.mockResolvedValue(undefined);
+  m.getReviewTexts.mockResolvedValue(null);
 });
 
 describe('runStep', () => {
@@ -164,6 +166,33 @@ describe('runStep', () => {
     expect(res.patch['passes.conversion']).toMatchObject({ skipped: true, tasks: [] });
   });
 
+  it('reputation pass reads cached review text by job id', async () => {
+    const loc = { source: 'places', id: 'p1', name: 'Acme', city: 'Tampa', region: 'FL', coverage: 'full', stats: { rating: 4.5, count: 80 } };
+    m.getReviewTexts.mockResolvedValue({ p1: [{ stars: 1, date: '2026-01-01', text: 'Late again' }] });
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [{ ...task('Reply to reviews', 'https://acme.com/'), category: 'reputation' }], themes: [], search_summary: { summary: '', competitors: [], cited_sites: [] } } });
+    const j = job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } });
+    const res = await runStep(j, 'pass:reputation');
+    expect(m.getReviewTexts).toHaveBeenCalledWith(j.id);
+    const input = m.runStructured.mock.calls[0][0].input;
+    expect(input.locations[0].reviews[0].text).toBe('Late again');
+    expect(input.domain).toBe('acme.com');
+    expect(res.patch['passes.reputation'].tasks[0].id).toBe('REP-1');
+    expect(res.patch['passes.reputation']).toHaveProperty('themes');
+  });
+
+  it('reputation pass tolerates a failed text lookup and skips without sources', async () => {
+    m.getReviewTexts.mockRejectedValue(new Error('db down'));
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [] } });
+    const loc = { source: 'places', id: 'p1', name: 'Acme', stats: {} };
+    const ok = await runStep(job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } }), 'pass:reputation');
+    expect(ok.ok).toBe(true);
+    expect(m.runStructured.mock.calls[0][0].input.locations[0]).not.toHaveProperty('reviews');
+    m.runStructured.mockClear();
+    const skipped = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:reputation');
+    expect(m.runStructured).not.toHaveBeenCalled();
+    expect(skipped.patch['passes.reputation']).toMatchObject({ skipped: true });
+  });
+
   it('synthesize builds the result from completed passes', async () => {
     const passes = {
       technical: { findings: [{ title: 'tf' }], tasks: [{ ...task('Fix canonical'), id: 'TECH-1' }] },
@@ -192,14 +221,14 @@ describe('runStep', () => {
     });
     const res = await runStep(j, 'synthesize');
     const synthInput = m.runStructured.mock.calls[0][0].input;
-    expect(synthInput.passes_not_completed).toEqual(['Conversion']);
+    expect(synthInput.passes_not_completed).toEqual(['Conversion', 'Reputation']);
     expect(synthInput.tasks.map((t) => t.id).sort()).toEqual(['CONT-1-1', 'TECH-1']);
     const r = res.patch.result;
     expect(r).toMatchObject({ version: 2, domain: 'acme.com', audit_type: 'full', client_summary: 'Summary' });
     expect(r.action_plan).toHaveLength(2);
     expect(r.top_moves[0].headline).toBe('Get found');
     expect(r.pages).toEqual([{ page: '/p1', fixes: [], index: null, speed: null, top_queries: [] }]);
-    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: false });
+    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: false, reputation: false });
     expect(r.findings.technical).toEqual([{ title: 'tf' }]);
     expect(r.findings.conversion).toEqual([]);
     expect(r.data_gaps).toEqual(['ga4 unavailable', "Conversion analysis didn't complete — rerun to include it"]);
@@ -247,7 +276,7 @@ describe('runStep', () => {
       },
     });
     const r = (await runStep(j, 'synthesize')).patch.result;
-    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: true });
+    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: true, reputation: false });
     expect(r.pages.map((p) => p.page)).toEqual(['/services/turf', '/about', '/']);
     const [turf, about, home] = r.pages;
     expect(turf.fixes).toHaveLength(1);

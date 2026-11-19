@@ -7,7 +7,7 @@ export const TASK_JSON_SCHEMA = {
   properties: {
     id: { type: 'string' },
     title: { type: 'string' },
-    category: { type: 'string', enum: ['technical', 'content', 'local', 'aeo', 'conversion'] },
+    category: { type: 'string', enum: ['technical', 'content', 'local', 'aeo', 'conversion', 'reputation'] },
     page: { type: 'string' },
     evidence: { type: 'array', items: { type: 'string' }, minItems: 1 },
     change: { type: 'string' },

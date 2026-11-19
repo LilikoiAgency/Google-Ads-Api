@@ -1,7 +1,7 @@
 // Overview numbers for a v2 audit result, shared by the dashboard view and the
 // downloaded report so both always agree. Pure: safe in client and server code.
 
-export const AREA_LABELS = { content: 'Content', local: 'Local', aeo: 'Answers', technical: 'Technical', conversion: 'Conversion' };
+export const AREA_LABELS = { content: 'Content', local: 'Local', aeo: 'Answers', technical: 'Technical', conversion: 'Conversion', reputation: 'Reputation' };
 export const OPPORTUNITY_ROWS = 8;
 
 // High impact = 4 or 5; low effort = 1 or 2. A quick win is both.

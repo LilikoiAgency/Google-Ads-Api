@@ -14,7 +14,7 @@ import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
 import { pageLimit, filterSkipped } from './options';
 import { buildSearchSummary } from './overview';
-import { getSavedLocations, saveReviewTexts } from './reputationStore';
+import { getSavedLocations, saveReviewTexts, getReviewTexts } from './reputationStore';
 import { brandName } from './reviews';
 import { buildSearchQueries, runWebSearch } from './search';
 
@@ -33,6 +33,7 @@ const PASS_AREA = {
   content: 'Content & keywords',
   local: 'Local & AI search',
   conversion: 'Conversion',
+  reputation: 'Reputation',
 };
 
 const errText = (err) => {
@@ -143,7 +144,14 @@ async function runSearch(job) {
 
 async function runPass(job, key) {
   const pass = key.slice('pass:'.length);
-  const input = buildPassInput(pass, { crawl: job.data?.crawl, data: job.data?.sources });
+  const data = job.data?.sources;
+  let passData = data;
+  if (pass === 'reputation') {
+    // Review text is cached by job id, never stored on the job; a failed lookup just means stats only.
+    const reviewTexts = await getReviewTexts(job.id).catch(() => null);
+    passData = { ...data, reviewTexts };
+  }
+  const input = buildPassInput(pass, { crawl: job.data?.crawl, data: passData, domain: job.domain });
   const call = (inp) => runStructured({
     system: PASS_SYSTEM[pass],
     sharedContext: job.data?.sharedContext,
