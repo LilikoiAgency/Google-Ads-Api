@@ -775,6 +775,13 @@ describe('Advanced: Google Business Profiles picker', () => {
     expect(fromAuditOptions({ locations: [pick] }).locations).toEqual([pick]);
   });
 
+  it('unticking every location sends locations: [] and survives Run again', () => {
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, locations: [] })).toEqual({ pages: [], skip: [], onlyListed: false, locations: [] });
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, locations: null })).toBeUndefined();
+    expect(fromAuditOptions({ pages: [], locations: [] }).locations).toEqual([]);
+    expect(fromAuditOptions({ pages: [] }).locations).toBeNull();
+  });
+
   it('ticks every found location when nothing is saved', async () => {
     mockLocations({ saved: null, found: FOUND, status: 'ok' });
     open();

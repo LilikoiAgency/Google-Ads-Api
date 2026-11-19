@@ -72,8 +72,10 @@ export function parseAuditOptions(raw, domain) {
   }
 
   // Business locations whose Google reviews to check (picked from GBP or Places).
+  // An explicit empty list means "no locations" (the user unticked them all) and is kept.
   const locations = [];
-  if (Array.isArray(raw.locations)) {
+  const locationsGiven = Array.isArray(raw.locations);
+  if (locationsGiven) {
     for (const loc of raw.locations) {
       const id = typeof loc?.id === 'string' ? loc.id.trim() : '';
       const ok = (loc?.source === 'places' && /^[A-Za-z0-9_-]{10,}$/.test(id))
@@ -85,18 +87,18 @@ export function parseAuditOptions(raw, domain) {
     locations.splice(MAX_LOCATIONS);
   }
 
-  if (!pages.length && !skip.length && pageCount == null && !gscSite && !ga4Property && !locations.length) return { options: null };
+  if (!pages.length && !skip.length && pageCount == null && !gscSite && !ga4Property && !locationsGiven) return { options: null };
   return {
     options: {
       pages, onlyListed, skip, pageCount,
       ...(gscSite ? { gscSite } : {}),
       ...(ga4Property ? { ga4Property } : {}),
-      ...(locations.length ? { locations } : {}),
+      ...(locationsGiven ? { locations } : {}),
     },
   };
 }
 
-export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property || o.locations?.length > 0);
+export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property || Array.isArray(o.locations));
 
 // How many pages the crawl may fetch.
 export function pageLimit(auditType, options) {
@@ -135,7 +137,8 @@ export function describeOptions(o) {
   if (o.skip?.length) parts.push(`skip ${o.skip.join(', ')}`);
   if (o.gscSite) parts.push(`Search Console ${o.gscSite}`);
   if (o.ga4Property) parts.push(`Analytics ${o.ga4Property.name}`);
-  if (o.locations?.length) parts.push(`${o.locations.length} location${o.locations.length === 1 ? '' : 's'}`);
+  if (Array.isArray(o.locations) && !o.locations.length) parts.push('no locations');
+  else if (o.locations?.length) parts.push(`${o.locations.length} location${o.locations.length === 1 ? '' : 's'}`);
   if (o.pageCount && !o.onlyListed) parts.push(`${o.pageCount} pages`);
   return parts.join(' · ');
 }

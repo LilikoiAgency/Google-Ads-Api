@@ -19,15 +19,16 @@ export function toRequestOptions(adv) {
   const pageCount = adv?.pageCount ? Number(adv.pageCount) : undefined;
   const gscSite = adv?.gscSite || "";
   const ga4Property = adv?.ga4Property?.id ? adv.ga4Property : null;
-  // locations: null = untouched (the server uses saved picks, else the automatic match); an array = the user's picks.
-  const locations = Array.isArray(adv?.locations) ? adv.locations : [];
-  if (!pages.length && !skip.length && !pageCount && !gscSite && !ga4Property && !locations.length) return undefined;
+  // locations: null = untouched (the server uses saved picks, else the automatic match); an array = the user's picks,
+  // and an empty one means they unticked every location, so no reviews are pulled.
+  const locations = Array.isArray(adv?.locations) ? adv.locations : null;
+  if (!pages.length && !skip.length && !pageCount && !gscSite && !ga4Property && !locations) return undefined;
   return {
     pages, skip, onlyListed: !!adv.onlyListed && pages.length > 0,
     ...(pageCount ? { pageCount } : {}),
     ...(gscSite ? { gscSite } : {}),
     ...(ga4Property ? { ga4Property } : {}),
-    ...(locations.length ? { locations } : {}),
+    ...(locations ? { locations } : {}),
   };
 }
 
@@ -44,7 +45,7 @@ export function fromAuditOptions(o) {
     pageCount: o.pageCount ? String(o.pageCount) : "",
     gscSite: o.gscSite || "",
     ga4Property: o.ga4Property || null,
-    locations: o.locations?.length ? o.locations : null,
+    locations: Array.isArray(o.locations) ? o.locations : null,
   };
 }
 

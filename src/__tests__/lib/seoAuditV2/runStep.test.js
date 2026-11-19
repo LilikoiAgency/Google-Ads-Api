@@ -624,10 +624,18 @@ describe('runStep gather reviews', () => {
     await runStep(job({}, { data: { crawl } }), 'gather');
     expect(m.gatherAll.mock.calls[1][0].locations).toBe(saved);
 
+    // an explicit empty pick list means "no locations": neither saved picks nor auto-match
+    m.getSavedLocations.mockClear();
+    const none = [];
+    await runStep(job({}, { data: { crawl }, options: { pages: [], skip: [], locations: none } }), 'gather');
+    expect(m.gatherAll.mock.calls[2][0].locations).toBe(none);
+    expect(m.getSavedLocations).not.toHaveBeenCalled();
+    m.gatherAll.mockClear();
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [], reviewTexts: { p1: [] } });
     m.getSavedLocations.mockRejectedValue(new Error('db down'));
     m.saveReviewTexts.mockRejectedValue(new Error('db down'));
     const res = await runStep(job({}, { data: { crawl } }), 'gather');
-    expect(m.gatherAll.mock.calls[2][0].locations).toBeNull();
+    expect(m.gatherAll.mock.calls[0][0].locations).toBeNull();
     expect(res.ok).toBe(true);
   });
 });

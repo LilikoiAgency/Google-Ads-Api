@@ -133,6 +133,12 @@ describe('fetchReviews', () => {
     expect(out.locations.map((l) => l.id)).toEqual(['p1']);
   });
 
+  it('an empty list of locations means none: no search, no_data', async () => {
+    const out = await fetchReviews({ domain: 'acme.com', crawl: home({ title_tag: 'Acme' }), locations: [] });
+    expect(out.status).toBe('no_data');
+    expect(m.searchPlaces).not.toHaveBeenCalled();
+  });
+
   it('no matching place gives no_data', async () => {
     m.searchPlaces.mockResolvedValue([place(1, 'https://other.com')]);
     expect((await fetchReviews({ domain: 'acme.com', crawl: null, locations: null })).status).toBe('no_data');

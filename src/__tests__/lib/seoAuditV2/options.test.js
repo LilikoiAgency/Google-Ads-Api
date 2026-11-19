@@ -124,6 +124,13 @@ describe('location picks', () => {
     expect(hasOptions(options)).toBe(true);
     expect(describeOptions(options)).toBe('1 location');
     expect(describeOptions({ ...options, locations: [place(1), place(2)] })).toBe('2 locations');
-    expect(parseAuditOptions({ locations: [] }, 'site.com')).toEqual({ options: null });
+  });
+
+  it('an explicit empty locations list is kept as an option (the user unticked every location)', () => {
+    const { options } = parseAuditOptions({ locations: [] }, 'site.com');
+    expect(options).toEqual({ pages: [], onlyListed: false, skip: [], pageCount: null, locations: [] });
+    expect(hasOptions(options)).toBe(true);
+    expect(describeOptions(options)).toBe('no locations');
+    expect(parseAuditOptions({}, 'site.com')).toEqual({ options: null });
   });
 });
