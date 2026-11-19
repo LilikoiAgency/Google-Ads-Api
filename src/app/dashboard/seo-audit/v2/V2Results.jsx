@@ -1,13 +1,13 @@
 "use client";
-// The v2 results as a clean report sheet: header (domain, details, actions), a stat
-// strip (scores and plan size), the summary, the top moves, the Action Plan /
-// Pages / per-area tabs, and "About this audit" (data sources and gaps) at the end.
+// The v2 results as a full-width dashboard: header, headline numbers, searches you
+// almost win next to the scores, the top moves, the plan by area and impact vs
+// effort, then the Action Plan / Pages / per-area tabs and "About this audit".
 
 import { useState } from "react";
 import s from "./audit.module.css";
 import { auditSans } from "./fonts";
 import { SectionTitle } from "../ui";
-import { StatStrip, SummaryBox, TopMoves } from "./ClientSummary";
+import { KpiRow, Opportunities, ScoresCard, TopMoves, PlanBreakdown } from "./ClientSummary";
 import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
@@ -94,42 +94,47 @@ export default function V2Results({ result, domain, actions }) {
   ];
   const areaLabel = (key) => tabs.find((t) => t.key === key).label;
   const meta = [
-    `${result.audit_type === "quick" ? "Quick" : "Full"} audit`,
     formatDate(result.audit_date),
-    pagesCrawled ? `${pagesCrawled} pages reviewed` : null,
+    pagesCrawled ? `${pagesCrawled} pages crawled` : null,
+    result.search?.range ? `Search Console ${result.search.range.startDate} to ${result.search.range.endDate}` : null,
   ].filter(Boolean).join(" · ");
 
   return (
     <article className={`${s.doc} ${auditSans.variable}`}>
-      <header className={s.cover}>
-        <div className={s.coverTop}>
-          <div style={{ minWidth: 0 }}>
-            <h2 className={s.domain}>{site}</h2>
-            <p className={s.meta}>{meta}</p>
-            {result.audit_options && <p className={s.custom}>Custom pages: {describeOptions(result.audit_options)}</p>}
-          </div>
-          <div className={s.actions}>
-            <ReportDownload result={result} />
-            {actions}
-          </div>
+      <header className={s.top}>
+        <div style={{ minWidth: 0 }}>
+          <p className={s.crumb}>SEO audits / {site}</p>
+          <h2 className={s.domain}>
+            {site}
+            <span className={s.pill}>{result.audit_type === "quick" ? "Quick audit" : "Full audit"}</span>
+          </h2>
+          <p className={s.meta}>{meta}</p>
+          {result.audit_options && <p className={s.custom}>Custom pages: {describeOptions(result.audit_options)}</p>}
+        </div>
+        <div className={s.actions}>
+          <ReportDownload result={result} />
+          {actions}
         </div>
       </header>
 
-      <StatStrip scores={result.scores} tasks={tasks} />
-      <SummaryBox summary={result.client_summary} scores={result.scores} />
+      <KpiRow result={result} />
+      <div className={s.grid}>
+        <Opportunities search={result.search} />
+        <ScoresCard scores={result.scores} summary={result.client_summary} />
+      </div>
+      <TopMoves moves={result.top_moves} />
+      <PlanBreakdown plan={tasks} />
 
-      <div className={s.sheet}>
-        <TopMoves moves={result.top_moves} />
+      <div className={s.tabs} role="tablist" aria-label="Audit sections">
+        {tabs.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={s.tab} onClick={() => setTab(t.key)}>
+            {t.label}
+            <span className={t.warn ? s.tabWarn : s.tabCount}>{t.count}</span>
+          </button>
+        ))}
+      </div>
 
-        <div className={s.tabs} role="tablist" aria-label="Audit sections">
-          {tabs.map((t) => (
-            <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={s.tab} onClick={() => setTab(t.key)}>
-              {t.label}
-              <span className={t.warn ? s.tabWarn : s.tabCount}>{t.count}</span>
-            </button>
-          ))}
-        </div>
-
+      <div className={`${s.card} ${s.panel}`}>
         <div role="tabpanel">
           {tab === "plan" && <ActionPlan tasks={tasks} domain={site} auditDate={result.audit_date} />}
           {tab === "pages" && (
@@ -154,9 +159,9 @@ export default function V2Results({ result, domain, actions }) {
             />
           )}
         </div>
-
-        <AboutAudit sources={result.data_sources} gaps={result.data_gaps} />
       </div>
+
+      <AboutAudit sources={result.data_sources} gaps={result.data_gaps} />
     </article>
   );
 }

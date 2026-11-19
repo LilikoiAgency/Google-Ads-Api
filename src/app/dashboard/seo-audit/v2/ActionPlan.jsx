@@ -7,14 +7,14 @@ import { tasksToCsv } from "@/lib/seoAuditV2/tasks";
 import p from "./plan.module.css";
 
 export const CATEGORY_META = {
-  technical:  { label: "Technical",  bg: "#e6edf3", color: "#3d5a73" },
-  content:    { label: "Content",    bg: "#ece8f4", color: "#5f4f95" },
-  local:      { label: "Local",      bg: "#dcebe7", color: "#285a56" },
-  aeo:        { label: "Answers",    bg: "#f5ecd7", color: "#8a6a1f" },
-  conversion: { label: "Conversion", bg: "#f6e3df", color: "#a5473a" },
+  technical:  { label: "Technical",  bg: "#e6edf3", color: "#60a5fa" },
+  content:    { label: "Content",    bg: "#ece8f4", color: "#a78bfa" },
+  local:      { label: "Local",      bg: "#dcebe7", color: "#34d399" },
+  aeo:        { label: "Answers",    bg: "#f5ecd7", color: "#fbbf24" },
+  conversion: { label: "Conversion", bg: "#f6e3df", color: "#fb7185" },
 };
 
-const CONFIDENCE_COLOR = { high: "#09090b", medium: "#b7791f", low: "#888" };
+const CONFIDENCE_COLOR = { high: "var(--up)", medium: "var(--amber)", low: "var(--muted)" };
 
 // "https://acme.com/services/turf?x=1" -> "/services/turf"; "site-wide" stays as is.
 export function pagePath(page) {
@@ -58,10 +58,9 @@ export function tasksToChecklist(tasks) {
 export const TOP_COUNT = 10;
 const taskPages = (t) => (t.group ? childrenOf(t).map((c) => c.page) : [t.page, ...childrenOf(t).map((c) => c.page)]);
 
-export const isQuickWin = (t) => t.impact >= 4 && t.effort <= 2;
-
-// Effort in words: 1-2 quick, 3 moderate, 4-5 major.
-export const effortLabel = (n) => (n <= 2 ? "Quick" : n === 3 ? "Moderate" : "Major");
+// One quick-win rule and effort wording for the app and the downloaded report.
+export { isQuickWin, effortLabel } from "@/lib/seoAuditV2/overview";
+import { isQuickWin, effortLabel } from "@/lib/seoAuditV2/overview";
 
 function ImpactMeter({ value }) {
   return (
@@ -72,12 +71,12 @@ function ImpactMeter({ value }) {
 }
 
 function Area({ category }) {
-  const m = CATEGORY_META[category] || { label: category, color: "#555" };
+  const m = CATEGORY_META[category] || { label: category, color: "var(--ink-2)" };
   return <span className={p.area}><i style={{ background: m.color }} aria-hidden />{m.label}</span>;
 }
 
 export function CategoryChip({ category }) {
-  const m = CATEGORY_META[category] || { label: category, bg: "#f0f0f0", color: "#555" };
+  const m = CATEGORY_META[category] || { label: category, bg: "var(--line)", color: "var(--ink-2)" };
   return (
     <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: m.bg, color: m.color, whiteSpace: "nowrap" }}>
       {m.label}
@@ -85,7 +84,7 @@ export function CategoryChip({ category }) {
   );
 }
 
-const SELECT = { padding: "8px 10px", borderRadius: 8, border: "1px solid #e4e4e7", fontSize: 13.5, color: "#09090b", background: "#fff", maxWidth: 260, fontFamily: "inherit" };
+const SELECT = { padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, color: "var(--ink)", background: "var(--panel)", maxWidth: 260, fontFamily: "inherit" };
 const BUTTON = { padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
 
 const COPY_FAILED = "Couldn't copy. Your browser blocked the clipboard.";
@@ -118,24 +117,24 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
     <div style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "4px 4px 8px" }}>
       <div style={{ flex: "1 1 320px", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#09090b" }}>Exact change</p>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)" }}>Exact change</p>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {copyNotice && !copyNotice.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{copyNotice.text}</span>}
+            {copyNotice && !copyNotice.ok && <span role="status" style={{ fontSize: 11, color: "var(--down)" }}>{copyNotice.text}</span>}
             <button
               onClick={(e) => { e.stopPropagation(); onCopy(); }}
-              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #e4e4e7", background: "#fff", color: "#09090b" }}
+              style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)" }}
             >
               {copyNotice?.ok ? "Copied" : "Copy change"}
             </button>
           </span>
         </div>
-        <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#fafafa", border: "1px solid #e4e4e7", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
+        <p style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.6, background: "var(--soft)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
           {task.change}
         </p>
         {task.why && (
           <>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#888", marginTop: 12, marginBottom: 4 }}>Why it matters</p>
-            <p style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>{task.why}</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginTop: 12, marginBottom: 4 }}>Why it matters</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>{task.why}</p>
           </>
         )}
         {href && (
@@ -144,26 +143,26 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#09090b", wordBreak: "break-all" }}
+            style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "var(--ink)", wordBreak: "break-all" }}
           >
             Open {href} &#8599;
           </a>
         )}
       </div>
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: "#888", marginBottom: 6 }}>Evidence</p>
+        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>Evidence</p>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           {(task.evidence || []).map((e, i) => (
-            <li key={i} style={{ fontSize: 12, color: "#444", lineHeight: 1.6, marginBottom: 2, wordBreak: "break-word" }}>{e}</li>
+            <li key={i} style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 2, wordBreak: "break-word" }}>{e}</li>
           ))}
         </ul>
         {task.confidence && (
-          <p style={{ fontSize: 12, color: CONFIDENCE_COLOR[task.confidence] || "#888", marginTop: 8, fontWeight: 600 }}>
+          <p style={{ fontSize: 12, color: CONFIDENCE_COLOR[task.confidence] || "var(--muted)", marginTop: 8, fontWeight: 600 }}>
             {task.confidence[0].toUpperCase() + task.confidence.slice(1)} confidence, impact {task.impact} of 5, effort {task.effort} of 5
           </p>
         )}
         {task.source_ids?.length > 0 && !task.group && (
-          <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>From findings {task.source_ids.join(", ")}</p>
+          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>From findings {task.source_ids.join(", ")}</p>
         )}
       </div>
     </div>
@@ -174,8 +173,8 @@ function SubTasks({ task, domain, notice, onCopy }) {
   const children = childrenOf(task);
   if (!children.length) return null;
   return (
-    <div style={{ marginTop: 6, borderTop: "1px solid #eee", paddingTop: 10 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, color: "#888", marginBottom: 8 }}>
+    <div style={{ marginTop: 6, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>
         {task.group ? `Each page (${children.length})` : "Do together with this task"}
       </p>
       <ol style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "grid", gap: 10 }}>
@@ -183,31 +182,31 @@ function SubTasks({ task, domain, notice, onCopy }) {
           const href = pageHref(c.page, domain);
           const n = notice?.key === `change-${c.id}` ? notice : null;
           return (
-            <li key={c.id} style={{ border: "1px solid #e4e4e7", borderRadius: 8, padding: "10px 12px", background: "#fff" }}>
+            <li key={c.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", background: "var(--panel)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a2e" }}>
-                  <span style={{ color: "#09090b", marginRight: 6 }}>{c.id}</span>{c.title}
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+                  <span style={{ color: "var(--ink)", marginRight: 6 }}>{c.id}</span>{c.title}
                 </p>
                 <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {n && !n.ok && <span role="status" style={{ fontSize: 11, color: "#c0392b" }}>{n.text}</span>}
+                  {n && !n.ok && <span role="status" style={{ fontSize: 11, color: "var(--down)" }}>{n.text}</span>}
                   <button
                     onClick={(e) => { e.stopPropagation(); onCopy(c); }}
-                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid #e4e4e7", background: "#fff", color: "#09090b" }}
+                    style={{ ...BUTTON, padding: "3px 10px", fontSize: 11, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)" }}
                   >
                     {n?.ok ? "Copied" : "Copy change"}
                   </button>
                 </span>
               </div>
               {href ? (
-                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "#09090b", wordBreak: "break-all" }}>
+                <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 12, color: "var(--ink)", wordBreak: "break-all" }}>
                   {pagePath(c.page)} &#8599;
                 </a>
-              ) : <span style={{ fontSize: 12, color: "#555" }}>{pagePath(c.page)}</span>}
-              <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.6, background: "#fafafa", border: "1px solid #e4e4e7", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
+              ) : <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{pagePath(c.page)}</span>}
+              <p style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.6, background: "var(--soft)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", marginTop: 6 }}>
                 {c.change}
               </p>
               {c.evidence?.length > 0 && (
-                <p style={{ fontSize: 12, color: "#666", marginTop: 6, lineHeight: 1.5 }}>Evidence: {c.evidence.join(" · ")}</p>
+                <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>Evidence: {c.evidence.join(" · ")}</p>
               )}
             </li>
           );
@@ -269,7 +268,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
   }
 
   if (!tasks.length) {
-    return <p style={{ color: "#999", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>;
+    return <p style={{ color: "var(--muted)", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>;
   }
 
   return (
@@ -277,7 +276,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       {/* Filters + export */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "#71717a" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
             Category
             <select value={category} onChange={(e) => setCategory(e.target.value)} style={SELECT}>
               <option value="">All categories</option>
@@ -286,7 +285,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
               ))}
             </select>
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "#71717a" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
             Page
             <select value={page} onChange={(e) => setPage(e.target.value)} style={SELECT}>
               <option value="">All pages</option>
@@ -294,7 +293,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
             </select>
           </label>
           {quickCount > 0 && (
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#444", paddingBottom: 7, cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-2)", paddingBottom: 7, cursor: "pointer" }}>
               <input type="checkbox" checked={quickOnly} onChange={(e) => setQuickOnly(e.target.checked)} />
               Quick wins only ({quickCount})
             </label>
@@ -302,24 +301,24 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
           {filtered && (
             <button
               onClick={() => { setCategory(""); setPage(""); setQuickOnly(false); }}
-              style={{ ...BUTTON, padding: "7px 10px", border: "none", background: "transparent", color: "#09090b", textDecoration: "underline" }}
+              style={{ ...BUTTON, padding: "7px 10px", border: "none", background: "transparent", color: "var(--ink)", textDecoration: "underline" }}
             >
               Clear filters
             </button>
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "#09090b" : "#c0392b" }}>{notice.text}</span>}
-          <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid #09090b", background: "#fff", color: "#09090b" }}>
+          {notice?.key === "checklist" && <span role="status" style={{ fontSize: 12, color: notice.ok ? "var(--ink)" : "var(--down)" }}>{notice.text}</span>}
+          <button onClick={handleCopyChecklist} disabled={!visible.length} style={{ ...BUTTON, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)" }}>
             Copy as checklist
           </button>
-          <button onClick={handleCsv} disabled={!visible.length} style={{ ...BUTTON, border: "none", background: "#09090b", color: "#fff" }}>
+          <button onClick={handleCsv} disabled={!visible.length} style={{ ...BUTTON, border: "none", background: "var(--btn-bg)", color: "var(--btn-ink)" }}>
             Download CSV
           </button>
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
+      <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
         {filtered
           ? `Showing ${visible.length} of ${tasks.length} tasks`
           : collapsed ? `Do these first: the top ${TOP_COUNT} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
@@ -384,12 +383,12 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
       {collapsed && (
         <button
           onClick={() => setShowAll(true)}
-          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed #e4e4e7", background: "#fafafa", color: "#09090b" }}
+          style={{ ...BUTTON, marginTop: 12, width: "100%", border: "1px dashed var(--line)", background: "var(--soft)", color: "var(--ink)" }}
         >
           Show {visible.length - TOP_COUNT} more task{visible.length - TOP_COUNT === 1 ? "" : "s"}
         </button>
       )}
-      {!visible.length && <p style={{ color: "#999", fontSize: 13, marginTop: 12 }}>No tasks match these filters.</p>}
+      {!visible.length && <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 12 }}>No tasks match these filters.</p>}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { runStructured } from './llm';
 import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
 import { pageLimit, filterSkipped } from './options';
+import { buildSearchSummary } from './overview';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -230,6 +231,8 @@ async function runSynthesize(job) {
     passes_completed: Object.fromEntries(PASSES.map((p) => [p, done.includes(p)])),
     data_gaps: dataGaps,
     data_sources: dataSources(job),
+    // Headline search numbers and index counts for the overview.
+    ...buildSearchSummary(job.data?.sources?.gsc, job.data?.sources?.inspection),
   };
   return { ok: true, patch: { result } };
 }

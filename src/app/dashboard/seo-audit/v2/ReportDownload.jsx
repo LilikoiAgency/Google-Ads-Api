@@ -30,14 +30,14 @@ export default function ReportDownload({ result }) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #09090b", background: "#09090b", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit" }}
+        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--btn-bg)", background: "var(--btn-bg)", color: "var(--btn-ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit" }}
       >
         Download report <span aria-hidden>▾</span>
       </button>
       {open && (
         <div
           role="menu"
-          style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20, width: 300, background: "#fff", borderRadius: 12, border: "1px solid #e4e4e7", boxShadow: "0 12px 32px rgba(0,0,0,0.12)", padding: 6 }}
+          style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20, width: 300, background: "var(--solid)", borderRadius: 12, border: "1px solid var(--line)", boxShadow: "0 12px 32px rgba(0,0,0,0.12)", padding: 6 }}
         >
           {REPORT_KINDS.map((k) => (
             <button
@@ -46,14 +46,14 @@ export default function ReportDownload({ result }) {
               type="button"
               onClick={() => { downloadSeoReport(result, { kind: k.key }); setOpen(false); }}
               style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "10px 12px", borderRadius: 8, cursor: "pointer" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#f4f4f5"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--panel-2)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             >
-              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1a1a2e" }}>{k.label}</span>
-              <span style={{ display: "block", fontSize: 12, color: "#666", marginTop: 2, lineHeight: 1.4 }}>{k.hint}</span>
+              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{k.label}</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>{k.hint}</span>
             </button>
           ))}
-          <p style={{ fontSize: 11, color: "#999", padding: "6px 12px 4px", margin: 0 }}>Saves one HTML file you can attach to an email.</p>
+          <p style={{ fontSize: 11, color: "var(--dim)", padding: "6px 12px 4px", margin: 0 }}>Saves one HTML file you can attach to an email.</p>
         </div>
       )}
     </div>

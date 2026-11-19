@@ -561,3 +561,33 @@ describe('AdvancedOptions', () => {
     expect(screen.queryByLabelText('Number of pages')).toBeNull();
   });
 });
+
+describe('v2 dashboard overview', () => {
+  const SEARCH = {
+    search: {
+      range: { startDate: '2026-08-17', endDate: '2026-11-14' },
+      clicks: 4661, impressions: 312344, avg_position: 13.8, avg_position_prev: 12.8,
+      clicks_change_pct: -38, impressions_change_pct: -46, branded_click_share: 0.88, nonbranded_clicks: 365,
+      opportunities: [{ query: 'turf installation las vegas', clicks: 5, impressions: 4081, position: 9.8 }],
+    },
+    index: { checked: 20, indexed: 16 },
+  };
+
+  it('shows the headline numbers, searches you almost win and the plan breakdown', () => {
+    render(<ResultsView audit={{ ...V2_RESULT, ...SEARCH }} domain="acme.com" />);
+    expect(screen.getByText('4,661')).toBeInTheDocument();
+    expect(screen.getByText('▼ 38% vs prior 90 days')).toBeInTheDocument();
+    expect(screen.getByText('312K')).toBeInTheDocument();
+    expect(screen.getByText('turf installation las vegas')).toBeInTheDocument();
+    expect(screen.getByText('4 checked pages not indexed')).toBeInTheDocument();
+    expect(screen.getByText('Action plan by area')).toBeInTheDocument();
+    expect(screen.getByText('Quick wins: high impact, low effort')).toBeInTheDocument();
+  });
+
+  it('an older audit without search data still renders, with a plain note instead of the table', () => {
+    render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
+    expect(screen.queryByText('Search clicks · 90 days')).not.toBeInTheDocument();
+    expect(screen.getByText(/Search Console data wasn.t available for this audit/)).toBeInTheDocument();
+    expect(screen.getByText('Action plan')).toBeInTheDocument();
+  });
+});

@@ -1,10 +1,12 @@
 "use client";
-// Report pieces for the top of a v2 audit: the stat strip (three 0–10 scores and
-// the plan size), the summary box (first sentence as the lead, then the rest and
-// the reason behind each score), and the three top moves.
+// Overview cards for a v2 audit: headline numbers, searches you almost win,
+// scores with the main finding, the top moves, the plan by area, and the
+// impact-vs-effort grid. Numbers come from seoAuditV2/overview so the app and
+// the downloaded report always agree.
 
 import s from "./audit.module.css";
-import { pagePath, isQuickWin } from "./ActionPlan";
+import { pagePath } from "./ActionPlan";
+import { kpiCards, planStats } from "@/lib/seoAuditV2/overview";
 
 export const SCORES = [
   { key: "seo", name: "Search visibility", abbr: "SEO" },
@@ -20,52 +22,84 @@ export function splitSummary(text) {
   return { headline: m[1], rest: t.slice(m[0].length).trim() };
 }
 
-const scored = (scores) => SCORES.filter((x) => Number.isFinite(scores?.[x.key]?.score));
+const fmt = (n) => (Number.isFinite(n) ? n.toLocaleString("en-US") : "–");
+const KPI_COLS = ["k1", "k1", "k2", "k3", "k4", "k5"];
 
-export function StatStrip({ scores, tasks }) {
-  const shown = scored(scores);
-  const plan = tasks || [];
-  if (!shown.length && !plan.length) return null;
-  const quick = plan.filter(isQuickWin).length;
+export function KpiRow({ result }) {
+  const cards = kpiCards(result);
   return (
-    <div className={s.stats}>
-      {shown.map(({ key, name, abbr }) => {
-        const score = scores[key].score;
-        return (
-          <div key={key} className={s.stat}>
-            <p className={s.statLabel}><abbr>{abbr}</abbr> {name}</p>
-            <p className={s.statValue}>{score}<small>/10</small></p>
-            <div className={s.bar} role="img" aria-label={`${name}: ${score} out of 10`}>
-              <i style={{ width: `${Math.max(0, Math.min(10, score)) * 10}%` }} />
-            </div>
-          </div>
-        );
-      })}
-      {plan.length > 0 && (
-        <div className={s.stat}>
-          <p className={s.statLabel}>Action plan</p>
-          <p className={s.statValue}>{plan.length}<small> tasks</small></p>
-          <p className={s.statNote}>{quick > 0 ? `${quick} quick win${quick === 1 ? "" : "s"}` : "Ranked by value"}</p>
+    <div className={`${s.kpis} ${cards.length < 6 ? s[KPI_COLS[cards.length]] : ""}`}>
+      {cards.map((c) => (
+        <div key={c.key} className={s.card}>
+          <p className={s.kl}>{c.label}</p>
+          <p className={s.kv}>{c.value}{c.unit && <small>{c.unit}</small>}</p>
+          {c.sub && <p className={`${s.kd} ${s[c.tone] || ""}`}>{c.sub}</p>}
         </div>
+      ))}
+    </div>
+  );
+}
+
+export function Opportunities({ search }) {
+  const rows = search?.opportunities || [];
+  const max = Math.max(1, ...rows.map((r) => r.impressions || 0));
+  return (
+    <div className={s.card}>
+      <div className={s.ch}>
+        <p className={s.ct}>Biggest opportunities: searches you almost win</p>
+        <span className={s.cs}>Positions 4–20, Search Console</span>
+      </div>
+      {rows.length ? (
+        <table className={s.opp}>
+          <thead>
+            <tr><th>Search</th><th className={s.r}>Impressions</th><th aria-hidden /><th className={s.r}>Clicks</th><th className={s.r}>Position</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.query}>
+                <td className={s.q}>{r.query}</td>
+                <td className={s.r}>{fmt(r.impressions)}</td>
+                <td style={{ width: "28%" }}><div className={s.bar}><i style={{ width: `${Math.round(((r.impressions || 0) / max) * 100)}%` }} /></div></td>
+                <td className={s.r}>{fmt(r.clicks)}</td>
+                <td className={s.r}><span className={s.pos}>{r.position}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className={s.empty}>Search Console data wasn&apos;t available for this audit, so there are no search opportunities to show. Re-run the audit once Search Console is connected.</p>
       )}
     </div>
   );
 }
 
-export function SummaryBox({ summary, scores }) {
+export function ScoresCard({ scores, summary }) {
+  const shown = SCORES.filter((x) => Number.isFinite(scores?.[x.key]?.score));
   const { headline, rest } = splitSummary(summary);
-  const reasons = scored(scores).filter((x) => scores[x.key].reason);
-  if (!headline && !reasons.length) return null;
+  const reasons = shown.filter((x) => scores[x.key].reason);
   return (
-    <div className={s.summary}>
-      {headline && <p className={s.headline}>{headline}</p>}
-      {rest && <p className={s.summaryRest}>{rest}</p>}
-      {reasons.length > 0 && (
-        <details className={s.why}>
-          <summary>Why these scores</summary>
-          <ul className={s.scoreWhyList}>
-            {reasons.map(({ key, abbr }) => <li key={key}><b>{abbr}:</b> {scores[key].reason}</li>)}
-          </ul>
+    <div className={s.card}>
+      <div className={s.ch}><p className={s.ct}>Scores</p><span className={s.cs}>out of 10</span></div>
+      {shown.map(({ key, name, abbr }) => {
+        const score = scores[key].score;
+        return (
+          <div key={key} className={s.score} title={name}>
+            <b>{abbr}</b>
+            <div className={s.bar} role="img" aria-label={`${name}: ${score} out of 10`}>
+              <i style={{ width: `${Math.max(0, Math.min(10, score)) * 10}%` }} />
+            </div>
+            <span>{score}</span>
+          </div>
+        );
+      })}
+      {headline && <p className={s.lead}>{headline}</p>}
+      {(rest || reasons.length > 0) && (
+        <details className={s.more}>
+          <summary>Full summary and score reasons</summary>
+          {rest && <p>{rest}</p>}
+          {reasons.length > 0 && (
+            <ul>{reasons.map(({ key, abbr }) => <li key={key}><b>{abbr}:</b> {scores[key].reason}</li>)}</ul>
+          )}
         </details>
       )}
     </div>
@@ -75,32 +109,64 @@ export function SummaryBox({ summary, scores }) {
 export function TopMoves({ moves }) {
   if (!moves?.length) return null;
   return (
-    <section className={s.section}>
-      <h3 className={s.sectionHead}>Top {moves.length} moves</h3>
-      <ol className={s.moves}>
-        {moves.map((m, i) => (
-          <li key={m.task?.id || i} className={s.move}>
-            <span className={s.moveNum} aria-hidden>{i + 1}</span>
-            <p className={s.moveText}>{m.headline}</p>
+    <div className={s.grid3}>
+      {moves.map((m, i) => (
+        <div key={m.task?.id || i} className={`${s.card} ${s.move}`}>
+          <span className={s.mn} aria-hidden>{i + 1}</span>
+          <div style={{ minWidth: 0 }}>
+            <p className={s.mt}>{m.headline}</p>
             {m.task && (
-              <p className={s.movePage} title={m.task.page}>
+              <p className={s.mp} title={m.task.page}>
                 {m.task.id} · {m.task.group ? `${m.task.items?.length || 0} pages` : pagePath(m.task.page)}
               </p>
             )}
-          </li>
-        ))}
-      </ol>
-    </section>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
+export function PlanBreakdown({ plan }) {
+  const { areas, matrix, total } = planStats(plan);
+  if (!total) return null;
+  return (
+    <div className={s.grid}>
+      <div className={s.card}>
+        <div className={s.ch}><p className={s.ct}>Action plan by area</p><span className={s.cs}>{total} tasks</span></div>
+        {areas.map((a) => (
+          <div key={a.key} className={s.hb}>
+            <span>{a.label}</span>
+            <div className={s.bar}><i style={{ width: `${Math.round((a.count / total) * 100)}%` }} /></div>
+            <span className={s.r}>{a.count}</span>
+          </div>
+        ))}
+      </div>
+      <div className={s.card}>
+        <div className={s.ch}><p className={s.ct}>Impact vs effort</p></div>
+        <div className={s.matrix}>
+          <div className={`${s.mq} ${s.hot}`}><b>{matrix.quick}</b><span>Quick wins: high impact, low effort</span></div>
+          <div className={s.mq}><b>{matrix.big}</b><span>Big bets: high impact, more work</span></div>
+          <div className={s.mq}><b>{matrix.fill}</b><span>Fill-ins: easy, smaller impact</span></div>
+          <div className={s.mq}><b>{matrix.later}</b><span>Later: more work, smaller impact</span></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The whole overview block in one piece.
 export default function ClientSummary({ result }) {
   if (!result) return null;
   return (
     <div>
-      <StatStrip scores={result.scores} tasks={result.action_plan} />
-      <SummaryBox summary={result.client_summary} scores={result.scores} />
+      <KpiRow result={result} />
+      <div className={s.grid}>
+        <Opportunities search={result.search} />
+        <ScoresCard scores={result.scores} summary={result.client_summary} />
+      </div>
       <TopMoves moves={result.top_moves} />
+      <PlanBreakdown plan={result.action_plan} />
     </div>
   );
 }

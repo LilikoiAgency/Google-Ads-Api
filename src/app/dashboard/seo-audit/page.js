@@ -181,13 +181,13 @@ export default function SEOAuditPage() {
       <button
         onClick={() => handleRunAudit(true)}
         disabled={starting}
-        style={{ padding: "8px 14px", borderRadius: 8, background: "#fff", border: "1px solid #e4e4e7", color: "#09090b", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1, fontFamily: "inherit" }}
+        style={{ padding: "8px 14px", borderRadius: 8, background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: starting ? 0.6 : 1, fontFamily: "inherit" }}
       >
         {starting ? "Starting..." : "Re-run Audit"}
       </button>
       <button
         onClick={handleReset}
-        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e4e4e7", background: "#fff", color: "#09090b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
       >
         New Audit
       </button>
@@ -202,7 +202,7 @@ export default function SEOAuditPage() {
         subtitle="Site audit with a prioritized action plan"
       />
 
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className={step === STEPS.RESULTS ? "mx-auto w-full max-w-[1600px] px-6 py-8" : "mx-auto max-w-5xl px-6 py-10"}>
         {/* ── Step 0: Configure ──────────────────────────────────────────── */}
         {step === STEPS.CONFIGURE && (
           <div style={{ maxWidth: 640, margin: "0 auto" }}>
