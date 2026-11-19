@@ -165,6 +165,16 @@ describe('ga4Report', () => {
     expect(typeof out.fetchedAt).toBe('string');
   });
 
+  it('landing pages carry engagedSessions when the report returns it', () => {
+    expect(buildReportRequests({ ...ctx.range, compareRange: ctx.compareRange, granularity: 'day' })[7].metrics.map((m) => m.name))
+      .toEqual(['sessions', 'activeUsers', 'keyEvents', 'engagedSessions']);
+    const reports = emptyReports();
+    reports[7] = { rows: [{ dimensionValues: [{ value: '/a' }, { value: 'Organic Search' }], metricValues: ['10', '8', '2', '6'].map((value) => ({ value })) }] };
+    expect(normalizeTrafficReport(reports, ctx).landingPages[0]).toEqual({
+      page: '/a', channel: 'Organic Search', bucket: 'organic', sessions: 10, users: 8, keyEvents: 2, engagedSessions: 6,
+    });
+  });
+
   it('without a comparison, channel compare is null', () => {
     const reports = emptyReports();
     reports[0] = { rows: [{ dimensionValues: [{ value: 'Direct' }], metricValues: ['1', '1', '1', '1', '1', '0'].map((value) => ({ value })) }] };
