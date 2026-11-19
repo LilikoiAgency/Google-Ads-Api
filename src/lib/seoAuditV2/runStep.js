@@ -14,6 +14,7 @@ import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
 import { pageLimit, filterSkipped } from './options';
 import { buildSearchSummary } from './overview';
+import { getSavedLocations, saveReviewTexts } from './reputationStore';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -21,6 +22,7 @@ const SOURCES = {
   sitemaps: 'googleSitemaps',
   ga4: 'ga4',
   pagespeed: 'pagespeed',
+  reviews: 'reviews',
 };
 
 const PASS_AREA = {
@@ -79,13 +81,30 @@ async function runCrawl(job) {
 async function runGather(job) {
   const crawl = job.data?.crawl;
   const o = job.options;
-  const { data, gaps } = await gatherAll(o
+  let locations = o?.locations ?? null;
+  if (!locations) {
+    try {
+      locations = (await getSavedLocations(job.domain)) ?? null;
+    } catch (err) {
+      console.warn('[seo-audit-v2] saved review locations unavailable:', errText(err));
+    }
+  }
+  const { data, gaps, reviewTexts } = await gatherAll(o
     ? {
       domain: job.domain, crawl, profile: job.auditType, priorityUrls: o.pages || [], onlyListed: !!o.onlyListed, skip: o.skip || [],
       ...(o.gscSite ? { gscSite: o.gscSite } : {}),
       ...(o.ga4Property ? { ga4Property: o.ga4Property } : {}),
+      locations,
     }
-    : { domain: job.domain, crawl, profile: job.auditType });
+    : { domain: job.domain, crawl, profile: job.auditType, locations });
+  // Review text is cached by job id for the reputation step and kept off the job document.
+  if (reviewTexts && Object.keys(reviewTexts).length) {
+    try {
+      await saveReviewTexts(job.id, reviewTexts);
+    } catch (err) {
+      console.warn('[seo-audit-v2] saving review text failed:', errText(err));
+    }
+  }
   const pages = crawl?.pages_crawled || [];
   const homepage = pages.find((p) => p.page_type === 'homepage') || pages[0] || null;
   const sharedContext = buildSharedContext({ domain: job.domain, profile: job.auditType, homepage, gaps: describeGaps(gaps) });

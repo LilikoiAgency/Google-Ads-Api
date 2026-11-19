@@ -5,6 +5,8 @@ const m = vi.hoisted(() => ({
   seedPages: vi.fn(),
   gatherAll: vi.fn(),
   runStructured: vi.fn(),
+  getSavedLocations: vi.fn(),
+  saveReviewTexts: vi.fn(),
 }));
 
 vi.mock('@/lib/seoCrawler', () => ({ crawlSite: m.crawlSite }));
@@ -15,6 +17,7 @@ vi.mock('@/lib/seoAuditV2/gather', () => ({
   AUDIT_PROFILES: { quick: { effort: 'medium' }, full: { effort: 'high' } },
 }));
 vi.mock('@/lib/seoAuditV2/llm', () => ({ runStructured: m.runStructured }));
+vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ getSavedLocations: m.getSavedLocations, saveReviewTexts: m.saveReviewTexts }));
 
 const { runStep } = await import('@/lib/seoAuditV2/runStep');
 const { newJob } = await import('@/lib/seoAuditV2/jobs');
@@ -38,7 +41,11 @@ const crawl = {
   site_wide: {},
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  m.getSavedLocations.mockResolvedValue(null);
+  m.saveReviewTexts.mockResolvedValue(undefined);
+});
 
 describe('runStep', () => {
   it('crawl seeds from Search Console pages then crawls', async () => {
@@ -76,7 +83,7 @@ describe('runStep', () => {
     const options = { pages: ['https://acme.com/money'], onlyListed: false, skip: ['/blog/*'], pageCount: null };
     await runStep(job({}, { data: { crawl }, options }), 'gather');
     expect(m.gatherAll).toHaveBeenCalledWith({
-      domain: 'acme.com', crawl, profile: 'full', priorityUrls: options.pages, onlyListed: false, skip: ['/blog/*'],
+      domain: 'acme.com', crawl, profile: 'full', priorityUrls: options.pages, onlyListed: false, skip: ['/blog/*'], locations: null,
     });
   });
 
@@ -101,7 +108,7 @@ describe('runStep', () => {
   it('gather stores sources, gaps and the shared context', async () => {
     m.gatherAll.mockResolvedValue({ data: { gsc: null }, gaps: [{ source: 'ga4', status: 'no_property' }] });
     const res = await runStep(job({}, { data: { crawl } }), 'gather');
-    expect(m.gatherAll).toHaveBeenCalledWith({ domain: 'acme.com', crawl, profile: 'full' });
+    expect(m.gatherAll).toHaveBeenCalledWith({ domain: 'acme.com', crawl, profile: 'full', locations: null });
     expect(res.patch['data.sources']).toEqual({ gsc: null });
     expect(res.patch['data.gaps']).toEqual([{ source: 'ga4', status: 'no_property' }]);
     expect(res.patch['data.sharedContext']).toMatch(/Domain: acme\.com/);
@@ -380,5 +387,39 @@ describe('runStep with picked data sources', () => {
     m.gatherAll.mockResolvedValue({ data: {}, gaps: [] });
     await runStep(job({}, { data: { crawl }, options }), 'gather');
     expect(m.gatherAll.mock.calls[0][0]).toMatchObject({ gscSite: 'sc-domain:acme.com', ga4Property: { id: 'properties/9' } });
+  });
+});
+
+describe('runStep gather reviews', () => {
+  const reviewLoc = { source: 'places', id: 'p1', name: 'Acme', city: 'Tampa', region: 'FL', coverage: 'sample', stats: { rating: 4.5 } };
+
+  it('caches review text by job id and keeps it out of the patch', async () => {
+    const texts = { p1: [{ stars: 5, date: '2026-01-01', text: 'Great' }] };
+    m.gatherAll.mockResolvedValue({ data: { reviews: [reviewLoc] }, gaps: [], reviewTexts: texts });
+    const j = job({}, { data: { crawl } });
+    const res = await runStep(j, 'gather');
+    expect(m.saveReviewTexts).toHaveBeenCalledWith(j.id, texts);
+    const stored = res.patch['data.sources'].reviews[0];
+    expect(stored).not.toHaveProperty('reviews');
+    expect(JSON.stringify(res.patch)).not.toContain('Great');
+  });
+
+  it('uses picked locations, else saved ones, and survives lookup and save failures', async () => {
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [], reviewTexts: { p1: [] } });
+    const picked = [{ source: 'places', id: 'a', name: 'A' }];
+    await runStep(job({}, { data: { crawl }, options: { pages: [], skip: [], locations: picked } }), 'gather');
+    expect(m.gatherAll.mock.calls[0][0].locations).toBe(picked);
+    expect(m.getSavedLocations).not.toHaveBeenCalled();
+
+    const saved = [{ source: 'places', id: 's', name: 'S' }];
+    m.getSavedLocations.mockResolvedValue(saved);
+    await runStep(job({}, { data: { crawl } }), 'gather');
+    expect(m.gatherAll.mock.calls[1][0].locations).toBe(saved);
+
+    m.getSavedLocations.mockRejectedValue(new Error('db down'));
+    m.saveReviewTexts.mockRejectedValue(new Error('db down'));
+    const res = await runStep(job({}, { data: { crawl } }), 'gather');
+    expect(m.gatherAll.mock.calls[2][0].locations).toBeNull();
+    expect(res.ok).toBe(true);
   });
 });

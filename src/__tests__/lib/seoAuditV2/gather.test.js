@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const m = vi.hoisted(() => ({
   findGscSite: vi.fn(), findGa4Property: vi.fn(), summarizeGsc: vi.fn(), summarizeGa4: vi.fn(),
   fetchTrafficReport: vi.fn(), joinPagesToQueries: vi.fn(), inspectUrls: vi.fn(), listGoogleSitemaps: vi.fn(),
-  ga4PerPage: vi.fn(), fetchPageSpeed: vi.fn(), query: vi.fn(),
+  ga4PerPage: vi.fn(), fetchPageSpeed: vi.fn(), query: vi.fn(), fetchReviews: vi.fn(),
 }));
 
 vi.mock('googleapis', () => ({ google: { webmasters: () => ({ searchanalytics: { query: m.query } }) } }));
@@ -18,6 +18,7 @@ vi.mock('@/lib/seoAuditV2/gsc', () => ({
   listGoogleSitemaps: m.listGoogleSitemaps, ga4PerPage: m.ga4PerPage,
 }));
 vi.mock('@/lib/seoAuditV2/pagespeed', () => ({ fetchPageSpeed: m.fetchPageSpeed }));
+vi.mock('@/lib/seoAuditV2/reviews', () => ({ fetchReviews: m.fetchReviews }));
 
 import { AUDIT_PROFILES, gatherAll, describeGaps, seedPages } from '@/lib/seoAuditV2/gather';
 
@@ -25,6 +26,7 @@ const crawl = { pages_crawled: [{ url: 'https://x.com/', final_url: 'https://x.c
 
 beforeEach(() => {
   vi.clearAllMocks();
+  m.fetchReviews.mockResolvedValue({ status: 'ok', locations: [], texts: {} });
   delete process.env.GA4_SA_KEY;
 });
 
@@ -39,9 +41,10 @@ describe('gather with all sources missing', () => {
   it('turns every status into a gap, falls back to crawled pages, never throws', async () => {
     m.findGscSite.mockResolvedValue({ status: 'not_connected', site: null, auth: null });
     m.fetchPageSpeed.mockImplementation(async (url) => ({ status: 'error', url, error: 'PageSpeed HTTP 500' }));
+    m.fetchReviews.mockResolvedValue({ status: 'no_data', locations: [], texts: {} });
     const { data, gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
     expect(Object.values(data).every((v) => v === null)).toBe(true);
-    expect(gaps.map((g) => g.source).sort()).toEqual(['ga4', 'pagespeed', 'pagespeed', 'search_console', 'sitemaps', 'url_inspection']);
+    expect(gaps.map((g) => g.source).sort()).toEqual(['ga4', 'pagespeed', 'pagespeed', 'reviews', 'search_console', 'sitemaps', 'url_inspection']);
     expect(gaps.find((g) => g.source === 'search_console').status).toBe('not_connected');
     expect(gaps.find((g) => g.source === 'ga4').status).toBe('not_connected');
     expect(m.fetchPageSpeed.mock.calls.map((c) => c[0])).toEqual(['https://x.com/home', 'https://x.com/b']);
@@ -228,5 +231,37 @@ describe('seedPages time budget', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('gather reviews source', () => {
+  beforeEach(() => {
+    m.findGscSite.mockResolvedValue({ status: 'not_connected', site: null, auth: null });
+    m.fetchPageSpeed.mockResolvedValue({ status: 'ok', url: 'u' });
+  });
+
+  it('puts locations in data.reviews, hands review text back apart, and passes locations through', async () => {
+    const locations = [{ source: 'places', id: 'p1', name: 'A', city: 'Tampa', region: 'FL', coverage: 'sample', stats: {} }];
+    m.fetchReviews.mockResolvedValue({ status: 'ok', locations, texts: { p1: [{ stars: 5, date: '2026-01-01', text: 'x' }] } });
+    const picked = [{ source: 'places', id: 'p1', name: 'A' }];
+    const { data, reviewTexts } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick', locations: picked });
+    expect(m.fetchReviews).toHaveBeenCalledWith({ domain: 'x.com', crawl, locations: picked });
+    expect(data.reviews).toEqual(locations);
+    expect(JSON.stringify(data)).not.toContain('"text"');
+    expect(reviewTexts).toEqual({ p1: [{ stars: 5, date: '2026-01-01', text: 'x' }] });
+  });
+
+  it('PlacesError not_connected becomes a not_connected gap', async () => {
+    m.fetchReviews.mockResolvedValue({ status: 'not_connected', locations: [], texts: {} });
+    const { data, gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
+    expect(data.reviews).toBeNull();
+    expect(gaps).toContainEqual({ source: 'reviews', status: 'not_connected', detail: '' });
+    expect(describeGaps(gaps).length).toBe(gaps.length);
+  });
+
+  it('a throwing reviews fetch is an error gap, not a crash', async () => {
+    m.fetchReviews.mockRejectedValue(new Error('boom'));
+    const { gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick' });
+    expect(gaps).toContainEqual({ source: 'reviews', status: 'error', detail: 'boom' });
   });
 });

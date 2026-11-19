@@ -285,6 +285,7 @@ export function parsePage(html, url) {
     og_title: $('meta[property="og:title"]').attr("content") || "",
     og_description: $('meta[property="og:description"]').attr("content") || "",
     og_image: $('meta[property="og:image"]').attr("content") || "",
+    og_site_name: $('meta[property="og:site_name"]').attr("content") || "",
   };
 
   // Body text for word count + content snippet. Read from a copy with
