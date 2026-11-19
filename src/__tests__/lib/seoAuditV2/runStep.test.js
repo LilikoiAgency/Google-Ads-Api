@@ -180,6 +180,28 @@ describe('runStep', () => {
     expect(res.patch['passes.reputation']).toHaveProperty('themes');
   });
 
+  it('reputation pass keeps only real, short quotes, clamps counts, and stores no other review text', async () => {
+    const loc = { source: 'places', id: 'p1', name: 'Acme', stats: {} };
+    const long = 'Great crew but they were late. ' + 'filler text '.repeat(40);
+    m.getReviewTexts.mockResolvedValue({ p1: [{ stars: 4, text: long }, { stars: 1, text: 'Late again' }] });
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [], themes: [
+      { kind: 'complaint', theme: 't', count: 9, location: 'Acme', quotes: ['late AGAIN', 'made up quote', 'Great crew but they were late. ' + 'filler text '.repeat(20)] },
+    ], search_summary: { summary: '', competitors: [], cited_sites: [] } } });
+    const res = await runStep(job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } }), 'pass:reputation');
+    const themes = res.patch['passes.reputation'].themes;
+    expect(themes[0].quotes).toEqual(['late AGAIN']);
+    expect(themes[0].count).toBe(2);
+    expect(JSON.stringify(res.patch)).not.toContain(long);
+  });
+
+  it('reputation pass drops all quotes when no review text was loaded', async () => {
+    m.getReviewTexts.mockResolvedValue(null);
+    const loc = { source: 'places', id: 'p1', name: 'Acme', stats: {} };
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [], themes: [{ kind: 'praise', theme: 't', count: 3, location: 'Acme', quotes: ['Great'] }] } });
+    const res = await runStep(job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } }), 'pass:reputation');
+    expect(res.patch['passes.reputation'].themes[0]).toMatchObject({ quotes: [], count: 3 });
+  });
+
   it('reputation pass tolerates a failed text lookup and skips without sources', async () => {
     m.getReviewTexts.mockRejectedValue(new Error('db down'));
     m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [] } });

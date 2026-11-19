@@ -142,13 +142,40 @@ async function runSearch(job) {
   }
 }
 
+const MAX_QUOTE_CHARS = 200;
+
+// Theme quotes must be short and really appear in a cached review; counts can't exceed the reviews given.
+function guardThemes(themes, locations, reviewTexts) {
+  if (!Array.isArray(themes)) return themes;
+  const byLoc = {};
+  const all = [];
+  for (const l of locations || []) {
+    const list = (reviewTexts?.[l.id] || []).map((r) => String(r.text || '').toLowerCase());
+    byLoc[l.name] = list;
+    all.push(...list);
+  }
+  const known = all.length > 0;
+  return themes.map((t) => {
+    const pool = byLoc[t.location]?.length ? byLoc[t.location] : all;
+    const quotes = known
+      ? (t.quotes || []).filter((q) => {
+        const lq = String(q || '').trim().toLowerCase();
+        return lq && lq.length <= MAX_QUOTE_CHARS && pool.some((x) => x.includes(lq));
+      })
+      : [];
+    const count = known && Number.isFinite(t.count) ? Math.min(t.count, pool.length) : t.count;
+    return { ...t, quotes, count };
+  });
+}
+
 async function runPass(job, key) {
   const pass = key.slice('pass:'.length);
   const data = job.data?.sources;
   let passData = data;
+  let reviewTexts = null;
   if (pass === 'reputation') {
     // Review text is cached by job id, never stored on the job; a failed lookup just means stats only.
-    const reviewTexts = await getReviewTexts(job.id).catch(() => null);
+    reviewTexts = await getReviewTexts(job.id).catch(() => null);
     passData = { ...data, reviewTexts };
   }
   const input = buildPassInput(pass, { crawl: job.data?.crawl, data: passData, domain: job.domain });
@@ -201,6 +228,7 @@ async function runPass(job, key) {
   } else {
     const { output } = await call(input);
     out = { ...output, tasks: normalizeTaskIds(pass, null, output?.tasks) };
+    if (pass === 'reputation') out.themes = guardThemes(out.themes, data?.reviews, reviewTexts);
   }
   out.tasks = (out.tasks || [])
     .map((t) => ({ ...t, page: pathKey(t.page) }))
