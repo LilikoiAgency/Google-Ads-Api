@@ -12,6 +12,7 @@ export const CATEGORY_META = {
   local:      { label: "Local",      bg: "#dcebe7", color: "#34d399" },
   aeo:        { label: "Answers",    bg: "#f5ecd7", color: "#fbbf24" },
   conversion: { label: "Conversion", bg: "#f6e3df", color: "#fb7185" },
+  reputation: { label: "Reputation", bg: "#f3e4ee", color: "#f472b6" },
 };
 
 const CONFIDENCE_COLOR = { high: "var(--up)", medium: "var(--amber)", low: "var(--muted)" };

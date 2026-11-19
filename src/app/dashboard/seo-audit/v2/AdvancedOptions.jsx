@@ -5,9 +5,9 @@
 // jobs API `options` (the server validates against the domain).
 
 import { useEffect, useState } from "react";
-import { describeOptions } from "../../../../lib/seoAuditV2/options";
+import { describeOptions, MAX_LOCATIONS } from "../../../../lib/seoAuditV2/options";
 
-export const EMPTY_ADVANCED = { pagesText: "", onlyListed: false, skipText: "", pageCount: "", gscSite: "", ga4Property: null };
+export const EMPTY_ADVANCED = { pagesText: "", onlyListed: false, skipText: "", pageCount: "", gscSite: "", ga4Property: null, locations: null };
 export const PAGE_COUNTS = [5, 10, 15, 25, 50];
 
 const splitLines = (text) => String(text || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
@@ -19,12 +19,15 @@ export function toRequestOptions(adv) {
   const pageCount = adv?.pageCount ? Number(adv.pageCount) : undefined;
   const gscSite = adv?.gscSite || "";
   const ga4Property = adv?.ga4Property?.id ? adv.ga4Property : null;
-  if (!pages.length && !skip.length && !pageCount && !gscSite && !ga4Property) return undefined;
+  // locations: null = untouched (the server uses saved picks, else the automatic match); an array = the user's picks.
+  const locations = Array.isArray(adv?.locations) ? adv.locations : [];
+  if (!pages.length && !skip.length && !pageCount && !gscSite && !ga4Property && !locations.length) return undefined;
   return {
     pages, skip, onlyListed: !!adv.onlyListed && pages.length > 0,
     ...(pageCount ? { pageCount } : {}),
     ...(gscSite ? { gscSite } : {}),
     ...(ga4Property ? { ga4Property } : {}),
+    ...(locations.length ? { locations } : {}),
   };
 }
 
@@ -41,6 +44,7 @@ export function fromAuditOptions(o) {
     pageCount: o.pageCount ? String(o.pageCount) : "",
     gscSite: o.gscSite || "",
     ga4Property: o.ga4Property || null,
+    locations: o.locations?.length ? o.locations : null,
   };
 }
 
@@ -74,6 +78,132 @@ function useSourceLists(active) {
     return () => { cancelled = true; };
   }, [active, lists.loaded]);
   return lists;
+}
+
+// Google listings for the domain (and the picks saved for it), loaded once when the panel opens.
+function useLocations(active, domain) {
+  const [state, setState] = useState({ key: null, saved: null, found: [], status: "loading" });
+  const key = bareHost(domain);
+  useEffect(() => {
+    if (!active || !key || state.key === key) return undefined;
+    let cancelled = false;
+    fetch(`/api/seo-audit/v2/locations?domain=${encodeURIComponent(key)}`)
+      .then((r) => r.json())
+      .then((b) => {
+        if (cancelled) return;
+        setState({ key, saved: Array.isArray(b.saved) ? b.saved : null, found: Array.isArray(b.found) ? b.found : [], status: b.status === "not_connected" ? "not_connected" : b.status === "ok" ? "ok" : "error" });
+      })
+      .catch(() => { if (!cancelled) setState({ key, saved: null, found: [], status: "error" }); });
+    return () => { cancelled = true; };
+  }, [active, key, state.key]);
+  return state.key === key ? state : { key, saved: null, found: [], status: "loading" };
+}
+
+const toPick = (c) => ({ source: "places", id: c.id, name: c.name });
+const ratingText = (c) => [typeof c.rating === "number" ? `${c.rating.toFixed(1)} ★` : null, typeof c.count === "number" ? `${c.count} reviews` : null].filter(Boolean).join(" · ");
+
+function LocationPicker({ adv, set, domain, active }) {
+  const loaded = useLocations(active, domain);
+  const [added, setAdded] = useState([]); // listings added by hand, so they keep their rating text
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [candidates, setCandidates] = useState([]);
+
+  const defaults = loaded.saved || loaded.found.map(toPick);
+  const picks = Array.isArray(adv.locations) ? adv.locations : defaults;
+  const ticked = new Set(picks.map((p) => p.id));
+  const full = picks.length >= MAX_LOCATIONS;
+  const info = new Map([...loaded.found, ...added].map((c) => [c.id, c]));
+  // Found listings first, then picks that aren't in the found list (saved earlier, or added by hand).
+  const rows = [...loaded.found.map(toPick), ...picks.filter((p) => !loaded.found.some((f) => f.id === p.id))];
+
+  const toggle = (pick) => set({ locations: ticked.has(pick.id) ? picks.filter((p) => p.id !== pick.id) : [...picks, pick] });
+  const choose = (c) => {
+    setAdded((a) => (a.some((x) => x.id === c.id) ? a : [...a, c]));
+    if (!ticked.has(c.id)) set({ locations: [...picks, toPick(c)] });
+    setCandidates([]); setInput(""); setNote("");
+  };
+  const add = async () => {
+    if (!input.trim() || full) return;
+    setBusy(true); setNote(""); setCandidates([]);
+    try {
+      const r = await fetch("/api/seo-audit/v2/locations/resolve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: input.trim() }) });
+      const b = await r.json();
+      const list = Array.isArray(b.candidates) ? b.candidates : [];
+      if (b.status === "not_connected") setNote("Google reviews aren't connected (no Places API key).");
+      else if (!r.ok || b.status === "error") setNote("Couldn't look up that location.");
+      else if (!list.length) setNote("No Google listing found for that.");
+      else if (list.length === 1) choose(list[0]);
+      else setCandidates(list);
+    } catch {
+      setNote("Couldn't look up that location.");
+    }
+    setBusy(false);
+  };
+
+  const emptyMsg = loaded.status === "not_connected" ? "Google reviews aren't connected (no Places API key)."
+    : loaded.status === "error" ? "Couldn't look up Google listings."
+    : loaded.status === "loading" ? "Looking up Google listings…"
+    : !rows.length ? "No Google listing links to this website. Add one below." : null;
+
+  return (
+    <div>
+      <span style={label}>Google Business Profiles</span>
+      {emptyMsg ? <p style={{ ...hint, marginTop: 0, marginBottom: 8 }}>{emptyMsg}</p> : (
+        <p style={{ ...hint, marginTop: 0, marginBottom: 8 }}>
+          {loaded.saved ? "Your saved picks for" : `Found ${rows.length} location${rows.length === 1 ? "" : "s"} for`} {bareHost(domain)}:
+        </p>
+      )}
+      <div style={{ display: "grid", gap: 6 }}>
+        {rows.map((p) => {
+          const c = info.get(p.id);
+          const checked = ticked.has(p.id);
+          return (
+            <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.75)", cursor: !checked && full ? "not-allowed" : "pointer" }}>
+              <input type="checkbox" checked={checked} disabled={!checked && full} onChange={() => toggle(p)} />
+              <span style={{ flex: 1, minWidth: 0 }}>{p.name}{c?.address ? <span style={{ color: "rgba(255,255,255,0.35)" }}> · {c.address}</span> : null}</span>
+              {c && ratingText(c) && <span style={{ color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>{ratingText(c)}</span>}
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{p.source === "gbp" ? "Managed" : "Public"}</span>
+            </label>
+          );
+        })}
+      </div>
+      {full && <p style={hint}>Up to {MAX_LOCATIONS} locations per audit. Untick one to add another.</p>}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <input
+          type="text"
+          aria-label="Add a location"
+          placeholder={'Paste a Google Maps link, or "name, city"'}
+          value={input}
+          disabled={full}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          style={field}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={busy || full || !input.trim()}
+          style={{ ...field, width: "auto", cursor: busy || full || !input.trim() ? "not-allowed" : "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+        >
+          {busy ? "Looking…" : "Add"}
+        </button>
+      </div>
+      {note && <p role="status" style={hint}>{note}</p>}
+      {candidates.length > 0 && (
+        <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+          <p style={hint}>Several matches. Pick one:</p>
+          {candidates.map((c) => (
+            <button key={c.id} type="button" onClick={() => choose(c)} style={{ ...field, textAlign: "left", cursor: "pointer" }}>
+              {c.name}{c.address ? ` · ${c.address}` : ""}{ratingText(c) ? ` · ${ratingText(c)}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const label = { fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.7)", display: "block", marginBottom: 6 };
@@ -206,6 +336,7 @@ export default function AdvancedOptions({ value, onChange, auditType, domain }) 
               <p style={hint}>{lists.ga4Error || "Only properties our reporting account can read are listed."}</p>
             </div>
           </div>
+          <LocationPicker adv={adv} set={set} domain={domain} active={open} />
         </div>
       )}
     </div>

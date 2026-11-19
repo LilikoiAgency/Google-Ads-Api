@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // SEO Audit v2 UI: action plan, progress steps, the job loop hook, and v1/v2 view selection.
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, renderHook, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,6 +13,7 @@ vi.mock('@/lib/seoAuditV2/tasks', async (importOriginal) => {
 
 import { tasksToCsv } from '@/lib/seoAuditV2/tasks';
 import ActionPlan, { tasksToChecklist, pagePath } from '@/app/dashboard/seo-audit/v2/ActionPlan.jsx';
+import Reputation from '@/app/dashboard/seo-audit/v2/Reputation.jsx';
 import ProgressSteps from '@/app/dashboard/seo-audit/v2/ProgressSteps.jsx';
 import ClientSummary from '@/app/dashboard/seo-audit/v2/ClientSummary.jsx';
 import PageCards from '@/app/dashboard/seo-audit/v2/PageCards.jsx';
@@ -531,7 +532,7 @@ describe('AdvancedOptions', () => {
 
   it('fromAuditOptions turns saved URLs back into paths', () => {
     expect(fromAuditOptions({ pages: ['https://acme.com/pet-turf'], onlyListed: true, skip: ['/blog/*'], pageCount: null }))
-      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '', gscSite: '', ga4Property: null });
+      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '', gscSite: '', ga4Property: null, locations: null });
     expect(fromAuditOptions(null)).toEqual(EMPTY_ADVANCED);
   });
 
@@ -635,5 +636,170 @@ describe('results back button', () => {
     render(<ResultsView audit={V1_AUDIT} domain="old.com" onBack={onBack} />);
     fireEvent.click(screen.getByRole('button', { name: /All audits/ }));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+const REPUTATION = {
+  locations: [
+    { name: 'Acme Turf Tampa', city: 'Tampa', source: 'gbp', coverage: 'full', stats: { rating: 4.9, count: 212, coverage: 'full', per_month: 8.6, star_split: {}, days_since_newest: 3, reply_rate: 0.64 } },
+    { name: 'Acme Turf Villages', city: 'The Villages', source: 'places', coverage: 'sample', stats: { rating: 4.8, count: 87, coverage: 'sample', per_month: null, star_split: null, days_since_newest: 2, reply_rate: null } },
+  ],
+  themes: [
+    { kind: 'praise', theme: 'On time, clean work', count: 31, location: 'Acme Turf Tampa', quotes: ['Showed up on time and left it spotless.'] },
+    { kind: 'complaint', theme: 'Scheduling delays', count: 6, location: 'Acme Turf Tampa', quotes: ['Took three weeks to get a date.'] },
+  ],
+  search: {
+    appear_count: 1, total: 2, summary: 'Shows up for brand searches only.',
+    queries: [
+      { query: 'turf installation tampa', you_appear: false, others: ['Angi', 'Expertise.com'] },
+      { query: 'acme turf', you_appear: true, others: [] },
+    ],
+  },
+  attribution: 'Source: Google reviews',
+};
+
+describe('Reputation tab', () => {
+  it('Reputation tab appears only with reputation data', () => {
+    const { unmount } = render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
+    expect(screen.queryByRole('tab', { name: /Reputation/ })).toBeNull();
+    unmount();
+    render(<ResultsView audit={{ ...V2_RESULT, reputation: REPUTATION, passes_completed: { technical: true, content: true, local: true, conversion: true } }} domain="acme.com" />);
+    const tab = screen.getByRole('tab', { name: /Reputation/ });
+    expect(tab).toHaveTextContent('2');
+    fireEvent.click(tab);
+    expect(screen.getByText('4.9 ★ · 212 reviews · ≈9/month · replies 64% · newest 3 days ago')).toBeInTheDocument();
+    expect(screen.getByText('Managed')).toBeInTheDocument();
+    expect(screen.getByText(/On time, clean work \(31\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Took three weeks/)).toBeInTheDocument();
+  });
+
+  it('lists the reputation findings under the tab', () => {
+    render(<ResultsView audit={{ ...V2_RESULT, reputation: REPUTATION, findings: { ...V2_RESULT.findings, reputation: [{ title: 'Replies are slow', detail: 'Few reviews get a reply.', evidence: [] }] } }} domain="acme.com" />);
+    fireEvent.click(screen.getByRole('tab', { name: /Reputation/ }));
+    expect(screen.getByText('Replies are slow')).toBeInTheDocument();
+  });
+
+  it('search block never shows a position and shows the not-Google-rankings note', () => {
+    render(<Reputation reputation={REPUTATION} />);
+    expect(screen.getByText('What a web search finds')).toBeInTheDocument();
+    expect(screen.getByText('A web search run during this audit, not Google rankings.')).toBeInTheDocument();
+    expect(screen.getByText('You appear in 1 of 2 searches')).toBeInTheDocument();
+    expect(screen.getByText('Angi, Expertise.com')).toBeInTheDocument();
+    expect(screen.getByLabelText('appears')).toHaveTextContent('✓');
+    expect(screen.getByLabelText('does not appear')).toHaveTextContent('✗');
+    expect(document.body.textContent).not.toMatch(/position|rank #|ranks? \d/i);
+  });
+
+  it('public locations show the sample label and Google attribution', () => {
+    render(<Reputation reputation={REPUTATION} />);
+    expect(screen.getByText('4.8 ★ · 87 reviews · (5 sample reviews)')).toBeInTheDocument();
+    expect(screen.getByText('Public data')).toBeInTheDocument();
+    expect(screen.getByText('Source: Google reviews')).toBeInTheDocument();
+  });
+
+  it('a quick audit (no themes, no search) and the "today" wording render cleanly', () => {
+    const rep = { locations: [{ ...REPUTATION.locations[0], stats: { ...REPUTATION.locations[0].stats, days_since_newest: 0, per_month: null, reply_rate: null } }], themes: [], search: null, attribution: null };
+    render(<Reputation reputation={rep} />);
+    expect(screen.getByText('4.9 ★ · 212 reviews · newest today')).toBeInTheDocument();
+    expect(screen.queryByText('What a web search finds')).toBeNull();
+    expect(screen.queryByText('What customers say')).toBeNull();
+  });
+});
+
+describe('Advanced: Google Business Profiles picker', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+  const FOUND = [
+    { id: 'ChIJaaaaaaaaaa1', name: 'Acme Tampa', address: '1 Main St', website: 'https://acme.com', rating: 4.9, count: 212, mapsUrl: 'u1' },
+    { id: 'ChIJaaaaaaaaaa2', name: 'Acme Villages', address: '2 Main St', website: 'https://acme.com', rating: 4.8, count: 87, mapsUrl: 'u2' },
+  ];
+  const mockLocations = (body) => {
+    global.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('/locations') ? body : { sites: [], properties: [] }),
+    }));
+  };
+  const open = () => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="full" domain="acme.com" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    return onChange;
+  };
+
+  it('location picker prefills saved picks and sends locations in options', async () => {
+    mockLocations({ saved: [{ source: 'places', id: 'ChIJaaaaaaaaaa2', name: 'Acme Villages' }, { source: 'gbp', id: 'locations/123', name: 'Old HQ' }], found: FOUND, status: 'ok' });
+    const onChange = open();
+    expect(global.fetch).toHaveBeenCalledWith('/api/seo-audit/v2/locations?domain=acme.com');
+    const villages = await screen.findByRole('checkbox', { name: /Acme Villages/ });
+    expect(villages).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Acme Tampa/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Old HQ/ })).toBeChecked(); // saved earlier, not in found
+    fireEvent.click(screen.getByRole('checkbox', { name: /Acme Tampa/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...EMPTY_ADVANCED,
+      locations: [
+        { source: 'places', id: 'ChIJaaaaaaaaaa2', name: 'Acme Villages' },
+        { source: 'gbp', id: 'locations/123', name: 'Old HQ' },
+        { source: 'places', id: 'ChIJaaaaaaaaaa1', name: 'Acme Tampa' },
+      ],
+    });
+    const pick = { source: 'places', id: 'ChIJaaaaaaaaaa1', name: 'Acme Tampa' };
+    expect(toRequestOptions({ ...EMPTY_ADVANCED, locations: [pick] })).toEqual({ pages: [], skip: [], onlyListed: false, locations: [pick] });
+    expect(fromAuditOptions({ locations: [pick] }).locations).toEqual([pick]);
+  });
+
+  it('ticks every found location when nothing is saved', async () => {
+    mockLocations({ saved: null, found: FOUND, status: 'ok' });
+    open();
+    expect(await screen.findByRole('checkbox', { name: /Acme Tampa/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Acme Villages/ })).toBeChecked();
+  });
+
+  it('shows plain messages for not connected, error and no listings', async () => {
+    for (const [status, text] of [
+      ['not_connected', "Google reviews aren't connected (no Places API key)."],
+      ['error', "Couldn't look up Google listings."],
+      ['ok', 'No Google listing links to this website. Add one below.'],
+    ]) {
+      mockLocations({ saved: null, found: [], status });
+      open();
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('adds a location by resolving it; several matches are picked from a list', async () => {
+    mockLocations({ saved: null, found: [], status: 'ok' });
+    const base = global.fetch;
+    global.fetch = vi.fn(async (url, init) => (String(url).includes('/resolve')
+      ? { ok: true, json: async () => ({ candidates: FOUND }) }
+      : base(url, init)));
+    const onChange = open();
+    await screen.findByText(/No Google listing links/);
+    fireEvent.change(screen.getByLabelText('Add a location'), { target: { value: 'Acme, Tampa' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Acme Villages/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_ADVANCED, locations: [{ source: 'places', id: 'ChIJaaaaaaaaaa2', name: 'Acme Villages' }] });
+    const post = global.fetch.mock.calls.find(([u]) => String(u).includes('/resolve'));
+    expect(JSON.parse(post[1].body)).toEqual({ input: 'Acme, Tampa' });
+  });
+
+  it('enforces the 10 location cap: more ticks and adding are disabled', async () => {
+    const saved = Array.from({ length: 10 }, (_, i) => ({ source: 'places', id: `ChIJsaved${String(i).padStart(6, '0')}`, name: `Saved ${i}` }));
+    mockLocations({ saved, found: FOUND, status: 'ok' });
+    open();
+    expect(await screen.findByRole('checkbox', { name: /Acme Tampa/ })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /Saved 0/ })).toBeEnabled();
+    expect(screen.getByLabelText('Add a location')).toBeDisabled();
+    expect(screen.getByText(/Up to 10 locations per audit/)).toBeInTheDocument();
+  });
+});
+
+describe('ProgressSteps time text', () => {
+  it('says 6–10 minutes for full audits only', () => {
+    const { unmount } = render(<ProgressSteps progress={{ status: 'running', auditType: 'full', steps: [] }} />);
+    expect(screen.getByText(/usually 6–10 minutes/)).toBeInTheDocument();
+    unmount();
+    render(<ProgressSteps progress={{ status: 'running', auditType: 'quick', steps: [] }} />);
+    expect(screen.queryByText(/usually/)).toBeNull();
   });
 });
