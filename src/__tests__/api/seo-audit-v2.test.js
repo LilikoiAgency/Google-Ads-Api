@@ -429,7 +429,7 @@ describe('GET /api/seo-audit/v2/jobs/[id]', () => {
     expect(res.body.result).toBeUndefined();
     expect(res.body.jobId).toBe('job1');
     expect(res.body.steps.map((s) => s.label)).toEqual([
-      'Crawling pages', 'Reading Search Console, Analytics & page speed', 'Searching the web for the business', 'Technical & indexing',
+      'Crawling pages', 'Reading Search Console, Analytics, page speed & keyword data', 'Searching the web for the business', 'Technical & indexing',
       'Content & keywords', 'Local & AI search', 'Conversion', 'Reviews & reputation', 'Building action plan',
     ]);
     expect(res.body.steps.find((s) => s.key === 'pass:local').status).toBe('failed');

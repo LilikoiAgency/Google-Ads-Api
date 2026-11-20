@@ -46,8 +46,11 @@ export async function fetchTrafficReport({ property, startDate, endDate, compare
   const batch = (reqs) => data.properties
     .batchRunReports({ property: property.id, requestBody: { requests: reqs } })
     .then((res) => res.data.reports || []);
-  const [first, second] = await Promise.all([batch(requests.slice(0, 5)), batch(requests.slice(5))]);
-  return normalizeTrafficReport([...first, ...second], { property, range, compareRange: cmp, granularity });
+  // batchRunReports takes at most 5 requests.
+  const chunks = [];
+  for (let i = 0; i < requests.length; i += 5) chunks.push(requests.slice(i, i + 5));
+  const results = await Promise.all(chunks.map(batch));
+  return normalizeTrafficReport(results.flat(), { property, range, compareRange: cmp, granularity });
 }
 
 // Web data streams for the given properties, so a website domain can be matched

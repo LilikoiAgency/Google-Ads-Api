@@ -7,6 +7,19 @@ const MAX_LOCATIONS = 10;
 const DAY_MS = 86400000;
 const BUSINESS_TYPE = /^(LocalBusiness|Organization)$/;
 
+// "123 Main St, Tampa, FL 33602" -> { city: 'Tampa', region: 'FL' }; null when it isn't a US "City, ST" address.
+export function cityFromAddress(address) {
+  const m = /(?:^|,)[ ]*([A-Za-z][A-Za-z.' -]*?)[ ]*,[ ]*([A-Z]{2})(?![A-Za-z])(?:[ ]+[0-9]{5}(?:-[0-9]{4})?)?(?:[ ]*,?[ ]*(?:USA|US|United States))?[ ]*$/.exec(String(address || '').trim());
+  return m ? { city: m[1], region: m[2] } : null;
+}
+
+// The business's city: the first review location with one, else the crawl's contact address.
+export function businessCity(reviewLocations, crawl) {
+  const loc = (reviewLocations || []).find((r) => r?.city);
+  if (loc) return { city: loc.city, region: loc.region || null };
+  return cityFromAddress(crawl?.site_wide?.contact_info?.addresses?.[0]);
+}
+
 const homePage = (crawl) => {
   const pages = crawl?.pages_crawled || [];
   return pages.find((p) => p.page_type === 'homepage') || pages[0] || null;

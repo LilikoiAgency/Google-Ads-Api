@@ -12,13 +12,14 @@ import {
 
 export const STEP_LABELS = {
   crawl: 'Crawling pages',
-  gather: 'Reading Search Console, Analytics & page speed',
+  gather: 'Reading Search Console, Analytics, page speed & keyword data',
   search: 'Searching the web for the business',
   'pass:technical': 'Technical & indexing',
   'pass:content': 'Content & keywords',
   'pass:local': 'Local & AI search',
   'pass:conversion': 'Conversion',
   'pass:reputation': 'Reviews & reputation',
+  'pass:targets': 'Target keywords',
   synthesize: 'Building action plan',
 };
 

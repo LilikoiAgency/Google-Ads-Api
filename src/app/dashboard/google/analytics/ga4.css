@@ -171,6 +171,19 @@
 .ga4-tag-paid { margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: var(--ga4-warn-bg); color: var(--ga4-warn-text); border: 1px solid var(--ga4-warn-border); }
 .ga4-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 #ga4-sources { scroll-margin-top: 16px; }
+.ga4-three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.ga4-panel-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* ── Audience: share bars + day/hour heatmap ── */
+.ga4-share { display: inline-flex; align-items: center; gap: 8px; min-width: 110px; }
+.ga4-share-track { flex: 1; height: 6px; min-width: 56px; border-radius: 999px; background: var(--ga4-skel); overflow: hidden; }
+.ga4-share-fill { display: block; height: 100%; border-radius: 999px; background: var(--ga4-accent); }
+.ga4-share-pct { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary); min-width: 38px; text-align: right; }
+.ga4-heat { min-width: 560px; display: grid; gap: 3px; }
+.ga4-heat-row { display: grid; grid-template-columns: 36px repeat(24, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.ga4-heat-day, .ga4-heat-hour { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ga4-heat-hour { text-align: left; white-space: nowrap; }
+.ga4-heat-cell { display: block; height: 22px; border-radius: 4px; background: var(--ga4-accent); }
 
 /* ── Notices ── */
 .ga4-notice { padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -209,7 +222,7 @@
 
 @media (max-width: 1100px) {
   .ga4-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ga4-two-col { grid-template-columns: minmax(0, 1fr); }
+  .ga4-two-col, .ga4-three-col { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
   .ga4-body { padding: 14px 16px 48px; gap: 12px; }

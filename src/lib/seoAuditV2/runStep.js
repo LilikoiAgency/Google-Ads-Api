@@ -15,8 +15,9 @@ import { effortForAttempt } from './jobs';
 import { pageLimit, filterSkipped, bareHost } from './options';
 import { buildSearchSummary } from './overview';
 import { getSavedLocations, saveReviewTexts, getReviewTexts } from './reputationStore';
-import { brandName } from './reviews';
+import { brandName, businessCity } from './reviews';
 import { buildSearchQueries, runWebSearch } from './search';
+import { guardTargets, buildTargetsResult } from './targets';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -26,6 +27,7 @@ const SOURCES = {
   pagespeed: 'pagespeed',
   reviews: 'reviews',
   ai_search: 'aiSearch',
+  keyword_planner: 'keywords',
 };
 
 const PASS_AREA = {
@@ -34,6 +36,7 @@ const PASS_AREA = {
   local: 'Local & AI search',
   conversion: 'Conversion',
   reputation: 'Reputation',
+  targets: 'Target keywords',
 };
 
 const errText = (err) => {
@@ -98,6 +101,7 @@ async function runGather(job) {
       domain: job.domain, crawl, profile: job.auditType, priorityUrls: o.pages || [], onlyListed: !!o.onlyListed, skip: o.skip || [],
       ...(o.gscSite ? { gscSite: o.gscSite } : {}),
       ...(o.ga4Property ? { ga4Property: o.ga4Property } : {}),
+      ...(o.targets?.length ? { targets: o.targets } : {}),
       locations,
     }
     : { domain: job.domain, crawl, profile: job.auditType, locations });
@@ -117,19 +121,12 @@ async function runGather(job) {
 
 const SEARCH_GAP = "Web search check didn't complete.";
 
-// "123 Main St, Tampa, FL 33602" -> { city: 'Tampa', region: 'FL' }; null when it isn't a US "City, ST" address.
-function cityFromAddress(address) {
-  const m = /(?:^|,)[ ]*([A-Za-z][A-Za-z.' -]*?)[ ]*,[ ]*([A-Z]{2})(?![A-Za-z])(?:[ ]+[0-9]{5}(?:-[0-9]{4})?)?(?:[ ]*,?[ ]*(?:USA|US|United States))?[ ]*$/.exec(String(address || '').trim());
-  return m ? { city: m[1], region: m[2] } : null;
-}
-
 // A search or API failure only leaves a gap; a timeout fails the step so it retries.
 async function runSearch(job) {
   const sources = job.data?.sources || {};
   const crawl = job.data?.crawl;
   const brand = brandName(crawl, job.domain);
-  const loc = (sources.reviews || []).find((r) => r?.city)
-    || cityFromAddress(crawl?.site_wide?.contact_info?.addresses?.[0]);
+  const loc = businessCity(sources.reviews, crawl);
   const city = loc?.city || null;
   const region = loc?.region || null;
   const queries = buildSearchQueries({ gscPages: sources.gscPages, crawl, brand, city });
@@ -185,7 +182,7 @@ async function runPass(job, key) {
     reviewTexts = await getReviewTexts(job.id).catch(() => null);
     passData = { ...data, reviewTexts };
   }
-  const input = buildPassInput(pass, { crawl: job.data?.crawl, data: passData, domain: job.domain });
+  const input = buildPassInput(pass, { crawl: job.data?.crawl, data: passData, domain: job.domain, targetOptions: job.options?.targets });
   const call = (inp) => runStructured({
     system: PASS_SYSTEM[pass],
     sharedContext: job.data?.sharedContext,
@@ -236,6 +233,7 @@ async function runPass(job, key) {
     const { output } = await call(input);
     out = { ...output, tasks: normalizeTaskIds(pass, null, output?.tasks) };
     if (pass === 'reputation') out.themes = guardThemes(out.themes, data?.reviews, reviewTexts);
+    if (pass === 'targets') out.targets = guardTargets(out.targets, input);
   }
   out.tasks = (out.tasks || [])
     .map((t) => ({ ...t, page: pathKey(t.page) }))
@@ -250,6 +248,7 @@ function dataSources(job) {
   const gaps = job.data?.gaps || [];
   const out = { crawl: { status: 'ok', pages: job.data?.crawl?.pages_crawled?.length || 0 } };
   for (const [name, field] of Object.entries(SOURCES)) {
+    if (name === 'keyword_planner' && !job.options?.targets?.length) continue; // only fetched for target pages
     const gap = gaps.find((g) => g.source === name);
     out[name] = { status: sources[field] != null ? 'ok' : gap?.status || 'no_data' };
   }
@@ -322,10 +321,11 @@ function buildPages(job) {
   });
 }
 
-// Skipped on purpose (quick audit), or a step an older job never had.
+// Skipped on purpose (quick audit, no target pages), or a step an older job never had.
+const OPTIONAL_PASSES = ['reputation', 'targets'];
 function passSkipped(job, pass) {
   const step = stepOf(job, `pass:${pass}`);
-  return step.skipped === true || (pass === 'reputation' && !step.key);
+  return step.skipped === true || (OPTIONAL_PASSES.includes(pass) && !step.key);
 }
 
 function resultHost(r) {
@@ -389,6 +389,12 @@ async function runSynthesize(job) {
   // One deterministic list: source gaps plus job gaps (incomplete passes, crawl cut short).
   const dataGaps = [...new Set([...describeGaps(job.data?.gaps), ...(job.gaps || [])])];
   const reputation = buildReputation(job, done.includes('reputation'));
+  const targets = buildTargetsResult({
+    targetOptions: job.options?.targets,
+    keywordData: job.data?.sources?.keywords,
+    guarded: done.includes('targets') ? job.passes.targets.targets : null,
+    plan,
+  });
   const result = {
     version: 2,
     domain: job.domain,
@@ -401,12 +407,13 @@ async function runSynthesize(job) {
     action_plan: plan,
     pages: buildPages(job),
     findings: Object.fromEntries(
-      PASSES.filter((p) => p !== 'reputation' || done.includes(p)).map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []]),
+      PASSES.filter((p) => !OPTIONAL_PASSES.includes(p) || done.includes(p)).map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []]),
     ),
     passes_completed: Object.fromEntries(PASSES.filter((p) => !passSkipped(job, p)).map((p) => [p, done.includes(p)])),
     data_gaps: dataGaps,
     data_sources: dataSources(job),
     ...(reputation ? { reputation } : {}),
+    ...(targets ? { targets } : {}),
     // Headline search numbers and index counts for the overview.
     ...buildSearchSummary(job.data?.sources?.gsc, job.data?.sources?.inspection),
   };

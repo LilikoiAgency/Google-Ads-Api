@@ -695,3 +695,83 @@ describe('runStep search', () => {
     expect(res.ok).toBe(false);
   });
 });
+
+describe('target keywords', () => {
+  const targets = [{ url: 'https://acme.com/p1', keywords: ['turf austin'] }];
+  const keywords = {
+    geo: 'Austin, Texas',
+    targets: [{
+      page: '/p1', url: 'https://acme.com/p1', mode: 'given',
+      given: [{ keyword: 'turf austin', volume: 320, competition: 'low', search_console: [{ page: '/p2', position: 11, clicks: 1, impressions: 90 }] }],
+      page_queries: [],
+      ideas: [{ keyword: 'artificial turf austin', volume: 880, competition: 'medium', search_console: [] }],
+    }],
+  };
+  const tjob = (statuses = {}, extra = {}) => {
+    const j = newJob({ email: 'a@lilikoiagency.com', domain: 'acme.com', auditType: 'full', now: '2026-11-18T10:00:00Z', targets: true });
+    j.steps = j.steps.map((s) => ({ ...s, ...(statuses[s.key] || {}) }));
+    return { ...j, options: { pages: ['https://acme.com/p1'], onlyListed: false, skip: [], pageCount: null, targets }, ...extra };
+  };
+
+  it('gather passes the target pages on', async () => {
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [] });
+    await runStep(tjob({}, { data: { crawl } }), 'gather');
+    expect(m.gatherAll.mock.calls[0][0].targets).toEqual(targets);
+  });
+
+  it('the pass sends the target pages and keeps only keywords from the input', async () => {
+    m.runStructured.mockResolvedValue({ output: {
+      findings: [],
+      tasks: [{ ...task('Rewrite the title for turf austin', 'https://acme.com/p1'), category: 'content', evidence: ["Keyword Planner: 'turf austin' 320 monthly searches"] }],
+      targets: [{ page: '/p1', keywords: [
+        { keyword: 'artificial turf austin', role: 'primary', note: 'more searches' },
+        { keyword: 'invented', role: 'secondary', note: '' },
+      ], conflicts: [{ keyword: 'turf austin', other_page: '/p2', note: 'link from /p2' }] }],
+    } });
+    const res = await runStep(tjob({}, { data: { crawl, sources: { keywords }, sharedContext: 'ctx' } }), 'pass:targets');
+    const call = m.runStructured.mock.calls[0][0];
+    expect(call.label).toBe('pass:targets');
+    expect(call.input.targets[0]).toMatchObject({ page: '/p1', mode: 'given', crawled: true });
+    expect(call.input.volumes_for).toBe('Austin, Texas');
+    const out = res.patch['passes.targets'];
+    expect(out.tasks[0].id).toBe('KW-1');
+    expect(out.targets[0].keywords.map((k) => k.keyword)).toEqual(['artificial turf austin', 'turf austin']);
+    expect(out.targets[0].conflicts).toEqual([{ keyword: 'turf austin', other_page: '/p2', note: 'link from /p2' }]);
+  });
+
+  it('synthesize adds result.targets with numbers from the data and the page tasks', async () => {
+    m.runStructured.mockResolvedValue({ output: { client_summary: 'S', top_moves: [], scores: {}, drop_task_ids: [] } });
+    const kwTask = { ...task('Rewrite the title', 'https://acme.com/p1'), id: 'KW-1', category: 'content' };
+    const j = tjob({
+      'pass:technical': { status: 'done' }, 'pass:content': { status: 'done' }, 'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' }, 'pass:reputation': { status: 'done', skipped: true }, 'pass:targets': { status: 'done' },
+      synthesize: { status: 'running', attempts: 1 },
+    }, {
+      data: { crawl, sources: { keywords }, sharedContext: 'ctx' },
+      passes: {
+        technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] },
+        targets: { findings: [{ title: 'kf' }], tasks: [kwTask], targets: [{ page: '/p1', keywords: [{ keyword: 'turf austin', role: 'primary', note: 'n', given: true }], conflicts: [] }] },
+      },
+    });
+    const r = (await runStep(j, 'synthesize')).patch.result;
+    expect(m.runStructured.mock.calls[0][0].input.tasks.map((t) => t.id)).toEqual(['KW-1']);
+    expect(r.passes_completed.targets).toBe(true);
+    expect(r.findings.targets).toEqual([{ title: 'kf' }]);
+    expect(r.targets.volumes_for).toBe('Austin, Texas');
+    expect(r.targets.pages[0]).toMatchObject({ page: '/p1', mode: 'given', task_ids: ['T1'] });
+    expect(r.targets.pages[0].keywords[0]).toMatchObject({ keyword: 'turf austin', role: 'primary', volume: 320, position: 11, ranking_page: '/p2' });
+    expect(r.data_sources.keyword_planner.status).toBe('ok');
+  });
+
+  it('jobs without target pages have no targets result and no targets findings', async () => {
+    m.runStructured.mockResolvedValue({ output: { client_summary: 'S', top_moves: [], scores: {}, drop_task_ids: [] } });
+    const j = job({
+      'pass:technical': { status: 'done' }, 'pass:content': { status: 'done' }, 'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' }, 'pass:reputation': { status: 'done', skipped: true }, synthesize: { status: 'running', attempts: 1 },
+    }, { data: { crawl, sources: {}, sharedContext: 'ctx' }, passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] } } });
+    const r = (await runStep(j, 'synthesize')).patch.result;
+    expect(r.targets).toBeUndefined();
+    expect(r.findings).not.toHaveProperty('targets');
+    expect(r.passes_completed).not.toHaveProperty('targets');
+  });
+});

@@ -5,8 +5,9 @@
 
 import { brandName } from './reviews';
 import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask, effectiveImpact, priorityScore } from './tasks';
+import { targetsInput } from './targets';
 
-export const PASSES = ['technical', 'content', 'local', 'conversion', 'reputation'];
+export const PASSES = ['technical', 'content', 'local', 'conversion', 'reputation', 'targets'];
 
 export const CONTENT_CHUNK_SIZE = 4;
 const HOMEPAGE_TEXT_CHARS = 1500;
@@ -236,8 +237,9 @@ function reputationInput(crawl, data, domain) {
 
 // content -> array of chunks (may be empty); conversion -> null when GA4 is
 // unavailable and reputation -> null when there are neither reviews nor a web
-// search (the pass is skipped); others -> one object.
-export function buildPassInput(passKey, { crawl, data, domain } = {}) {
+// search (the pass is skipped); targets -> null when the options name no
+// target pages (targetOptions); others -> one object.
+export function buildPassInput(passKey, { crawl, data, domain, targetOptions } = {}) {
   const c = crawl || {};
   const d = data || {};
   switch (passKey) {
@@ -246,6 +248,7 @@ export function buildPassInput(passKey, { crawl, data, domain } = {}) {
     case 'local': return localInput(c, d);
     case 'conversion': return conversionInput(c, d);
     case 'reputation': return reputationInput(c, d, domain);
+    case 'targets': return targetsInput(c, d, targetOptions);
     default: throw new Error(`Unknown pass: ${passKey}`);
   }
 }
@@ -380,11 +383,23 @@ ${RULES_REMINDER}`,
 
 ${OWN_AREA}
 ${RULES_REMINDER}`,
+
+  targets: `This is the target keywords pass. The agency has chosen pages it wants to rank for chosen searches. For each target page the input has its mode ("given": the agency chose the keywords; "recommend": the agency wants keywords chosen), whether the page was crawled, its content (title tag, meta description, headings, word count, visible text), the chosen keywords (target_keywords), the page's own Search Console queries (page_queries) and related keyword ideas (keyword_ideas). Each keyword has monthly searches and competition from Google Ads Keyword Planner for the area in volumes_for (null when Google has no figure) and, under search_console, the pages of the site that already appear for it, with position, clicks and impressions over the search period. other_pages lists the site's other crawled pages with their title and H1. Task category is "content".
+
+- targets: one entry per input target page, page copied exactly as given.
+  - keywords: in "given" mode, one entry per target keyword with role "primary" (the one main search the page is built around; exactly one), "secondary" (searches the same page can also win) or "drop" (wrong intent for this page, no search demand, or a better fit for another page; the note says which). In "recommend" mode, pick one primary and up to five secondary keywords. In both modes you may add up to three secondary keywords that clearly fit. Added or picked keywords come only from keyword_ideas or page_queries, copied exactly. Choose by fit with what the page offers and where the business works first, then by monthly searches: a popular search with a different intent (a product the business doesn't sell, another city, a job seeker or do-it-yourself search) is not a fit. note: one sentence on why.
+  - conflicts: a keyword for this page that another page of the site already appears for (its search_console lists a different page) or that a page in other_pages is clearly about. other_page is that page's path as given; note says what to do (usually make the target page the one for that search and link to it from the other page, or move the keyword to the other page).
+- tasks: the exact on-page changes that make each target page the best answer for its primary and secondary keywords: the new title tag (under 60 characters, primary keyword near the start), the meta description (under 155 characters), the H1, sections to add with their exact headings and what each covers, questions to answer on the page, and internal links (the exact page from other_pages to link from and the anchor text). Keep what the page already does well. One task per kind of change per page. If a page was not crawled, the task is to create or restore it with that content.
+- Evidence quotes the numbers from the input exactly, for example "Keyword Planner: 'panel upgrade tampa' 210 monthly searches" or "Search Console: 'electrician tampa' position 14.2 on /services". When a keyword has no monthly searches figure, say Google has no estimate rather than guessing.
+- Monthly searches are estimates for the area in volumes_for. Never present them as traffic the page will get, and never promise rankings or timelines.
+
+${OWN_AREA}
+${RULES_REMINDER}`,
 };
 
-export const SYNTH_SYSTEM = `This is the final step. The writing rules in the audit instructions above apply. The input has every task from five focused analysis passes (technical, content, local and answer-engine, conversion, reputation), each shown compactly with its id, title, page, category, impact, effort, confidence and first evidence item, plus the passes' findings and any passes that did not complete. The action plan is built from these tasks as they are; you do not rewrite them. Return:
+export const SYNTH_SYSTEM = `This is the final step. The writing rules in the audit instructions above apply. The input has every task from the focused analysis passes (technical, content, local and answer-engine, conversion, reputation and, when the agency chose pages to rank for chosen keywords, target keywords), each shown compactly with its id, title, page, category, impact, effort, confidence and first evidence item, plus the passes' findings and any passes that did not complete. The action plan is built from these tasks as they are; you do not rewrite them. Return:
 
-- drop_task_ids: the ids of tasks to leave out of the action plan: duplicates of another task (keep the more specific one), tasks outside their pass's area that another pass already covers, tasks that depend on a data gap, generic tasks, and tasks whose evidence does not support them. Leave every other task in.
+- drop_task_ids: the ids of tasks to leave out of the action plan: duplicates of another task (keep the more specific one; when a target keywords task (id starting KW) and a content task change the same thing on the same page, keep the target keywords task), tasks outside their pass's area that another pass already covers, tasks that depend on a data gap, generic tasks, and tasks whose evidence does not support them. Leave every other task in.
 - follow_ups: tasks that can only be done as part of another task, as { parent_id, task_ids }. Example: a page returns 404 and one task restores it, while other tasks add sections to that same page; those additions are follow-ups of the restore task. Use only when the dependency is real; most tasks have none.
 - groups: the same kind of fix repeated across three or more pages, as { title, why, task_ids }, so the plan shows it once with one item per page. Examples: removing visible keyword lists, adding an FAQ section, adding a cost section, fixing copy pasted from another city, title and meta rewrites that have no page-specific search numbers behind them. The title names the fix ("Remove the visible keyword lists from 6 pages"); why is one sentence. Do not group a task whose own Search Console numbers make it urgent on its own; leave it separate. A task may appear in at most one group or follow-up list, and never in drop_task_ids as well.
 - top_moves: exactly three items, the three highest-value tasks that are not dropped: task_id (copied exactly from the input) and a one-sentence headline for the business owner on what it does for them.
@@ -432,6 +447,16 @@ export function passSchema(passKey) {
     };
     props.search_summary = closed({ summary: str, competitors: strList, cited_sites: strList });
   }
+  if (passKey === 'targets') {
+    props.targets = {
+      type: 'array',
+      items: closed({
+        page: str,
+        keywords: { type: 'array', items: closed({ keyword: str, role: { type: 'string', enum: ['primary', 'secondary', 'drop'] }, note: str }) },
+        conflicts: { type: 'array', items: closed({ keyword: str, other_page: str, note: str }) },
+      }),
+    };
+  }
   return closed(props);
 }
 
@@ -450,7 +475,7 @@ export const synthSchema = closed({
 
 // ── task ids, synthesis input, action plan ───────────────────────────────────
 
-const ID_PREFIX = { technical: 'TECH', content: 'CONT', local: 'LOCAL', conversion: 'CONV', reputation: 'REP' };
+const ID_PREFIX = { technical: 'TECH', content: 'CONT', local: 'LOCAL', conversion: 'CONV', reputation: 'REP', targets: 'KW' };
 
 // Pass task ids unique across passes: TECH-1, LOCAL-2, CONV-1, and CONT-<chunk>-<n>
 // for content (chunk is the 1-based chunk number from the input).

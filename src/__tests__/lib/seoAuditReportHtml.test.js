@@ -157,3 +157,48 @@ describe('seo audit report reputation', () => {
     expect(block).not.toMatch(/position|\brank\b/i);
   });
 });
+
+describe('90-day plan and target keywords in the report', () => {
+  const TARGETS = {
+    volumes_for: 'Tampa, Florida',
+    pages: [{
+      page: '/panel', mode: 'given', task_ids: ['T1'],
+      keywords: [
+        { keyword: 'panel upgrade tampa', role: 'primary', note: 'Best fit', volume: 210, position: 12.5, ranking_page: '/services', given: true },
+        { keyword: 'panel <b>', role: 'drop', note: 'Wrong intent', volume: null, position: null, ranking_page: null, given: true },
+      ],
+      conflicts: [{ keyword: 'panel upgrade tampa', other_page: '/services', note: 'Link to /panel' }],
+    }],
+  };
+
+  it('both versions show the three periods; the client version caps each list and hides ids', () => {
+    const plan = Array.from({ length: 12 }, (_, i) => task(i + 1, { impact: 4, effort: 1 }));
+    const client = generateSeoReportHtml({ ...RESULT, action_plan: plan }, { kind: 'client' });
+    expect(client).toContain('Your 90-day plan');
+    for (const label of ['Days 1–30', 'Days 31–60', 'Days 61–90']) expect(client).toContain(label);
+    const block = client.slice(client.indexOf('Your 90-day plan'), client.indexOf('What we'));
+    expect(block).not.toMatch(/confirm:/i);
+    expect(block).not.toContain('class="id"');
+    expect(block).toContain('Plus 4 more.');
+    const full = generateSeoReportHtml({ ...RESULT, action_plan: plan }, { kind: 'full' });
+    const fblock = full.slice(full.indexOf('Your 90-day plan'), full.indexOf('Action plan ·'));
+    expect(fblock).toContain('<span class="id">T12</span>');
+    expect(generateSeoReportHtml({ ...RESULT, action_plan: [] }, { kind: 'client' })).not.toContain('Your 90-day plan');
+  });
+
+  it('target keywords: numbers, where the site shows up, conflicts, escaped text and the source line', () => {
+    const html = generateSeoReportHtml({ ...RESULT, targets: TARGETS, data_sources: { ...RESULT.data_sources, keyword_planner: { status: 'ok' } } }, { kind: 'client' });
+    const block = html.slice(html.indexOf('<h2>Target keywords</h2>'));
+    expect(block).toContain('Keyword Planner estimates for Tampa, Florida');
+    expect(block).toContain('panel upgrade tampa');
+    expect(block).toContain('Main');
+    expect(block).toContain('210');
+    expect(block).toContain('12.5 on /services');
+    expect(block).toContain('Not showing yet');
+    expect(block).toContain('Not for this page');
+    expect(block).toContain('panel &lt;b&gt;');
+    expect(block).toContain('Link to /panel');
+    expect(html).toContain('Google Ads Keyword Planner');
+    expect(generateSeoReportHtml(RESULT, { kind: 'client' })).not.toContain('<h2>Target keywords</h2>');
+  });
+});

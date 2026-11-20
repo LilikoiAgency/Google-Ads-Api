@@ -14,6 +14,8 @@ const DAY_MS = 86400000;
 
 const metrics = (names) => names.map((name) => ({ name }));
 const dims = (names) => names.map((name) => ({ name }));
+// Breakdown tables (geo, device, new vs returning): metric set B.
+const BREAKDOWN_METRICS = ['sessions', 'activeUsers', 'engagedSessions', 'keyEvents'];
 const bySessionsDesc = [{ metric: { metricName: 'sessions' }, desc: true }];
 
 export function buildReportRequests({ startDate, endDate, compareRange, granularity }) {
@@ -51,6 +53,41 @@ export function buildReportRequests({ startDate, endDate, compareRange, granular
       metrics: metrics(['sessions', 'activeUsers', 'keyEvents', 'engagedSessions']),
       orderBys: bySessionsDesc,
       limit: 500,
+    },
+    // ── Audience breakdowns (current range only, split by channel so every
+    // view can filter them like the landing pages). Indexes 8..12.
+    {
+      dateRanges: current,
+      dimensions: dims(['country', 'region', 'city', CHANNEL_DIM]),
+      metrics: metrics(BREAKDOWN_METRICS),
+      orderBys: bySessionsDesc,
+      limit: 25000,
+    },
+    {
+      dateRanges: current,
+      dimensions: dims(['deviceCategory', CHANNEL_DIM]),
+      metrics: metrics(BREAKDOWN_METRICS),
+      limit: 1000,
+    },
+    {
+      dateRanges: current,
+      dimensions: dims(['newVsReturning', CHANNEL_DIM]),
+      metrics: metrics(BREAKDOWN_METRICS),
+      limit: 1000,
+    },
+    {
+      dateRanges: current,
+      dimensions: dims(['eventName', CHANNEL_DIM]),
+      metrics: metrics(['keyEvents']),
+      metricFilter: { filter: { fieldName: 'keyEvents', numericFilter: { operation: 'GREATER_THAN', value: { doubleValue: 0 } } } },
+      orderBys: [{ metric: { metricName: 'keyEvents' }, desc: true }],
+      limit: 1000,
+    },
+    {
+      dateRanges: current,
+      dimensions: dims(['dayOfWeek', 'hour', CHANNEL_DIM]),
+      metrics: metrics(['sessions', 'keyEvents']),
+      limit: 10000,
     },
   ];
 }
@@ -232,6 +269,31 @@ export function normalizeTrafficReport(reports, { property, range, compareRange,
     return out;
   });
 
+  const [geoReport, deviceReport, visitorReport, eventReport, timeReport] = rest.slice(7, 12);
+  // Rows with the four B metrics, keyed by the leading dimension names.
+  const breakdown = (report, keys) => rowsOf(report).map((row) => {
+    const values = dimVals(row);
+    const out = Object.fromEntries(keys.map((k, i) => [k, values[i]]));
+    out.channel = values[keys.length];
+    out.sessions = num(row.metricValues?.[0]?.value);
+    out.users = num(row.metricValues?.[1]?.value);
+    out.engagedSessions = num(row.metricValues?.[2]?.value);
+    out.keyEvents = num(row.metricValues?.[3]?.value);
+    return out;
+  });
+  const geo = breakdown(geoReport, ['country', 'region', 'city']);
+  const devices = breakdown(deviceReport, ['device']);
+  const visitorTypes = breakdown(visitorReport, ['type']);
+  const keyEventNames = rowsOf(eventReport).map((row) => {
+    const [event, channel] = dimVals(row);
+    return { event, channel, keyEvents: num(row.metricValues?.[0]?.value) };
+  }).filter((e) => e.keyEvents > 0);
+  // GA dayOfWeek: '0' = Sunday … '6' = Saturday; hour '00'…'23' in the property's time zone.
+  const timeGrid = rowsOf(timeReport).map((row) => {
+    const [day, hour, channel] = dimVals(row);
+    return { day: Number(day), hour: Number(hour), channel, sessions: num(row.metricValues?.[0]?.value), keyEvents: num(row.metricValues?.[1]?.value) };
+  }).filter((t) => t.day >= 0 && t.day <= 6 && t.hour >= 0 && t.hour <= 23);
+
   const warnings = [];
   const paidWarning = suspectedPaidWarning(sources);
   if (paidWarning) warnings.push(paidWarning);
@@ -256,6 +318,11 @@ export function normalizeTrafficReport(reports, { property, range, compareRange,
     series: { labels: buckets.map((b) => b.label), byChannel },
     sources,
     landingPages,
+    geo,
+    devices,
+    visitorTypes,
+    keyEventNames,
+    timeGrid,
     warnings,
     dataQuality,
     fetchedAt: new Date().toISOString(),

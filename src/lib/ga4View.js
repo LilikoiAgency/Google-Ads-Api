@@ -37,6 +37,76 @@ function deltasFor(cur, prev) {
   return out;
 }
 
+// Adds up breakdown rows (geo / device / new vs returning) in the view by a
+// grouping key. Users are summed across channels, so they are approximate.
+function rollup(rows, viewKey, keyOf, init) {
+  const map = new Map();
+  for (const r of rows || []) {
+    if (!inView(r.channel, viewKey)) continue;
+    const k = keyOf(r);
+    const e = map.get(k) || { ...init(r), sessions: 0, users: 0, engagedSessions: 0, keyEvents: 0 };
+    e.sessions += r.sessions;
+    e.users += r.users;
+    e.engagedSessions += r.engagedSessions;
+    e.keyEvents += r.keyEvents;
+    map.set(k, e);
+  }
+  const list = [...map.values()].sort((a, b) => b.sessions - a.sessions);
+  const total = list.reduce((s, e) => s + e.sessions, 0);
+  return list.map((e) => ({
+    ...e,
+    share: total > 0 ? e.sessions / total : 0,
+    engagementRate: e.sessions > 0 ? e.engagedSessions / e.sessions : 0,
+    keyEventRate: e.sessions > 0 ? e.keyEvents / e.sessions : 0,
+  }));
+}
+
+const DEVICE_LABELS = { desktop: 'Desktop', mobile: 'Mobile', tablet: 'Tablet', 'smart tv': 'Smart TV' };
+const VISITOR_LABELS = { new: 'New visitors', returning: 'Returning visitors' };
+const label = (map, v) => map[String(v).toLowerCase()] || (v && v !== '(not set)' ? v : 'Unknown');
+
+// Audience breakdowns for one view. null when the report predates them.
+export function selectAudience(report, viewKey) {
+  if (!report || !Array.isArray(report.geo)) return null;
+  const cities = rollup(report.geo, viewKey, (r) => `${r.country}|${r.region}|${r.city}`,
+    (r) => ({ city: r.city, region: r.region, country: r.country })).slice(0, TOP_N);
+  const regions = rollup(report.geo, viewKey, (r) => `${r.country}|${r.region}`,
+    (r) => ({ region: r.region, country: r.country })).slice(0, 15);
+  const devices = rollup(report.devices, viewKey, (r) => label(DEVICE_LABELS, r.device),
+    (r) => ({ device: label(DEVICE_LABELS, r.device) }));
+  const visitorTypes = rollup(report.visitorTypes, viewKey, (r) => label(VISITOR_LABELS, r.type),
+    (r) => ({ type: label(VISITOR_LABELS, r.type) }));
+
+  const eventMap = new Map();
+  for (const e of report.keyEventNames || []) {
+    if (!inView(e.channel, viewKey)) continue;
+    eventMap.set(e.event, (eventMap.get(e.event) || 0) + e.keyEvents);
+  }
+  const eventTotal = [...eventMap.values()].reduce((s, n) => s + n, 0);
+  const keyEvents = [...eventMap].sort((a, b) => b[1] - a[1])
+    .map(([event, count]) => ({ event, count, share: eventTotal > 0 ? count / eventTotal : 0 }));
+
+  // 7 x 24 grid, rows Monday..Sunday (GA day 1..6, 0).
+  const sessions = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  const conversions = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (const t of report.timeGrid || []) {
+    if (!inView(t.channel, viewKey)) continue;
+    const row = (t.day + 6) % 7;
+    sessions[row][t.hour] += t.sessions;
+    conversions[row][t.hour] += t.keyEvents;
+  }
+  const max = Math.max(0, ...sessions.flat());
+
+  return {
+    cities,
+    regions,
+    devices,
+    visitorTypes,
+    keyEvents,
+    heatmap: { days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], sessions, keyEvents: conversions, max },
+  };
+}
+
 export function selectView(report, viewKey) {
   const view = VIEWS.find((v) => v.key === viewKey);
   if (!view) throw new Error(`Unknown view: ${viewKey}`);
@@ -89,5 +159,6 @@ export function selectView(report, viewKey) {
     sources: sources.slice(0, TOP_N),
     pages,
     suspected,
+    audience: selectAudience(report, viewKey),
   };
 }
