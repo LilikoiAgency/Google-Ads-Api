@@ -64,7 +64,7 @@ describe("ga4 routes", () => {
       property: prop, startDate: "2026-10-01", endDate: "2026-10-31", compare: "prev", granularity: "day",
     });
     expect(setCached).toHaveBeenCalledWith(
-      "ga4:v2:report:properties/1:2026-10-01:2026-10-31:prev:day", { ok: true }, 6 * 60 * 60 * 1000);
+      "ga4:v3:report:properties/1:2026-10-01:2026-10-31:prev:day", { ok: true }, 6 * 60 * 60 * 1000);
   });
 
   it("refetches properties fresh once when cached list lacks the property", async () => {
