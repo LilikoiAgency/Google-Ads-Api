@@ -261,18 +261,13 @@ export default function OrganicPage() {
       // Otherwise selectedSite stays "" → picker screen will show
     };
 
-    const cached = sessionStorage.getItem("gsc_sites_list");
-    if (cached) {
-      try { loadSites(JSON.parse(cached)); return; } catch {}
-    }
-
+    // Always fetch fresh: a cached list hides properties shared after the tab opened.
+    sessionStorage.removeItem("gsc_sites_list");
     fetch("/api/gsc-sites")
       .then((r) => r.json())
       .then((d) => {
         if (!d.connected) { setGscConnected(false); return; }
-        const list = d.sites || [];
-        sessionStorage.setItem("gsc_sites_list", JSON.stringify(list));
-        loadSites(list);
+        loadSites(d.sites || []);
       })
       .catch(() => setGscConnected(false));
   }, [status]);
