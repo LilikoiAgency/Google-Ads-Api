@@ -172,3 +172,14 @@ describe('review fixes', () => {
     expect(r.pages[0].keywords[0]).toMatchObject({ volume: null, position: 8, ranking_page: '/panel' });
   });
 });
+
+describe('guardTargets exclusions and the agency picks', () => {
+  it('keeps a keyword the agency chose even when it matches an exclusion, with its role', () => {
+    const input = targetsInput(crawl, { keywords }, opts);
+    const out = guardTargets([{ page: '/panel', keywords: [
+      { keyword: 'panel upgrade tampa', role: 'primary', note: 'chosen' },
+      { keyword: 'electrical panel upgrade', role: 'secondary', note: '' },
+    ], conflicts: [] }], input, { exclude: ['panel upgrade'] });
+    expect(out[0].keywords).toEqual([{ keyword: 'panel upgrade tampa', role: 'primary', note: 'chosen', given: true }]);
+  });
+});

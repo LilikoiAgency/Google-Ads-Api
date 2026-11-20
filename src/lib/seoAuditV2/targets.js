@@ -97,7 +97,7 @@ export function guardTargets(outTargets, input, { exclude } = {}) {
     for (const k of out.keywords || []) {
       const keyword = normKeyword(k?.keyword);
       if (!keyword || !allowed.has(keyword) || seen.has(keyword) || !ROLES.includes(k.role)) continue;
-      if (matchesExclusion({ title: keyword }, exclude)) continue;
+      if (!givenSet.has(keyword) && matchesExclusion({ title: keyword }, exclude)) continue; // the agency's own picks stay
       let role = k.role;
       if (role === 'primary' && primary) role = 'secondary';
       if (!givenSet.has(keyword)) {
