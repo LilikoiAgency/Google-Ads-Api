@@ -5,6 +5,7 @@ import { authOptions, allowedEmailDomain } from "../../../../lib/auth";
 import dbConnect from "../../../../lib/mongoose";
 import { listOpenJobs } from "../../../../lib/seoAuditV2/jobStore";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
+import { jobCanReplan } from "../../../../lib/seoAuditV2/auditStore";
 
 const DB = "tokensApi";
 const COLLECTION = "SeoAudits";
@@ -47,7 +48,8 @@ export async function GET(request) {
     if (!doc) {
       return NextResponse.json({ error: "Audit not found", requestId }, { status: 404 });
     }
-    return NextResponse.json({ ...doc, requestId });
+    const canReplan = doc.jobId ? await jobCanReplan(doc.jobId).catch(() => false) : false;
+    return NextResponse.json({ ...doc, canReplan, requestId });
   }
 
   // ── List audits (metadata only — exclude heavy fields) ─────────────────
@@ -59,7 +61,7 @@ export async function GET(request) {
   const [saved, openJobs] = await Promise.all([
     db
       .collection(COLLECTION)
-      .find(query, { projection: { crawlData: 0, auditResult: 0 } })
+      .find(query, { projection: { crawlData: 0, auditResult: 0, previousResults: 0 } })
       .sort({ createdAt: -1 })
       .limit(50)
       .toArray(),
