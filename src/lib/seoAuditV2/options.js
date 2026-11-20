@@ -124,7 +124,7 @@ export function parseAuditOptions(raw, domain) {
   };
 }
 
-export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property || Array.isArray(o.locations));
+export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property || Array.isArray(o.locations) || o.targets?.length > 0);
 export const hasTargets = (o) => Array.isArray(o?.targets) && o.targets.length > 0;
 
 // How many pages the crawl may fetch.

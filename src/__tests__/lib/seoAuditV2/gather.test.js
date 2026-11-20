@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const m = vi.hoisted(() => ({
   findGscSite: vi.fn(), findGa4Property: vi.fn(), summarizeGsc: vi.fn(), summarizeGa4: vi.fn(),
   fetchTrafficReport: vi.fn(), joinPagesToQueries: vi.fn(), inspectUrls: vi.fn(), listGoogleSitemaps: vi.fn(),
-  ga4PerPage: vi.fn(), fetchPageSpeed: vi.fn(), query: vi.fn(), fetchReviews: vi.fn(), fetchKeywordData: vi.fn(),
+  ga4PerPage: vi.fn(), fetchPageSpeed: vi.fn(), query: vi.fn(), fetchReviews: vi.fn(), fetchKeywordData: vi.fn(), gscOnlyKeywordData: vi.fn(),
 }));
 
 vi.mock('googleapis', () => ({ google: { webmasters: () => ({ searchanalytics: { query: m.query } }) } }));
@@ -22,7 +22,7 @@ vi.mock('@/lib/seoAuditV2/reviews', () => ({
   fetchReviews: m.fetchReviews,
   businessCity: (locs) => { const l = (locs || []).find((x) => x.city); return l ? { city: l.city, region: l.region } : null; },
 }));
-vi.mock('@/lib/seoAuditV2/keywords', () => ({ fetchKeywordData: m.fetchKeywordData }));
+vi.mock('@/lib/seoAuditV2/keywords', () => ({ fetchKeywordData: m.fetchKeywordData, gscOnlyKeywordData: m.gscOnlyKeywordData }));
 
 import { AUDIT_PROFILES, gatherAll, describeGaps, seedPages } from '@/lib/seoAuditV2/gather';
 
@@ -314,10 +314,31 @@ describe('gather keyword data', () => {
     m.fetchKeywordData.mockResolvedValue({ status: 'not_connected' });
     let { data, gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick', targets });
     expect(m.fetchKeywordData.mock.calls[0][0].gscRows).toBeNull();
-    expect(data.keywords).toBeNull();
+    expect(m.gscOnlyKeywordData).toHaveBeenCalledWith(targets, null);
+    expect(data.keywords).toBeUndefined(); // the mock returns nothing
     expect(describeGaps(gaps)).toContain('Keyword search volumes unavailable: Google Ads is not connected.');
     m.fetchKeywordData.mockRejectedValue(new Error('quota'));
     ({ gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick', targets }));
+    expect(gaps).toContainEqual({ source: 'keyword_planner', status: 'error', detail: 'quota' });
+  });
+});
+
+describe('gather keyword data fallback', () => {
+  it('keeps Search Console positions when Keyword Planner fails', async () => {
+    const targets = [{ url: 'https://x.com/panel', keywords: ['panel upgrade tampa'] }];
+    m.fetchPageSpeed.mockResolvedValue({ status: 'ok', url: 'u' });
+    m.findGscSite.mockResolvedValue({ status: 'ok', site: 'sc-domain:x.com', auth: {} });
+    const rows = [{ keys: ['https://x.com/panel', 'panel upgrade tampa'], clicks: 1, impressions: 50, position: 9 }];
+    m.query.mockResolvedValue({ data: { rows } });
+    m.summarizeGsc.mockReturnValue({ summary: true });
+    m.joinPagesToQueries.mockReturnValue([]);
+    m.inspectUrls.mockResolvedValue({ status: 'ok', results: [] });
+    m.listGoogleSitemaps.mockResolvedValue({ status: 'ok', sitemaps: [] });
+    m.fetchKeywordData.mockResolvedValue({ status: 'error', error: 'quota' });
+    m.gscOnlyKeywordData.mockReturnValue({ geo: null, volumes: false, targets: [] });
+    const { data, gaps } = await gatherAll({ domain: 'x.com', crawl, profile: 'quick', targets });
+    expect(m.gscOnlyKeywordData).toHaveBeenCalledWith(targets, rows);
+    expect(data.keywords).toEqual({ geo: null, volumes: false, targets: [] });
     expect(gaps).toContainEqual({ source: 'keyword_planner', status: 'error', detail: 'quota' });
   });
 });

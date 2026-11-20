@@ -133,3 +133,27 @@ describe('normKeyword', () => {
     expect(normKeyword('  Panel   Upgrade ')).toBe('panel upgrade');
   });
 });
+
+describe('review fixes', () => {
+  it("prefers the target page's own position over a sibling page's", () => {
+    const kw = {
+      geo: 'Tampa, Florida',
+      targets: [{
+        page: '/panel', url: 'https://x.com/panel', mode: 'given',
+        given: [{ keyword: 'electrician tampa', volume: 500, competition: 'low', search_console: [{ page: '/', position: 3, clicks: 50, impressions: 900 }] }],
+        page_queries: [{ query: 'electrician tampa', clicks: 1, impressions: 40, position: 18 }],
+        ideas: [],
+      }],
+    };
+    const r = buildTargetsResult({ targetOptions: [{ url: 'https://x.com/panel', keywords: ['electrician tampa'] }], keywordData: kw, guarded: null, plan: [] });
+    expect(r.pages[0].keywords[0]).toMatchObject({ position: 18, ranking_page: '/panel', clicks: 1 });
+  });
+
+  it('Search Console only data (no volumes) still gives positions and tells the pass demand is unknown', () => {
+    const kw = { geo: null, volumes: false, targets: [{ page: '/panel', url: 'https://x.com/panel', mode: 'given', given: [{ keyword: 'panel upgrade tampa', volume: null, competition: null, search_console: [{ page: '/panel', position: 8, clicks: 2, impressions: 60 }] }], page_queries: [], ideas: [] }] };
+    expect(targetsInput(crawl, { keywords: kw }, opts).note).toMatch(/unavailable/);
+    const r = buildTargetsResult({ targetOptions: opts, keywordData: kw, guarded: null, plan: [] });
+    expect(r.volumes_for).toBeNull();
+    expect(r.pages[0].keywords[0]).toMatchObject({ volume: null, position: 8, ranking_page: '/panel' });
+  });
+});

@@ -172,3 +172,11 @@ describe('target keywords', () => {
     expect(parseAuditOptions({ targets: [{ page: '/a', keywords: 'x'.repeat(81) }] }, 'site.com').error).toMatch(/under 80/);
   });
 });
+
+describe('targets-only options', () => {
+  it('count as options and are described', () => {
+    const o = { pages: [], skip: [], targets: [{ page: '/a', keywords: [] }] };
+    expect(hasOptions(o)).toBe(true);
+    expect(describeOptions(o)).toBe('target keywords for 1 page');
+  });
+});

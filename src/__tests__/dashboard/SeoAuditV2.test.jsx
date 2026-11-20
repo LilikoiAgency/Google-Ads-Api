@@ -183,7 +183,7 @@ describe('ActionPlan', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { downloadName = this.download; });
     render(<ActionPlan tasks={TASKS} domain="acme.com" auditDate="2026-11-18" />);
     fireEvent.click(screen.getByRole('button', { name: /download csv/i }));
-    expect(tasksToCsv).toHaveBeenCalledWith(TASKS);
+    expect(tasksToCsv).toHaveBeenCalledWith(TASKS, { phases: expect.any(Map) });
     expect(createObjectURL).toHaveBeenCalled();
     expect(downloadName).toBe('acme.com SEO action plan 2026-11-18.csv');
     clickSpy.mockRestore();

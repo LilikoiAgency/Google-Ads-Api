@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { tasksToCsv } from "@/lib/seoAuditV2/tasks";
-import { buildRoadmap } from "@/lib/seoAuditV2/roadmap";
+import { buildRoadmap, phaseByTaskId } from "@/lib/seoAuditV2/roadmap";
 import p from "./plan.module.css";
 
 export const CATEGORY_META = {
@@ -230,6 +230,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId
   // Phases come from the whole plan, so filtering never moves a task to another month.
   const roadmap = useMemo(() => buildRoadmap(tasks), [tasks]);
   const phaseOf = useMemo(() => new Map(roadmap.flatMap((ph) => ph.tasks.map((t) => [t.id, ph]))), [roadmap]);
+  const phaseLabels = useMemo(() => phaseByTaskId(tasks), [tasks]);
 
   const categories = useMemo(() => {
     const counts = new Map();
@@ -271,7 +272,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId
 
   function handleCsv() {
     const date = auditDate || new Date().toISOString().slice(0, 10);
-    downloadCsv(tasksToCsv(visible), `${domain} SEO action plan ${date}.csv`);
+    downloadCsv(tasksToCsv(visible, { phases: phaseLabels }), `${domain} SEO action plan ${date}.csv`);
   }
 
   if (!tasks.length) {

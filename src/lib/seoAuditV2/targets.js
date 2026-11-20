@@ -62,7 +62,7 @@ export function targetsInput(crawl, data, targetOptions) {
   return {
     volumes_for: kw?.geo || null,
     ...(has(data?.gsc?.range) ? { search_period: data.gsc.range } : {}),
-    ...(kw ? {} : { note: 'Keyword Planner data is unavailable: there are no monthly searches or keyword ideas. Work from the page and Search Console only and say that search demand could not be checked.' }),
+    ...(kw && kw.volumes !== false ? {} : { note: 'Keyword Planner data is unavailable: there are no monthly searches or keyword ideas. Work from the page and Search Console only and say that search demand could not be checked.' }),
     targets,
     other_pages: pages
       .filter((p) => !targetPaths.has(pathKey(pageUrl(p))))
@@ -135,16 +135,18 @@ export function buildTargetsResult({ targetOptions, keywordData, guarded, plan }
     const keywords = (g?.keywords?.length ? g.keywords : fallback).map((x) => {
       const r = rows.get(x.keyword);
       const sc = r?.search_console || [];
-      const best = sc.find((s) => s.page === page) || sc[0] || null;
-      const own = pageQueries.get(x.keyword);
+      // The target page's own numbers first (its query list is longer than the
+      // per-keyword top pages); another page only when the target has none.
+      const ownQuery = pageQueries.get(x.keyword);
+      const best = sc.find((s) => s.page === page) || (ownQuery ? { ...ownQuery, page } : null) || sc[0] || null;
       return {
         ...x,
         volume: r?.volume ?? null,
         competition: r?.competition ?? null,
-        position: best?.position ?? own?.position ?? null,
-        ranking_page: best ? best.page : own ? page : null,
-        clicks: best?.clicks ?? own?.clicks ?? null,
-        impressions: best?.impressions ?? own?.impressions ?? null,
+        position: best?.position ?? null,
+        ranking_page: best ? best.page : null,
+        clicks: best?.clicks ?? null,
+        impressions: best?.impressions ?? null,
       };
     }).sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || (b.volume ?? -1) - (a.volume ?? -1));
     const taskIds = flat

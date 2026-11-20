@@ -128,6 +128,28 @@ export async function fetchKeywordData({ targets, gscRows = null, city = null, c
   return { status: 'ok', keywords: { geo: geo.name, targets: out } };
 }
 
+// Search Console numbers alone, for when Keyword Planner is unavailable: the same
+// shape as fetchKeywordData's keywords, with no volumes or ideas (volumes: false).
+export function gscOnlyKeywordData(targets, gscRows) {
+  if (!targets?.length || !gscRows) return null;
+  const gsc = indexGscRows(gscRows);
+  return {
+    geo: null,
+    volumes: false,
+    targets: targets.map((t) => {
+      const given = (t.keywords || []).map(normKeyword).filter(Boolean);
+      return {
+        page: pathKey(t.url),
+        url: t.url,
+        mode: given.length ? 'given' : 'recommend',
+        given: given.map((k) => ({ keyword: k, volume: null, competition: null, search_console: gsc.keywordPages(k) })),
+        page_queries: gsc.pageQueries(pathKey(t.url)),
+        ideas: [],
+      };
+    }),
+  };
+}
+
 // City-level volumes when the business's city is known; null falls back to the US.
 async function findGeo(customer, city) {
   if (!city?.city) return null;

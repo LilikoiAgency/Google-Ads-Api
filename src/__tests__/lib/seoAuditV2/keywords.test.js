@@ -108,3 +108,16 @@ describe('fetchKeywordData', () => {
     expect(out.keywords.geo).toBe('United States');
   });
 });
+
+describe('gscOnlyKeywordData', () => {
+  it('builds the keyword shape from Search Console rows, with no volumes', async () => {
+    const { gscOnlyKeywordData } = await import('@/lib/seoAuditV2/keywords');
+    const rows = [{ keys: ['https://x.com/panel', 'panel upgrade tampa'], clicks: 2, impressions: 60, position: 8 }];
+    const out = gscOnlyKeywordData([{ url: 'https://x.com/panel', keywords: ['Panel Upgrade Tampa'] }], rows);
+    expect(out).toMatchObject({ geo: null, volumes: false });
+    expect(out.targets[0]).toMatchObject({ page: '/panel', mode: 'given', ideas: [] });
+    expect(out.targets[0].given[0]).toEqual({ keyword: 'panel upgrade tampa', volume: null, competition: null, search_console: [{ page: '/panel', clicks: 2, impressions: 60, position: 8 }] });
+    expect(out.targets[0].page_queries[0].query).toBe('panel upgrade tampa');
+    expect(gscOnlyKeywordData([{ url: 'https://x.com/a', keywords: [] }], null)).toBeNull();
+  });
+});

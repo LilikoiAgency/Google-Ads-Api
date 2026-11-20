@@ -43,8 +43,9 @@ export function fromAuditOptions(o) {
   const path = (u) => {
     try { return new URL(u).pathname + new URL(u).search; } catch { return u; }
   };
-  // Target pages are added to pages on the server; list them only under target keywords.
-  const targetUrls = new Set((o.targets || []).map((t) => t.url));
+  // Target pages are added to pages on the server; list them only under target
+  // keywords. With "only these pages" the list stays whole, so the box stays ticked.
+  const targetUrls = new Set(o.onlyListed ? [] : (o.targets || []).map((t) => t.url));
   return {
     pagesText: (o.pages || []).filter((u) => !targetUrls.has(u)).map(path).join("\n"),
     onlyListed: !!o.onlyListed,

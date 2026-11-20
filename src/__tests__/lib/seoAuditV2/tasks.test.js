@@ -166,3 +166,10 @@ describe('page keys', () => {
     expect(isEmptyTask(t({ why: 'w' }))).toBe(false);
   });
 });
+
+describe('tasksToCsv periods', () => {
+  it('uses the whole plan periods when given, so a filtered export matches the screen', () => {
+    const rows = tasksToCsv([t({ id: 'T5', title: 'one' })], { phases: new Map([['T5', 'Days 31–60']]) }).split('\n');
+    expect(rows[1].startsWith('T5,1,Days 31–60,one,')).toBe(true);
+  });
+});

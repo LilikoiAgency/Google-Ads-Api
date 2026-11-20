@@ -10,7 +10,7 @@ import { fetchPageSpeed } from './pagespeed';
 import { filterSkipped } from './options';
 import { pathKey } from './tasks';
 import { fetchReviews, businessCity } from './reviews';
-import { fetchKeywordData } from './keywords';
+import { fetchKeywordData, gscOnlyKeywordData } from './keywords';
 
 export const AUDIT_PROFILES = {
   quick: { pages: 5, inspect: 5, pagespeed: 2, effort: 'medium' },
@@ -212,7 +212,11 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
 
     if (keywords) {
       if (keywords.status === 'ok') data.keywords = keywords.keywords;
-      else gap('keyword_planner', keywords.status, keywords.error || '');
+      else {
+        gap('keyword_planner', keywords.status, keywords.error || '');
+        // Keep where the site shows up today even without search volumes.
+        data.keywords = gscOnlyKeywordData(targets, gsc.status === 'ok' ? gsc.rows : null);
+      }
     }
 
     if (pagespeed.status !== 'ok') gap('pagespeed', pagespeed.status, pagespeed.error || '');

@@ -129,8 +129,10 @@ function csvCell(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function tasksToCsv(tasks) {
-  const phase = phaseByTaskId(tasks);
+export function tasksToCsv(tasks, { phases = null } = {}) {
+  // phases: id -> period label from the whole plan, so a filtered export keeps
+  // each task in the same period as the screen.
+  const phase = phases || phaseByTaskId(tasks);
   const header = ['ID', 'Priority', 'When', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Why', 'Evidence', 'Part of'];
   const row = (t, rank, parent = '') => [
     t.id, rank, phase.get(t.id) || '', t.title, t.page, t.category, t.impact, t.effort, t.confidence,
