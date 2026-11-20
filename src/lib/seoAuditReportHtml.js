@@ -218,7 +218,15 @@ ${kids.length ? `<p class="lbl">${esc(kidsLabel)}</p>${kids.map((c) => taskCard(
 const DARK = '--bg:#0c0618;--bg2:radial-gradient(ellipse at 20% 0%,#2a1055 0%,#140a2b 40%,#0c0618 100%);--panel:rgba(255,255,255,.035);--panel2:rgba(255,255,255,.06);--line:rgba(255,255,255,.08);--ink:#f4f2fa;--ink2:#d6d1e3;--muted:#9a94ad;--dim:#6b6580;--acc:#a78bfa;--accInk:#c4b5fd;--accSoft:rgba(124,58,237,.25);--track:rgba(255,255,255,.07);--up:#34d399;--upSoft:rgba(52,211,153,.1);--down:#fb7185;--amber:#fbbf24;--warnbg:rgba(251,191,36,.08)';
 const LIGHT = '--bg:#ffffff;--bg2:#ffffff;--panel:#ffffff;--panel2:#f4f4f5;--line:#e4e4e7;--ink:#09090b;--ink2:#3f3f46;--muted:#71717a;--dim:#a1a1aa;--acc:#7c3aed;--accInk:#6d28d9;--accSoft:rgba(124,58,237,.1);--track:#f1f1f4;--up:#16a34a;--upSoft:rgba(22,163,74,.08);--down:#dc2626;--amber:#b45309;--warnbg:#fffbeb';
 
-export function generateSeoReportHtml(result, { kind = 'client' } = {}) {
+// Data gaps, plus how many tasks the agency hid from this plan (full report only).
+function gapsHtml(gaps, hiddenCount) {
+  const lines = (gaps || []).map(esc);
+  if (hiddenCount > 0) lines.push(`${hiddenCount} task${hiddenCount === 1 ? '' : 's'} hidden by the agency`);
+  return lines.length ? `<div class="gaps"><p><b>Data gaps</b></p><ul>${lines.map((g) => `<li>${g}</li>`).join('')}</ul></div>` : '';
+}
+
+// result: the plan as shown (corrections already applied by the caller).
+export function generateSeoReportHtml(result, { kind = 'client', hiddenCount = 0 } = {}) {
   const r = result || {};
   const full = kind === 'full';
   const plan = r.action_plan || [];
@@ -236,7 +244,7 @@ export function generateSeoReportHtml(result, { kind = 'client' } = {}) {
   const scoresCard = scoresHtml(r.scores, headline, rest, { reasons: full });
 
   const body = full
-    ? `${r.data_gaps?.length ? `<div class="gaps"><p><b>Data gaps</b></p><ul>${r.data_gaps.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>` : ''}
+    ? `${gapsHtml(r.data_gaps, hiddenCount)}
 <h2>Action plan · ${plan.length} task${plan.length === 1 ? '' : 's'}, highest value first</h2>
 ${plan.map((t) => taskCard(t)).join('')}`
     : clientTasks(plan);
@@ -350,8 +358,8 @@ ${body}
 </main></body></html>`;
 }
 
-export function downloadSeoReport(result, { kind = 'client' } = {}) {
-  const html = generateSeoReportHtml(result, { kind });
+export function downloadSeoReport(result, { kind = 'client', hiddenCount = 0 } = {}) {
+  const html = generateSeoReportHtml(result, { kind, hiddenCount });
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

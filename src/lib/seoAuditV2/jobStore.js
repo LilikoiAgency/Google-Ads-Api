@@ -128,13 +128,15 @@ export async function resetJob(id, job) {
 }
 
 // A job for the domain and type created today (UTC) that is in progress or finished.
-export async function findReusable({ domain, auditType, todayStart }) {
+export async function findReusable({ domain, auditType, todayStart, brief }) {
   const doc = await (await col(JOBS)).findOne(
     {
       domain,
       auditType,
       // Never hand a custom-page audit to a plain request (matches missing or null).
       options: null,
+      // Only an audit run with the same company brief (an old job without one matches null).
+      brief: brief ?? null,
       status: { $in: ['queued', 'running', 'done'] },
       createdAt: { $gte: iso(todayStart) },
     },

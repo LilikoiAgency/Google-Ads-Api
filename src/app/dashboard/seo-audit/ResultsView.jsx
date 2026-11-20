@@ -10,9 +10,10 @@ export function isV2Audit(audit) {
 }
 
 // onBack: return to the audit list (shown as "All audits").
-export default function ResultsView({ audit, crawlData, domain, actions, onBack }) {
+// review: corrections and "Update the plan" for a saved v2 audit (see V2Results).
+export default function ResultsView({ audit, crawlData, domain, actions, onBack, review }) {
   if (!audit) return null;
-  if (isV2Audit(audit)) return <V2Results result={audit} domain={domain} actions={actions} onBack={onBack} />;
+  if (isV2Audit(audit)) return <V2Results result={audit} domain={domain} actions={actions} onBack={onBack} review={review} />;
   const back = onBack ? (
     <button
       type="button"

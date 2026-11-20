@@ -775,3 +775,30 @@ describe('target keywords', () => {
     expect(r.passes_completed).not.toHaveProperty('targets');
   });
 });
+
+describe('company brief', () => {
+  const brief = { services: 'turf', exclude: ['roof repairs'], areas: '', notes: '' };
+
+  it('gather ends the shared context with the brief block', async () => {
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [] });
+    const res = await runStep(job({}, { data: { crawl }, brief }), 'gather');
+    const ctx = res.patch['data.sharedContext'];
+    expect(ctx.endsWith('Do not recommend: roof repairs')).toBe(true);
+    expect(ctx).toContain('## Company brief');
+  });
+
+  it('a pass drops tasks that promote an excluded service and keeps the rest', async () => {
+    m.runStructured.mockResolvedValue({ output: {
+      findings: [],
+      tasks: [task('Add a roof repair page', 'https://acme.com/'), task('Fix the canonical on the home page', 'https://acme.com/')],
+    } });
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' }, brief }), 'pass:technical');
+    expect(res.patch['passes.technical'].tasks.map((t) => t.title)).toEqual(['Fix the canonical on the home page']);
+  });
+
+  it('a pass keeps every task when there is no brief', async () => {
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [task('Add a roof repair page', 'https://acme.com/')] } });
+    const res = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' }, brief: null }), 'pass:technical');
+    expect(res.patch['passes.technical'].tasks).toHaveLength(1);
+  });
+});

@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
@@ -10,7 +10,9 @@ import { SEOAuditIcon } from "../components/DashboardIcons";
 import ResultsView from "./ResultsView";
 import ProgressSteps from "./v2/ProgressSteps";
 import { useAuditJob, friendlyError } from "./v2/useAuditJob";
-import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from "./v2/AdvancedOptions";
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions, bareHost } from "./v2/AdvancedOptions";
+import { loadSavedAudit, finishedAuditView } from "./v2/savedAudit";
+import { sameBrief } from "../../../lib/seoAuditV2/briefs";
 import "../../globals.css";
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -44,6 +46,15 @@ export default function SEOAuditPage() {
   const [auditResult, setAuditResult] = useState(null);
   const [jobId, setJobId] = useState(null);
 
+  // Corrections on the saved audit shown in the results, and "Update the plan".
+  const [auditId, setAuditId] = useState(null);
+  const [corrections, setCorrections] = useState([]);
+  const [canReplan, setCanReplan] = useState(false);
+  const [changedAt, setChangedAt] = useState(null); // last undo, so "Update the plan" shows after one
+  const [replanning, setReplanning] = useState(false);
+  const [replanError, setReplanError] = useState(null);
+  const shownAuditRef = useRef(null); // drops a late reply for an audit no longer shown
+
   // History
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -72,13 +83,85 @@ export default function SEOAuditPage() {
   }, [authStatus]);
 
   // ── Job finished: show its results ─────────────────────────────────────
+  const finishedAuditId = job.progress?.auditId;
   useEffect(() => {
     if (step !== STEPS.PROGRESS || !job.result) return;
-    setCrawlData(null);
-    setAuditResult(job.result);
-    setStep(STEPS.RESULTS);
-    refreshHistory();
-  }, [step, job.result]);
+    // A reused job's audit may have been corrected and re-planned since: show the
+    // saved audit, falling back to the job's own result.
+    let cancelled = false;
+    const id = finishedAuditId || null;
+    shownAuditRef.current = id;
+    finishedAuditView(job.result, id).then((view) => {
+      if (cancelled || shownAuditRef.current !== id) return; // another audit is open now
+      setCrawlData(null);
+      setAuditResult(view.result);
+      setReview(view);
+      setStep(STEPS.RESULTS);
+      refreshHistory();
+    });
+    return () => { cancelled = true; };
+  }, [step, job.result, finishedAuditId]);
+
+  function setReview({ id = null, corrections: list = [], canReplan: can = false, changedAt: changed = null } = {}) {
+    setAuditId(id);
+    shownAuditRef.current = id;
+    setCorrections(list);
+    setCanReplan(can);
+    setChangedAt(changed);
+    setReplanning(false);
+    setReplanError(null);
+  }
+
+  // Add or undo a correction; both return the audit's updated corrections.
+  async function saveCorrection(id, url, init, fallback) {
+    let res;
+    try {
+      res = await fetch(url, init);
+    } catch {
+      throw new Error("Couldn't reach the server. Check your connection and try again.");
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 401 ? "Your session has expired. Sign in again and retry." : body.error || fallback);
+    if (shownAuditRef.current !== id) return;
+    setCorrections(Array.isArray(body.corrections) ? body.corrections : []);
+    if (body.correctionsChangedAt) setChangedAt(body.correctionsChangedAt);
+  }
+
+  function handleCorrect(correction) {
+    return saveCorrection(auditId, `/api/seo-audit/v2/audits/${auditId}/corrections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(correction),
+    }, "Couldn't save the correction. Try again.");
+  }
+
+  function handleUndo(correctionId) {
+    return saveCorrection(auditId, `/api/seo-audit/v2/audits/${auditId}/corrections/${correctionId}`, { method: "DELETE" }, "Couldn't undo. Try again.");
+  }
+
+  async function handleReplan() {
+    const id = auditId;
+    if (replanning || !id) return;
+    setReplanning(true);
+    setReplanError(null);
+    let error = null;
+    let result = null;
+    try {
+      const res = await fetch(`/api/seo-audit/v2/audits/${id}/replan`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.result) result = body.result;
+      else if (res.status === 401) error = "Your session has expired. Sign in again and retry.";
+      else if (res.status === 429) error = "The monthly usage limit is reached. Contact an admin.";
+      else if (res.status === 404) error = "This audit no longer exists.";
+      else error = body.error || "Updating the plan failed. Try again.";
+    } catch {
+      error = "Couldn't reach the server. Check your connection and try again.";
+    }
+    if (shownAuditRef.current !== id) return; // another audit is open now
+    if (result) setAuditResult(result.version ? result : { ...result, version: 2 });
+    setReplanError(error);
+    setReplanning(false);
+  }
 
   // ── Start (or reuse) a v2 audit job ────────────────────────────────────
   async function handleRunAudit(forceRerun = false) {
@@ -87,6 +170,24 @@ export default function SEOAuditPage() {
     setError(null);
     setStarting(true);
     try {
+      // The company brief is saved on its own; the job loads it when it starts.
+      if (advanced.brief && advanced.briefDomain === bareHost(target) && !sameBrief(advanced.brief, advanced.briefLoaded)) {
+        let saved;
+        try {
+          saved = await fetch("/api/seo-audit/v2/brief", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: bareHost(target), brief: advanced.brief }),
+          });
+        } catch {
+          throw new Error("Couldn't save the company brief. Check your connection and try again.");
+        }
+        if (!saved.ok) {
+          const b = await saved.json().catch(() => ({}));
+          throw new Error(b.error || "Couldn't save the company brief.");
+        }
+        setAdvanced((cur) => ({ ...cur, briefLoaded: cur.brief }));
+      }
       let res;
       try {
         res = await fetch("/api/seo-audit/v2/jobs", {
@@ -100,6 +201,7 @@ export default function SEOAuditPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(friendlyError(res.status, body));
       setAuditResult(null);
+      setReview();
       setCrawlData(null);
       setJobId(body.jobId);
       setStep(STEPS.PROGRESS);
@@ -116,6 +218,7 @@ export default function SEOAuditPage() {
     setStep(STEPS.CONFIGURE);
     setCrawlData(null);
     setAuditResult(null);
+    setReview();
     setJobId(null);
     setError(null);
     setDomain("");
@@ -149,12 +252,11 @@ export default function SEOAuditPage() {
     const auditId = item._id;
     setLoadingAuditId(auditId);
     try {
-      const res = await fetch(`/api/seo-audit/history?id=${auditId}`);
-      if (!res.ok) throw new Error("Couldn't load that audit. Try again.");
-      const doc = await res.json();
+      const view = await loadSavedAudit(auditId);
+      const { doc, result } = view;
       setCrawlData(doc.crawlData || null);
-      const result = doc.auditResult;
-      setAuditResult(doc.version === 2 && result && !result.version ? { ...result, version: 2 } : result);
+      setAuditResult(result);
+      setReview(view);
       setDomain(doc.domain || "");
       setAuditType(doc.auditType || "full");
       // "Run again" repeats the same page selection.
@@ -518,7 +620,14 @@ export default function SEOAuditPage() {
 
         {/* ── Step 2: Results (v2 or v1 view, by version) ────────────────── */}
         {step === STEPS.RESULTS && auditResult && (
-          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} onBack={handleBackToAudits} />
+          <ResultsView
+            audit={auditResult}
+            crawlData={crawlData}
+            domain={domain}
+            actions={resultActions}
+            onBack={handleBackToAudits}
+            review={auditId ? { auditId, corrections, changedAt, canReplan, onCorrect: handleCorrect, onUndo: handleUndo, onReplan: handleReplan, replanning, replanError } : undefined}
+          />
         )}
       </div>
     </div>

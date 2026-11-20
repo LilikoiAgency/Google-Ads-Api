@@ -5,9 +5,14 @@
 // jobs API `options` (the server validates against the domain).
 
 import { useEffect, useState } from "react";
+import { sameBrief } from "../../../../lib/seoAuditV2/briefs";
+import { isUsablePhrase } from "../../../../lib/seoAuditV2/corrections";
 import { describeOptions, MAX_LOCATIONS, MAX_TARGETS, MAX_TARGET_KEYWORDS } from "../../../../lib/seoAuditV2/options";
 
-export const EMPTY_ADVANCED = { pagesText: "", onlyListed: false, skipText: "", pageCount: "", gscSite: "", ga4Property: null, locations: null, targets: [] };
+export const EMPTY_ADVANCED = { pagesText: "", onlyListed: false, skipText: "", pageCount: "", gscSite: "", ga4Property: null, locations: null, targets: [],
+  // Company brief: brief = the edited copy (null = untouched), briefLoaded = what was saved when editing started,
+  // briefDomain = the site it was edited for. Saved separately from the audit options.
+  brief: null, briefLoaded: null, briefDomain: "" };
 export const PAGE_COUNTS = [5, 10, 15, 25, 50];
 
 const splitLines = (text) => String(text || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
@@ -58,7 +63,7 @@ export function fromAuditOptions(o) {
   };
 }
 
-const bareHost = (d) => String(d || "").trim().toLowerCase().replace(/^[a-z]+:\/\//, "").split(/[/?#]/)[0].replace(/:\d+$/, "").replace(/^www\./, "");
+export const bareHost = (d) => String(d || "").trim().toLowerCase().replace(/^[a-z]+:\/\//, "").split(/[/?#]/)[0].replace(/:\d+$/, "").replace(/^www\./, "");
 
 // The Search Console property "Automatic" would use for a domain (same order as the server).
 export function autoGscSite(domain, siteUrls) {
@@ -107,6 +112,105 @@ function useLocations(active, domain) {
     return () => { cancelled = true; };
   }, [active, key, state.key]);
   return state.key === key ? state : { key, saved: null, found: [], status: "loading" };
+}
+
+// The saved company brief for the domain, loaded once when the panel opens.
+function useBrief(active, domain) {
+  const [state, setState] = useState({ key: null, brief: null, status: "loading" });
+  const key = bareHost(domain);
+  useEffect(() => {
+    if (!active || !key || state.key === key) return undefined;
+    let cancelled = false;
+    fetch(`/api/seo-audit/v2/brief?domain=${encodeURIComponent(key)}`)
+      .then((r) => r.json().then((b) => ({ ok: r.ok, b })))
+      .then(({ ok, b }) => {
+        if (cancelled) return;
+        setState({ key, brief: ok && b.brief ? b.brief : null, status: ok ? "ok" : "error" });
+      })
+      .catch(() => { if (!cancelled) setState({ key, brief: null, status: "error" }); });
+    return () => { cancelled = true; };
+  }, [active, key, state.key]);
+  return state.key === key ? state : { key, brief: null, status: "loading" };
+}
+
+const EMPTY_BRIEF = { services: "", exclude: [], areas: "", notes: "" };
+const toBrief = (b) => ({ ...EMPTY_BRIEF, ...(b || {}), exclude: [...(b?.exclude || [])] });
+
+// What the agency knows about the business that the homepage doesn't show.
+function BriefEditor({ adv, set, domain, loaded }) {
+  const key = bareHost(domain);
+  const edited = adv.brief && adv.briefDomain === key ? adv.brief : null;
+  const current = toBrief(edited || loaded.brief);
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => { setInput(""); setError(""); }, [key]);
+  // Not editable until the saved brief is known, or an edit would overwrite it with partial text.
+  const locked = loaded.status !== "ok";
+  // The baseline stays what it was when editing began (page.js advances it after each save).
+  const update = (patch) => set({ brief: { ...current, ...patch }, briefLoaded: edited ? adv.briefLoaded : loaded.brief, briefDomain: key });
+  const addExclusion = () => {
+    const phrase = input.trim();
+    if (!phrase) return;
+    if (!isUsablePhrase(phrase)) {
+      setError(phrase.length < 4 ? "Use at least 4 characters for each service not to recommend." : "Each service not to recommend must be 80 characters or fewer.");
+      return;
+    }
+    setError("");
+    if (!current.exclude.some((e) => e.toLowerCase() === phrase.toLowerCase())) update({ exclude: [...current.exclude, phrase] });
+    setInput("");
+  };
+  return (
+    <div>
+      <span style={label}>Company brief</span>
+      <p style={{ ...hint, marginTop: 0, marginBottom: 8 }}>
+        {loaded.status === "loading" ? "Loading the saved brief…" : loaded.status === "error" ? "Couldn't load the saved brief for this site." : "Facts the homepage doesn't show. It is saved for this website and used in every audit."}
+      </p>
+      <div style={{ display: "grid", gap: 12 }}>
+        <div>
+          <label htmlFor="adv-brief-services" style={label}>Services</label>
+          <textarea id="adv-brief-services" rows={3} maxLength={1000} disabled={locked} placeholder="What the business actually sells" value={current.services} onChange={(e) => update({ services: e.target.value })} style={{ ...field, resize: "vertical" }} />
+        </div>
+        <div>
+          <label htmlFor="adv-brief-areas" style={label}>Service areas</label>
+          <input id="adv-brief-areas" type="text" maxLength={300} disabled={locked} placeholder="Tampa, Brandon, Riverview" value={current.areas} onChange={(e) => update({ areas: e.target.value })} style={field} />
+        </div>
+        <div>
+          <label htmlFor="adv-brief-exclude" style={label}>Don&apos;t recommend</label>
+          {current.exclude.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {current.exclude.map((e) => (
+                <span key={e} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "rgba(255,255,255,0.08)", fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
+                  {e}
+                  <button type="button" aria-label={`Remove ${e}`} onClick={() => update({ exclude: current.exclude.filter((x) => x !== e) })} disabled={locked} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              id="adv-brief-exclude"
+              type="text"
+              maxLength={80}
+              disabled={locked}
+              placeholder="A service to never recommend"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addExclusion(); } }}
+              style={field}
+            />
+            <button type="button" aria-label="Add service not to recommend" onClick={addExclusion} disabled={locked || !input.trim()} style={{ ...field, width: "auto", cursor: !locked && input.trim() ? "pointer" : "not-allowed", fontWeight: 600, whiteSpace: "nowrap" }}>
+              Add
+            </button>
+          </div>
+          {error && <p role="alert" style={{ ...hint, color: "#fca5a5" }}>{error}</p>}
+        </div>
+        <div>
+          <label htmlFor="adv-brief-notes" style={label}>Notes</label>
+          <textarea id="adv-brief-notes" rows={2} maxLength={1000} disabled={locked} placeholder="Anything else the audit should know" value={current.notes} onChange={(e) => update({ notes: e.target.value })} style={{ ...field, resize: "vertical" }} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const toPick = (c) => ({ source: "places", id: c.id, name: c.name });
@@ -279,8 +383,13 @@ export default function AdvancedOptions({ value, onChange, auditType, domain }) 
   const auto = autoGscSite(domain, lists.gsc);
   const adv = value || EMPTY_ADVANCED;
   const set = (patch) => onChange({ ...adv, ...patch });
+  const briefLoaded = useBrief(open, domain);
   const opts = toRequestOptions(adv);
-  const summary = describeOptions(opts ? { pageCount: null, ...opts } : null);
+  const optsSummary = describeOptions(opts ? { pageCount: null, ...opts } : null);
+  const briefEdited = !!adv.brief && adv.briefDomain === bareHost(domain);
+  const hasBrief = briefEdited ? !sameBrief(adv.brief, null) : !!briefLoaded.brief;
+  const summary = [optsSummary, hasBrief ? "company brief" : ""].filter(Boolean).join(", ");
+  const clearable = !!optsSummary || briefEdited;
   const hasPages = splitLines(adv.pagesText).length > 0;
   const defaultCount = auditType === "quick" ? 5 : 50;
 
@@ -297,7 +406,7 @@ export default function AdvancedOptions({ value, onChange, auditType, domain }) 
           Advanced
           {!open && summary && <span style={{ color: "#5eead4", fontWeight: 500 }}>· {summary}</span>}
         </button>
-        {summary && (
+        {clearable && (
           <button
             type="button"
             onClick={() => onChange(EMPTY_ADVANCED)}
@@ -397,6 +506,7 @@ export default function AdvancedOptions({ value, onChange, auditType, domain }) 
           </div>
           <TargetsEditor adv={adv} set={set} />
           <LocationPicker adv={adv} set={set} domain={domain} active={open} />
+          <BriefEditor adv={adv} set={set} domain={domain} loaded={briefLoaded} />
         </div>
       )}
     </div>

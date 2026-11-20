@@ -95,6 +95,21 @@ describe('guardTargets', () => {
     expect(out[0].conflicts).toEqual([{ keyword: 'panel upgrade tampa', other_page: '/services', note: 'link it' }]);
   });
 
+  it('skips keywords that contain an excluded phrase', () => {
+    const out = guardTargets([{
+      page: '/panel',
+      keywords: [
+        { keyword: 'panel upgrade tampa', role: 'primary', note: '' },
+        { keyword: 'electrical panel upgrade', role: 'secondary', note: '' },
+      ],
+      conflicts: [],
+    }], input, { exclude: ['electrical panel'] });
+    // a keyword the user gave is still listed; only the model's picks are filtered
+    expect(out[0].keywords).toEqual([{ keyword: 'panel upgrade tampa', role: 'primary', note: '', given: true }]);
+    const kept = guardTargets([{ page: '/panel', keywords: [{ keyword: 'electrical panel upgrade', role: 'secondary', note: '' }] }], input, { exclude: ['roof repairs'] });
+    expect(kept[0].keywords.map((k) => k.keyword)).toEqual(['electrical panel upgrade', 'panel upgrade tampa']);
+  });
+
   it('a missing reply still yields an entry per target page', () => {
     expect(guardTargets(null, input)[0].keywords).toEqual([{ keyword: 'panel upgrade tampa', role: 'secondary', note: '', given: true }]);
   });
@@ -155,5 +170,16 @@ describe('review fixes', () => {
     const r = buildTargetsResult({ targetOptions: opts, keywordData: kw, guarded: null, plan: [] });
     expect(r.volumes_for).toBeNull();
     expect(r.pages[0].keywords[0]).toMatchObject({ volume: null, position: 8, ranking_page: '/panel' });
+  });
+});
+
+describe('guardTargets exclusions and the agency picks', () => {
+  it('keeps a keyword the agency chose even when it matches an exclusion, with its role', () => {
+    const input = targetsInput(crawl, { keywords }, opts);
+    const out = guardTargets([{ page: '/panel', keywords: [
+      { keyword: 'panel upgrade tampa', role: 'primary', note: 'chosen' },
+      { keyword: 'electrical panel upgrade', role: 'secondary', note: '' },
+    ], conflicts: [] }], input, { exclude: ['panel upgrade'] });
+    expect(out[0].keywords).toEqual([{ keyword: 'panel upgrade tampa', role: 'primary', note: 'chosen', given: true }]);
   });
 });

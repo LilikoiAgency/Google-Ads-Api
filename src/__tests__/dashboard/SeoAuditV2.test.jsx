@@ -864,6 +864,119 @@ describe('Advanced: Google Business Profiles picker', () => {
   });
 });
 
+describe('Advanced: company brief', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+  const SAVED = { services: 'Panel upgrades', exclude: ['generator installs'], areas: 'Tampa', notes: '' };
+  const mockBrief = (brief) => {
+    global.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('/v2/brief') ? { brief } : { sites: [], properties: [] }),
+    }));
+  };
+  const open = (value = EMPTY_ADVANCED) => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={value} onChange={onChange} auditType="full" domain="acme.com" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    return onChange;
+  };
+
+  it('loads and shows the saved brief for the domain', async () => {
+    mockBrief(SAVED);
+    open();
+    expect(global.fetch).toHaveBeenCalledWith('/api/seo-audit/v2/brief?domain=acme.com');
+    expect(await screen.findByDisplayValue('Panel upgrades')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Tampa')).toBeInTheDocument();
+    expect(screen.getByText('generator installs')).toBeInTheDocument();
+  });
+
+  it('adding and removing a service not to recommend updates the form', async () => {
+    mockBrief(SAVED);
+    const onChange = open();
+    await screen.findByDisplayValue('Panel upgrades');
+    fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'pool wiring' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      brief: { ...SAVED, exclude: ['generator installs', 'pool wiring'] },
+      briefLoaded: SAVED,
+      briefDomain: 'acme.com',
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove generator installs' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ brief: { ...SAVED, exclude: [] } }));
+  });
+
+  it('rejects an exclusion under 4 characters with a message', async () => {
+    mockBrief(null);
+    const onChange = open();
+    await waitFor(() => expect(screen.getByLabelText("Don't recommend")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
+    expect(screen.getByText('Use at least 4 characters for each service not to recommend.')).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('typing in services reports the edited brief', async () => {
+    mockBrief(null);
+    const onChange = open();
+    await waitFor(() => expect(screen.getByLabelText('Services')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Services'), { target: { value: 'Rewiring' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      brief: { services: 'Rewiring', exclude: [], areas: '', notes: '' }, briefLoaded: null,
+    }));
+  });
+
+  it('keeps the baseline already set instead of resetting it to the fetched brief', async () => {
+    mockBrief(SAVED);
+    const edited = { ...SAVED, services: 'Newer' };
+    const onChange = open({ ...EMPTY_ADVANCED, brief: edited, briefLoaded: edited, briefDomain: 'acme.com' });
+    await waitFor(() => expect(screen.getByLabelText('Services')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Services'), { target: { value: 'Newest' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ briefLoaded: edited }));
+  });
+
+  it('disables the brief fields while the saved brief loads', () => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    open();
+    expect(screen.getByLabelText('Services')).toBeDisabled();
+    expect(screen.getByLabelText('Service areas')).toBeDisabled();
+    expect(screen.getByLabelText("Don't recommend")).toBeDisabled();
+    expect(screen.getByLabelText('Notes')).toBeDisabled();
+  });
+
+  it('keeps the fields disabled and says so when the saved brief fails to load', async () => {
+    global.fetch = vi.fn(async (url) => (String(url).includes('/v2/brief')
+      ? { ok: false, json: async () => ({ error: 'boom' }) }
+      : { ok: true, json: async () => ({ sites: [], properties: [] }) }));
+    open();
+    expect(await screen.findByText("Couldn't load the saved brief for this site.")).toBeInTheDocument();
+    expect(screen.getByLabelText('Services')).toBeDisabled();
+    expect(screen.getByLabelText('Notes')).toBeDisabled();
+  });
+
+  it('limits the brief field lengths', async () => {
+    mockBrief(null);
+    open();
+    await waitFor(() => expect(screen.getByLabelText('Services')).toBeEnabled());
+    expect(screen.getByLabelText('Services')).toHaveAttribute('maxLength', '1000');
+    expect(screen.getByLabelText('Service areas')).toHaveAttribute('maxLength', '300');
+    expect(screen.getByLabelText('Notes')).toHaveAttribute('maxLength', '1000');
+    expect(screen.getByLabelText("Don't recommend")).toHaveAttribute('maxLength', '80');
+  });
+
+  it('clears the exclusion input and its error when the domain changes', async () => {
+    mockBrief(null);
+    const onChange = vi.fn();
+    const { rerender } = render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="full" domain="acme.com" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    await waitFor(() => expect(screen.getByLabelText("Don't recommend")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    rerender(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="full" domain="other.com" />);
+    expect(screen.getByLabelText("Don't recommend")).toHaveValue('');
+    expect(screen.queryByText(/Use at least 4 characters/)).toBeNull();
+  });
+});
+
 describe('ProgressSteps time text', () => {
   it('says 6–10 minutes for full audits only', () => {
     const { unmount } = render(<ProgressSteps progress={{ status: 'running', auditType: 'full', steps: [] }} />);
@@ -921,5 +1034,145 @@ describe('30/60/90 view and target keywords', () => {
   it('no Target keywords tab without targets', () => {
     render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
     expect(screen.queryByRole('tab', { name: /^Target keywords/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('corrections and Update the plan', () => {
+  const PLAN = TASKS.map((t, i) => ({ ...t, source_ids: [`S${i + 1}`] }));
+  const RESULT = { ...V2_RESULT, action_plan: PLAN, top_moves: [{ headline: 'Answer pricing questions on the turf page', task: PLAN[0] }] };
+  const C_RELEVANT = { id: 'c1', kind: 'not_relevant', source_ids: ['S1'], by: 'a@lilikoiagency.com', at: '2026-11-19T10:00:00.000Z' };
+  const C_OFFERED = { id: 'c2', kind: 'not_offered', service: 'localbusiness schema', source_ids: ['S3'], by: 'a@lilikoiagency.com', at: '2026-11-19T10:00:00.000Z' };
+  const review = (o = {}) => ({
+    auditId: 'a1', corrections: [], canReplan: true,
+    onCorrect: vi.fn(async () => {}), onUndo: vi.fn(async () => {}), onReplan: vi.fn(async () => {}),
+    replanning: false, replanError: null, ...o,
+  });
+
+  it('a correction hides the task from the plan, the 30/60/90 view and the top moves', () => {
+    render(<ResultsView audit={RESULT} domain="acme.com" review={review({ corrections: [C_RELEVANT] })} />);
+    expect(screen.queryByText('Add pricing section to turf page')).not.toBeInTheDocument();
+    expect(screen.queryByText('Answer pricing questions on the turf page')).not.toBeInTheDocument();
+    expect(screen.getByText('Fix canonical pointing to staging')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '30 / 60 / 90 days' }));
+    expect(screen.queryByText('Add pricing section to turf page')).not.toBeInTheDocument();
+    expect(screen.getByText('Fix canonical pointing to staging')).toBeInTheDocument();
+  });
+
+  it('without review nothing is hidden and no correction controls show', () => {
+    render(<ResultsView audit={RESULT} domain="acme.com" />);
+    expect(screen.getByText('Add pricing section to turf page')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T1' }));
+    expect(screen.queryByRole('button', { name: 'Not for this business' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Show hidden/)).not.toBeInTheDocument();
+  });
+
+  it('Show hidden lists hidden tasks with the reason, and Undo calls onUndo', () => {
+    const r = review({ corrections: [C_RELEVANT, C_OFFERED] });
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    expect(screen.getByText(/2 hidden/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden' }));
+    expect(screen.getByText('Add pricing section to turf page')).toBeInTheDocument();
+    expect(screen.getByText('Marked not relevant')).toBeInTheDocument();
+    expect(screen.getByText("You don't offer localbusiness schema")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Undo' })[0]);
+    expect(r.onUndo).toHaveBeenCalledWith('c1');
+  });
+
+  it('the form sends the source ids and the edited service', async () => {
+    const r = review();
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    expect(screen.getByLabelText("We don't offer this")).toBeChecked();
+    const service = screen.getByLabelText('Service');
+    expect(service).toHaveValue('pricing section to turf');
+    expect(screen.getByLabelText("Don't recommend it in future audits")).toBeChecked();
+    fireEvent.change(service, { target: { value: 'turf installation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_offered', service: 'turf installation', source_ids: ['S1'], saveToBrief: true }));
+  });
+
+  it("a task's correction also covers its follow-ups' source ids, so a plan update leaves them out too", async () => {
+    const r = review();
+    const withFollowUps = { ...PLAN[1], follow_ups: [{ ...TASKS[2], id: 'T2.1', source_ids: ['S7', 'S8'] }, { ...TASKS[0], id: 'T2.2', source_ids: ['S2'] }] };
+    render(<ResultsView audit={{ ...RESULT, action_plan: [PLAN[0], withFollowUps] }} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    fireEvent.click(screen.getByLabelText('Not relevant here'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_relevant', source_ids: ['S2', 'S7', 'S8'], saveToBrief: false }));
+  });
+
+  it('Not relevant here sends no service and nothing for the brief; a short service is rejected', async () => {
+    const r = review();
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'ab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByText(/at least 4 characters/)).toBeInTheDocument();
+    expect(r.onCorrect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Not relevant here'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_relevant', source_ids: ['S2'], saveToBrief: false }));
+  });
+
+  it('shows the save error from onCorrect inline', async () => {
+    const r = review({ onCorrect: vi.fn(async () => { throw new Error("Couldn't save the correction."); }) });
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    fireEvent.click(screen.getByLabelText('Not relevant here'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText("Couldn't save the correction.")).toBeInTheDocument();
+  });
+
+  it('a correction whose tasks left the plan in an update is listed with Undo', () => {
+    const gone = { ...C_RELEVANT, id: 'c9', source_ids: ['S99'] };
+    const offered = { ...C_OFFERED, id: 'c8', service: 'gutter cleaning', source_ids: ['S98'] };
+    const r = review({ corrections: [gone, offered] });
+    render(<ResultsView audit={{ ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' }} domain="acme.com" review={r} />);
+    expect(screen.getByText(/2 hidden/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden' }));
+    expect(screen.getAllByText('Removed when the plan was updated')).toHaveLength(2);
+    expect(screen.getByText('Marked not relevant')).toBeInTheDocument();
+    expect(screen.getByText("You don't offer gutter cleaning")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Undo' })[0]);
+    expect(r.onUndo).toHaveBeenCalledWith('c9');
+  });
+
+  it('an undo after the last plan update brings back Update the plan', () => {
+    const audit = { ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' };
+    const { unmount } = render(<ResultsView audit={audit} domain="acme.com" review={review({ changedAt: '2026-11-19T11:00:00.000Z' })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+    unmount();
+    const { unmount: u2 } = render(<ResultsView audit={audit} domain="acme.com" review={review({ changedAt: '2026-11-19T13:00:00.000Z' })} />);
+    expect(screen.getByRole('button', { name: 'Update the plan' })).toBeInTheDocument();
+    u2();
+    // Never updated: undoing brings back the plan as it was, nothing to update.
+    render(<ResultsView audit={RESULT} domain="acme.com" review={review({ changedAt: '2026-11-19T13:00:00.000Z' })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+  });
+
+  it('Update the plan appears only after a newer correction and calls onReplan', () => {
+    const old = { ...C_RELEVANT, at: '2026-11-19T10:00:00.000Z' };
+    const { unmount } = render(<ResultsView audit={{ ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' }} domain="acme.com" review={review({ corrections: [old] })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+    unmount();
+
+    const r = review({ corrections: [old] });
+    const { unmount: u2 } = render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    expect(screen.getByText('Rewrites the summary, scores and plan without the hidden work. About a minute.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Update the plan' }));
+    expect(r.onReplan).toHaveBeenCalled();
+    u2();
+
+    const { unmount: u3 } = render(<ResultsView audit={RESULT} domain="acme.com" review={review({ corrections: [old], canReplan: false })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+    u3();
+
+    render(<ResultsView audit={RESULT} domain="acme.com" review={review({ corrections: [old], replanning: true, replanError: 'Updating the plan failed. Try again.' })} />);
+    expect(screen.getByText('Updating the plan…')).toBeInTheDocument();
+    expect(screen.getByText('Updating the plan failed. Try again.')).toBeInTheDocument();
   });
 });
