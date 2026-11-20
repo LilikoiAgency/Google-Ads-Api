@@ -41,13 +41,17 @@ export async function addCorrection(id, correction) {
   return updated ? updated.corrections || [] : null;
 }
 
-/** Removes a correction by id; returns the updated corrections array (null when the audit is gone). */
-export async function removeCorrection(id, correctionId) {
+/**
+ * Removes a correction by id and records when the corrections last changed, so an
+ * undo after a plan update can call for another; returns the updated corrections
+ * array (null when the audit is gone).
+ */
+export async function removeCorrection(id, correctionId, now = new Date()) {
   const _id = oid(id);
   if (!_id) return null;
   const doc = await (await col(AUDITS)).findOneAndUpdate(
     { _id },
-    { $pull: { corrections: { id: correctionId } } },
+    { $pull: { corrections: { id: correctionId } }, $set: { correctionsChangedAt: now.toISOString() } },
     { returnDocument: 'after', projection: { corrections: 1 } }
   );
   const updated = doc && 'value' in doc && !doc._id ? doc.value : doc;

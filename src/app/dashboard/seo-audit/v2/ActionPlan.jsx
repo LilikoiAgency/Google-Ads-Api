@@ -255,10 +255,13 @@ const hiddenReason = (c) => (c?.kind === "not_offered"
   : "Marked not relevant");
 
 // "N hidden · Show hidden" and the greyed list of hidden tasks, each with Undo.
-function HiddenTasks({ hidden, onUndo }) {
+// removed: corrections whose tasks left the plan when it was updated, so they
+// can still be undone.
+function HiddenTasks({ hidden = [], removed = [], onUndo }) {
   const [show, setShow] = useState(false);
   const [error, setError] = useState(null);
-  if (!hidden?.length) return null;
+  const count = hidden.length + removed.length;
+  if (!count) return null;
   async function undo(id) {
     setError(null);
     try {
@@ -270,7 +273,7 @@ function HiddenTasks({ hidden, onUndo }) {
   return (
     <div>
       <p className={p.hiddenBar}>
-        <span>{hidden.length} hidden · </span>
+        <span>{count} hidden · </span>
         <button type="button" className={p.linkBtn} aria-expanded={show} onClick={() => setShow((v) => !v)}>
           {show ? "Hide hidden" : "Show hidden"}
         </button>
@@ -285,6 +288,15 @@ function HiddenTasks({ hidden, onUndo }) {
               <span className={p.hiddenReason}>{hiddenReason(correction)}</span>
               {onUndo && correction?.id && (
                 <button type="button" className={p.secondary} onClick={() => undo(correction.id)}>Undo</button>
+              )}
+            </li>
+          ))}
+          {removed.map((c, i) => (
+            <li key={`removed-${c.id || i}`} className={p.hiddenItem}>
+              <span className={p.hiddenTitle}>Removed when the plan was updated</span>
+              <span className={p.hiddenReason}>{hiddenReason(c)}</span>
+              {onUndo && c.id && (
+                <button type="button" className={p.secondary} onClick={() => undo(c.id)}>Undo</button>
               )}
             </li>
           ))}
@@ -344,9 +356,9 @@ function SubTasks({ task, domain, notice, onCopy, onCorrect }) {
 }
 
 // focusId: a task to show opened (from another tab); a nested id (T2.1) opens its parent.
-// hidden / onCorrect / onUndo: corrections on a saved audit; without them the
+// hidden / removed / onCorrect / onUndo: corrections on a saved audit; without them the
 // plan shows no correction controls.
-export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId = null, hidden = [], onCorrect, onUndo }) {
+export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId = null, hidden = [], removed = [], onCorrect, onUndo }) {
   const [category, setCategory] = useState("");
   const [page, setPage] = useState("");
   const [quickOnly, setQuickOnly] = useState(false);
@@ -402,7 +414,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId
     downloadCsv(tasksToCsv(visible, { phases: phaseLabels }), `${domain} SEO action plan ${date}.csv`);
   }
 
-  const hiddenTasks = <HiddenTasks hidden={hidden} onUndo={onUndo} />;
+  const hiddenTasks = <HiddenTasks hidden={hidden} removed={removed} onUndo={onUndo} />;
 
   if (!tasks.length) {
     return (

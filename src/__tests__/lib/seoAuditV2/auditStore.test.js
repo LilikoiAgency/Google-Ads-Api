@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const c = { updateOne: vi.fn(), findOne: vi.fn() };
+const c = { updateOne: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn() };
 vi.mock('@/lib/mongoose', () => ({ default: vi.fn(async () => ({ db: () => ({ collection: () => c }) })) }));
 
 const store = await import('@/lib/seoAuditV2/auditStore');
@@ -29,6 +29,15 @@ describe('claimReplan', () => {
     c.updateOne.mockResolvedValue({ modifiedCount: 0 });
     expect(await store.claimReplan(ID, NOW)).toBe(false);
     expect(await store.claimReplan('bad', NOW)).toBe(false);
+  });
+});
+
+describe('removeCorrection', () => {
+  it('pulls the correction and records when the corrections last changed', async () => {
+    c.findOneAndUpdate.mockResolvedValue({ _id: ID, corrections: [{ id: 'c2' }] });
+    expect(await store.removeCorrection(ID, 'c1', NOW)).toEqual([{ id: 'c2' }]);
+    const [, update] = c.findOneAndUpdate.mock.calls[0];
+    expect(update).toEqual({ $pull: { corrections: { id: 'c1' } }, $set: { correctionsChangedAt: NOW.toISOString() } });
   });
 });
 

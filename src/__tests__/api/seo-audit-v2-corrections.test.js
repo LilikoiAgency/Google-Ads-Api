@@ -86,8 +86,9 @@ describe('DELETE correction', () => {
   it('returns the remaining corrections and leaves the brief alone', async () => {
     audits.removeCorrection.mockResolvedValue([{ id: 'c2' }]);
     const res = await del.DELETE({}, { params: { id: 'aud1', correctionId: 'c1' } });
-    expect(audits.removeCorrection).toHaveBeenCalledWith('aud1', 'c1');
-    expect(res.body).toEqual({ corrections: [{ id: 'c2' }] });
+    expect(audits.removeCorrection).toHaveBeenCalledWith('aud1', 'c1', expect.any(Date));
+    const now = audits.removeCorrection.mock.calls[0][2];
+    expect(res.body).toEqual({ corrections: [{ id: 'c2' }], correctionsChangedAt: now.toISOString() });
     expect(briefs.addExclusion).not.toHaveBeenCalled();
   });
 });

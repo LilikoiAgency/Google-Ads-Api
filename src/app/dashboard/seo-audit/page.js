@@ -11,6 +11,7 @@ import ResultsView from "./ResultsView";
 import ProgressSteps from "./v2/ProgressSteps";
 import { useAuditJob, friendlyError } from "./v2/useAuditJob";
 import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions, bareHost } from "./v2/AdvancedOptions";
+import { loadSavedAudit, finishedAuditView } from "./v2/savedAudit";
 import { sameBrief } from "../../../lib/seoAuditV2/briefs";
 import "../../globals.css";
 
@@ -49,6 +50,7 @@ export default function SEOAuditPage() {
   const [auditId, setAuditId] = useState(null);
   const [corrections, setCorrections] = useState([]);
   const [canReplan, setCanReplan] = useState(false);
+  const [changedAt, setChangedAt] = useState(null); // last undo, so "Update the plan" shows after one
   const [replanning, setReplanning] = useState(false);
   const [replanError, setReplanError] = useState(null);
   const shownAuditRef = useRef(null); // drops a late reply for an audit no longer shown
@@ -84,19 +86,28 @@ export default function SEOAuditPage() {
   const finishedAuditId = job.progress?.auditId;
   useEffect(() => {
     if (step !== STEPS.PROGRESS || !job.result) return;
-    setCrawlData(null);
-    setAuditResult(job.result);
-    // A just-finished job is saved with no corrections and its job data intact.
-    setReview({ id: finishedAuditId || null, corrections: [], canReplan: Boolean(finishedAuditId) });
-    setStep(STEPS.RESULTS);
-    refreshHistory();
+    // A reused job's audit may have been corrected and re-planned since: show the
+    // saved audit, falling back to the job's own result.
+    let cancelled = false;
+    const id = finishedAuditId || null;
+    shownAuditRef.current = id;
+    finishedAuditView(job.result, id).then((view) => {
+      if (cancelled || shownAuditRef.current !== id) return; // another audit is open now
+      setCrawlData(null);
+      setAuditResult(view.result);
+      setReview(view);
+      setStep(STEPS.RESULTS);
+      refreshHistory();
+    });
+    return () => { cancelled = true; };
   }, [step, job.result, finishedAuditId]);
 
-  function setReview({ id = null, corrections: list = [], canReplan: can = false } = {}) {
+  function setReview({ id = null, corrections: list = [], canReplan: can = false, changedAt: changed = null } = {}) {
     setAuditId(id);
     shownAuditRef.current = id;
     setCorrections(list);
     setCanReplan(can);
+    setChangedAt(changed);
     setReplanning(false);
     setReplanError(null);
   }
@@ -111,7 +122,9 @@ export default function SEOAuditPage() {
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(res.status === 401 ? "Your session has expired. Sign in again and retry." : body.error || fallback);
-    if (shownAuditRef.current === id) setCorrections(Array.isArray(body.corrections) ? body.corrections : []);
+    if (shownAuditRef.current !== id) return;
+    setCorrections(Array.isArray(body.corrections) ? body.corrections : []);
+    if (body.correctionsChangedAt) setChangedAt(body.correctionsChangedAt);
   }
 
   function handleCorrect(correction) {
@@ -239,13 +252,11 @@ export default function SEOAuditPage() {
     const auditId = item._id;
     setLoadingAuditId(auditId);
     try {
-      const res = await fetch(`/api/seo-audit/history?id=${auditId}`);
-      if (!res.ok) throw new Error("Couldn't load that audit. Try again.");
-      const doc = await res.json();
+      const view = await loadSavedAudit(auditId);
+      const { doc, result } = view;
       setCrawlData(doc.crawlData || null);
-      const result = doc.auditResult;
-      setAuditResult(doc.version === 2 && result && !result.version ? { ...result, version: 2 } : result);
-      setReview({ id: doc._id || auditId, corrections: Array.isArray(doc.corrections) ? doc.corrections : [], canReplan: Boolean(doc.canReplan) });
+      setAuditResult(result);
+      setReview(view);
       setDomain(doc.domain || "");
       setAuditType(doc.auditType || "full");
       // "Run again" repeats the same page selection.
@@ -615,7 +626,7 @@ export default function SEOAuditPage() {
             domain={domain}
             actions={resultActions}
             onBack={handleBackToAudits}
-            review={auditId ? { auditId, corrections, canReplan, onCorrect: handleCorrect, onUndo: handleUndo, onReplan: handleReplan, replanning, replanError } : undefined}
+            review={auditId ? { auditId, corrections, changedAt, canReplan, onCorrect: handleCorrect, onUndo: handleUndo, onReplan: handleReplan, replanning, replanError } : undefined}
           />
         )}
       </div>

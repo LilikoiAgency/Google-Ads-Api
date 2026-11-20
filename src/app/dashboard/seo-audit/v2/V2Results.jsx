@@ -80,10 +80,13 @@ function AboutAudit({ sources, gaps }) {
   );
 }
 
-// Corrections added after the plan was last built (or rebuilt) call for "Update the plan".
-export function needsReplan(result, corrections) {
+// Corrections added after the plan was last built (or rebuilt) call for "Update
+// the plan"; so does an undo (changedAt) after a rebuild, since the rebuilt plan
+// still leaves out the undone work.
+export function needsReplan(result, corrections, changedAt) {
   const built = Date.parse(result?.replanned_at || result?.audit_date || "");
   if (Number.isNaN(built)) return false;
+  if (result?.replanned_at && Date.parse(changedAt) > built) return true;
   return (corrections || []).some((c) => Date.parse(c?.at) > built);
 }
 
@@ -99,21 +102,27 @@ function ReplanBar({ review }) {
   );
 }
 
-// review (saved audits only): { auditId, corrections, canReplan, onCorrect, onUndo,
+// review (saved audits only): { auditId, corrections, changedAt, canReplan, onCorrect, onUndo,
 // onReplan, replanning, replanError }. Without it nothing is hidden or editable.
 export default function V2Results({ result: raw, domain, actions, onBack, review }) {
   const [tab, setTab] = useState("plan");
   const [focusTask, setFocusTask] = useState(null); // a task opened from another tab
   const corrections = review?.corrections;
-  const { result, hidden } = useMemo(() => {
-    if (!raw || !corrections?.length) return { result: raw, hidden: [] };
+  const { result, hidden, removed } = useMemo(() => {
+    if (!raw || !corrections?.length) return { result: raw, hidden: [], removed: [] };
     const out = applyCorrections(raw, corrections);
     // A hidden task's follow-ups go with it; list only the task itself.
     const tied = new Set(out.hidden.flatMap((h) => h.task.follow_ups || []));
-    return { result: out.result, hidden: out.hidden.filter((h) => !tied.has(h.task)) };
+    // Corrections that hide nothing now: their tasks left the plan when it was updated.
+    const used = new Set(out.hidden.map((h) => h.correction));
+    return {
+      result: out.result,
+      hidden: out.hidden.filter((h) => !tied.has(h.task)),
+      removed: corrections.filter((c) => !used.has(c)),
+    };
   }, [raw, corrections]);
   if (!result) return null;
-  const showReplan = Boolean(review?.canReplan && (review.replanning || needsReplan(result, corrections)));
+  const showReplan = Boolean(review?.canReplan && (review.replanning || needsReplan(result, corrections, review.changedAt)));
   const tasks = result.action_plan || [];
   // Page cards list each page's own fixes, including ones nested in groups.
   const pageTasks = flattenTasks(tasks).filter((t) => !t.group);
@@ -193,6 +202,7 @@ export default function V2Results({ result: raw, domain, actions, onBack, review
               auditDate={result.audit_date}
               focusId={focusTask}
               hidden={hidden}
+              removed={removed}
               onCorrect={review?.onCorrect}
               onUndo={review?.onUndo}
             />

@@ -1127,6 +1127,33 @@ describe('corrections and Update the plan', () => {
     expect(await screen.findByText("Couldn't save the correction.")).toBeInTheDocument();
   });
 
+  it('a correction whose tasks left the plan in an update is listed with Undo', () => {
+    const gone = { ...C_RELEVANT, id: 'c9', source_ids: ['S99'] };
+    const offered = { ...C_OFFERED, id: 'c8', service: 'gutter cleaning', source_ids: ['S98'] };
+    const r = review({ corrections: [gone, offered] });
+    render(<ResultsView audit={{ ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' }} domain="acme.com" review={r} />);
+    expect(screen.getByText(/2 hidden/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden' }));
+    expect(screen.getAllByText('Removed when the plan was updated')).toHaveLength(2);
+    expect(screen.getByText('Marked not relevant')).toBeInTheDocument();
+    expect(screen.getByText("You don't offer gutter cleaning")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Undo' })[0]);
+    expect(r.onUndo).toHaveBeenCalledWith('c9');
+  });
+
+  it('an undo after the last plan update brings back Update the plan', () => {
+    const audit = { ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' };
+    const { unmount } = render(<ResultsView audit={audit} domain="acme.com" review={review({ changedAt: '2026-11-19T11:00:00.000Z' })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+    unmount();
+    const { unmount: u2 } = render(<ResultsView audit={audit} domain="acme.com" review={review({ changedAt: '2026-11-19T13:00:00.000Z' })} />);
+    expect(screen.getByRole('button', { name: 'Update the plan' })).toBeInTheDocument();
+    u2();
+    // Never updated: undoing brings back the plan as it was, nothing to update.
+    render(<ResultsView audit={RESULT} domain="acme.com" review={review({ changedAt: '2026-11-19T13:00:00.000Z' })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+  });
+
   it('Update the plan appears only after a newer correction and calls onReplan', () => {
     const old = { ...C_RELEVANT, at: '2026-11-19T10:00:00.000Z' };
     const { unmount } = render(<ResultsView audit={{ ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' }} domain="acme.com" review={review({ corrections: [old] })} />);
