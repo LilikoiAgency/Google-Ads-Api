@@ -5,6 +5,9 @@ export const MAX_LISTED_PAGES = 50;
 export const MAX_SKIP_PATTERNS = 20;
 export const MAX_PAGE_COUNT = 50;
 export const MAX_LOCATIONS = 10;
+export const MAX_TARGETS = 5;
+export const MAX_TARGET_KEYWORDS = 10;
+const MAX_KEYWORD_CHARS = 80;
 export const DEFAULT_PAGES = { quick: 5, full: 50 };
 
 export const bareHost = (h) => h.toLowerCase().replace(/^www\./, '');
@@ -87,6 +90,28 @@ export function parseAuditOptions(raw, domain) {
     locations.splice(MAX_LOCATIONS);
   }
 
+  // Pages to rank for chosen keywords (no keywords = recommend some). Each
+  // target page is also a priority page, so it is crawled and inspected.
+  const targets = [];
+  for (const t of Array.isArray(raw.targets) ? raw.targets : []) {
+    const pageLine = String(t?.page ?? '').trim();
+    const kwLines = lines(t?.keywords);
+    if (!pageLine && !kwLines.length) continue;
+    if (!pageLine) return { error: 'Add the page for each set of target keywords.' };
+    const r = toUrl(pageLine, domain);
+    if (!r?.url) return { error: `This page isn't on ${domain}: ${pageLine}` };
+    const keywords = [...new Set(kwLines.map((k) => k.toLowerCase().replace(/\s+/g, ' ')))];
+    if (keywords.some((k) => k.length > MAX_KEYWORD_CHARS)) return { error: `Keep each keyword under ${MAX_KEYWORD_CHARS} characters.` };
+    const same = targets.find((x) => x.url === r.url);
+    const merged = same ? [...new Set([...same.keywords, ...keywords])] : keywords;
+    if (merged.length > MAX_TARGET_KEYWORDS) return { error: `Use at most ${MAX_TARGET_KEYWORDS} keywords per page.` };
+    if (same) same.keywords = merged;
+    else targets.push({ url: r.url, keywords });
+  }
+  if (targets.length > MAX_TARGETS) return { error: `Add target keywords for at most ${MAX_TARGETS} pages.` };
+  for (const t of targets) if (!pages.includes(t.url)) pages.push(t.url);
+  if (pages.length > MAX_LISTED_PAGES) return { error: `List at most ${MAX_LISTED_PAGES} pages.` };
+
   if (!pages.length && !skip.length && pageCount == null && !gscSite && !ga4Property && !locationsGiven) return { options: null };
   return {
     options: {
@@ -94,11 +119,13 @@ export function parseAuditOptions(raw, domain) {
       ...(gscSite ? { gscSite } : {}),
       ...(ga4Property ? { ga4Property } : {}),
       ...(locationsGiven ? { locations } : {}),
+      ...(targets.length ? { targets } : {}),
     },
   };
 }
 
 export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property || Array.isArray(o.locations));
+export const hasTargets = (o) => Array.isArray(o?.targets) && o.targets.length > 0;
 
 // How many pages the crawl may fetch.
 export function pageLimit(auditType, options) {
@@ -133,7 +160,11 @@ export const filterSkipped = (urls, patterns) => (patterns?.length ? urls.filter
 export function describeOptions(o) {
   if (!hasOptions(o)) return '';
   const parts = [];
-  if (o.pages?.length) parts.push(o.onlyListed ? `only ${o.pages.length} listed page${o.pages.length === 1 ? '' : 's'}` : `${o.pages.length} priority page${o.pages.length === 1 ? '' : 's'}`);
+  // Target pages are added to pages; count them once, under target keywords.
+  const targetUrls = new Set((o.targets || []).map((t) => t.url));
+  const listed = (o.pages || []).filter((u) => o.onlyListed || !targetUrls.has(u));
+  if (o.targets?.length) parts.push(`target keywords for ${o.targets.length} page${o.targets.length === 1 ? '' : 's'}`);
+  if (listed.length) parts.push(o.onlyListed ? `only ${listed.length} listed page${listed.length === 1 ? '' : 's'}` : `${listed.length} priority page${listed.length === 1 ? '' : 's'}`);
   if (o.skip?.length) parts.push(`skip ${o.skip.join(', ')}`);
   if (o.gscSite) parts.push(`Search Console ${o.gscSite}`);
   if (o.ga4Property) parts.push(`Analytics ${o.ga4Property.name}`);

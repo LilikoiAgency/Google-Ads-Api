@@ -12,6 +12,7 @@ import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
 import Reputation from "./Reputation";
+import TargetKeywords from "./TargetKeywords";
 import ReportDownload from "./ReportDownload";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
 import { flattenTasks } from "../../../../lib/seoAuditV2/tasks";
@@ -25,6 +26,7 @@ const SOURCES = [
   ["pagespeed", "Page speed"],
   ["reviews", "Google reviews"],
   ["ai_search", "Web search check"],
+  ["keyword_planner", "Keyword Planner"],
 ];
 
 const STATUS_TEXT = {
@@ -78,6 +80,7 @@ function AboutAudit({ sources, gaps }) {
 
 export default function V2Results({ result, domain, actions, onBack }) {
   const [tab, setTab] = useState("plan");
+  const [focusTask, setFocusTask] = useState(null); // a task opened from another tab
   if (!result) return null;
   const tasks = result.action_plan || [];
   // Page cards list each page's own fixes, including ones nested in groups.
@@ -97,6 +100,7 @@ export default function V2Results({ result, domain, actions, onBack }) {
     { key: "conversion", label: "Conversion", ...flagged("conversion", findings.conversion?.length || 0) },
     // Only present when reviews or the web search produced data; a skipped pass is never flagged.
     ...(result.reputation ? [{ key: "reputation", label: "Reputation", count: result.reputation.locations?.length || 0 }] : []),
+    ...(result.targets ? [{ key: "targets", label: "Target keywords", ...flagged("targets", result.targets.pages?.length || 0) }] : []),
   ];
   const areaLabel = (key) => tabs.find((t) => t.key === key).label;
   const meta = [
@@ -139,7 +143,7 @@ export default function V2Results({ result, domain, actions, onBack }) {
 
       <div className={s.tabs} role="tablist" aria-label="Audit sections">
         {tabs.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={s.tab} onClick={() => setTab(t.key)}>
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={s.tab} onClick={() => { setTab(t.key); setFocusTask(null); }}>
             {t.label}
             <span className={t.warn ? s.tabWarn : s.tabCount}>{t.count}</span>
           </button>
@@ -148,7 +152,7 @@ export default function V2Results({ result, domain, actions, onBack }) {
 
       <div className={`${s.card} ${s.panel}`}>
         <div role="tabpanel">
-          {tab === "plan" && <ActionPlan tasks={tasks} domain={site} auditDate={result.audit_date} />}
+          {tab === "plan" && <ActionPlan key={focusTask || "plan"} tasks={tasks} domain={site} auditDate={result.audit_date} focusId={focusTask} />}
           {tab === "pages" && (
             <>
               {incomplete("content") && <IncompleteNotice area="Content" />}
@@ -168,6 +172,14 @@ export default function V2Results({ result, domain, actions, onBack }) {
               findings={findings.conversion}
               incomplete={incomplete("conversion") ? areaLabel("conversion") : undefined}
               intro={result.data_sources?.ga4 && result.data_sources.ga4.status !== "ok" ? "Conversion analysis needs Google Analytics, which wasn't available for this site." : undefined}
+            />
+          )}
+          {tab === "targets" && (
+            <TargetKeywords
+              targets={result.targets}
+              findings={findings.targets}
+              incomplete={incomplete("targets")}
+              onTask={(id) => { setFocusTask(id); setTab("plan"); }}
             />
           )}
           {tab === "reputation" && (

@@ -9,7 +9,8 @@ import { joinPagesToQueries, inspectUrls, listGoogleSitemaps, ga4PerPage } from 
 import { fetchPageSpeed } from './pagespeed';
 import { filterSkipped } from './options';
 import { pathKey } from './tasks';
-import { fetchReviews } from './reviews';
+import { fetchReviews, businessCity } from './reviews';
+import { fetchKeywordData } from './keywords';
 
 export const AUDIT_PROFILES = {
   quick: { pages: 5, inspect: 5, pagespeed: 2, effort: 'medium' },
@@ -90,6 +91,7 @@ async function fetchGsc({ site, auth, domain, ranges }) {
     status: 'ok',
     gsc: summarizeGsc({ site, domain, ranges, queryRows, pageRows, totals: tot[0], prevTotals: prevTot[0] }),
     gscPages: joinPagesToQueries(pqRows, { topPages: 25, perPage: 10 }),
+    rows: pqRows, // raw page/query rows for target keywords; never stored
   };
 }
 
@@ -127,7 +129,7 @@ function onePerPage(urls, gscUrls) {
 
 const crawlUrls = (crawl) => (crawl?.pages_crawled || []).map((p) => p.final_url || p.url).filter(Boolean);
 
-const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, ga4Property: null, pagespeed: null, reviews: null });
+const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, ga4Property: null, pagespeed: null, reviews: null, keywords: null });
 
 const blocked = (s) => ({ status: s.status, error: s.error });
 
@@ -142,9 +144,11 @@ async function runPageSpeed(urls) {
 // patterns drop Search Console pages; onlyListed limits targets to the crawl.
 // gscSite / ga4Property: data sources picked by hand instead of matched by domain.
 // locations: Google review locations picked by hand (null matches by website).
+// targets: [{ url, keywords }] pages to rank for chosen keywords (keyword data
+// is fetched only when there are some).
 // reviewTexts (review text by location id) is returned apart from data so it
 // never lands on the job document.
-export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [], gscSite, ga4Property, locations = null } = {}) {
+export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [], gscSite, ga4Property, locations = null, targets = null } = {}) {
   try {
     const prof = profileOf(profile);
     const ranges = auditRanges(today());
@@ -163,8 +167,16 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
     const ga4P = settle(() => fetchGa4(domain, ranges, ga4Property));
     const reviewsP = settle(() => fetchReviews({ domain, crawl, locations }));
     const pagespeedP = targetsP.then((urls) => runPageSpeed(urls.slice(0, prof.pagespeed)));
+    // Volumes for the business's city when it is known, so this waits for reviews.
+    const keywordsP = targets?.length
+      ? Promise.all([gscP, reviewsP]).then(([g, r]) => settle(() => fetchKeywordData({
+        targets,
+        gscRows: g.status === 'ok' ? g.rows : null,
+        city: businessCity(r.status === 'ok' ? r.locations : null, crawl),
+      })))
+      : null;
 
-    const [gsc, sitemaps, inspection, ga4, pagespeed, targets, reviews] = await Promise.all([gscP, sitemapsP, inspectionP, ga4P, pagespeedP, targetsP, reviewsP]);
+    const [gsc, sitemaps, inspection, ga4, pagespeed, pageTargets, reviews, keywords] = await Promise.all([gscP, sitemapsP, inspectionP, ga4P, pagespeedP, targetsP, reviewsP, keywordsP]);
 
     const data = emptyData();
     const gaps = [];
@@ -185,7 +197,7 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
       data.ga4 = ga4.ga4;
       data.ga4Property = ga4.property || null;
       try {
-        data.ga4Pages = ga4PerPage(ga4.report, targets);
+        data.ga4Pages = ga4PerPage(ga4.report, pageTargets);
       } catch (err) {
         data.ga4Pages = null;
         gap('ga4', 'error', errText(err));
@@ -197,6 +209,11 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
       data.reviews = reviews.locations;
       reviewTexts = reviews.texts || {};
     } else gap('reviews', reviews.status, reviews.error || '');
+
+    if (keywords) {
+      if (keywords.status === 'ok') data.keywords = keywords.keywords;
+      else gap('keyword_planner', keywords.status, keywords.error || '');
+    }
 
     if (pagespeed.status !== 'ok') gap('pagespeed', pagespeed.status, pagespeed.error || '');
     else {
@@ -224,6 +241,7 @@ const SOURCE_LABEL = {
   ga4: 'Google Analytics data',
   pagespeed: 'Page speed',
   reviews: 'Google reviews',
+  keyword_planner: 'Keyword search volumes',
   gather: 'Search and analytics data',
 };
 
@@ -252,6 +270,7 @@ export function describeGaps(gaps) {
     }
     const label = SOURCE_LABEL[source] || source;
     let reason = REASON[status];
+    if (source === 'keyword_planner' && status === 'not_connected') reason = 'Google Ads is not connected.';
     if (source === 'ga4' && status === 'not_connected') reason = 'Google Analytics is not connected.';
     if (source === 'search_console' && status === 'not_connected') reason = 'Search Console is not connected.';
     if (source === 'url_inspection' && status === 'no_data') reason = 'there were no pages to inspect.';

@@ -107,23 +107,23 @@ describe('tasksToCsv', () => {
   it('has the expected header and joins evidence', () => {
     const csv = tasksToCsv([t({ evidence: ['a', 'b'] })]);
     const [head, row] = csv.split('\n');
-    expect(head).toBe('ID,Priority,Task,Page,Category,Impact,Effort,Confidence,Change,Why,Evidence,Part of');
+    expect(head).toBe('ID,Priority,When,Task,Page,Category,Impact,Effort,Confidence,Change,Why,Evidence,Part of');
     expect(row).toContain('a | b');
   });
   it('puts the task id first and the rank (1 = first, in received order) in Priority', () => {
     const rows = tasksToCsv([t({ id: 'T3', title: 'one' }), t({ id: 'T7', title: 'two' })]).split('\n');
-    expect(rows[1].startsWith('T3,1,one,')).toBe(true);
-    expect(rows[2].startsWith('T7,2,two,')).toBe(true);
+    expect(rows[1].startsWith('T3,1,Days 1–30,one,')).toBe(true);
+    expect(rows[2].startsWith('T7,2,Days 1–30,two,')).toBe(true);
   });
   it('adds a row per group item and follow-up, ranked with its parent', () => {
     const rows = tasksToCsv([
       t({ id: 'T1', title: 'group', page: 'multiple pages', items: [t({ id: 'T1.1', title: 'a' })] }),
       t({ id: 'T2', title: 'two' }),
     ]).split('\n');
-    expect(rows[1].startsWith('T1,1,group,multiple pages,')).toBe(true);
-    expect(rows[2].startsWith('T1.1,1,a,/a,')).toBe(true);
+    expect(rows[1].startsWith('T1,1,Days 1–30,group,multiple pages,')).toBe(true);
+    expect(rows[2].startsWith('T1.1,1,Days 1–30,a,/a,')).toBe(true);
     expect(rows[2].endsWith(',T1')).toBe(true);
-    expect(rows[3].startsWith('T2,2,two,')).toBe(true);
+    expect(rows[3].startsWith('T2,2,Days 1–30,two,')).toBe(true);
   });
   it('escapes quotes, commas and newlines per RFC 4180', () => {
     const csv = tasksToCsv([t({ title: 'Say "hi", ok', change: 'line1\nline2' })]);

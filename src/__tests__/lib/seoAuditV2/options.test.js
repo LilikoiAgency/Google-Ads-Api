@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAuditOptions, matchesSkip, filterSkipped, pageLimit, hasOptions, describeOptions, MAX_LOCATIONS } from '../../../lib/seoAuditV2/options';
+import { parseAuditOptions, matchesSkip, filterSkipped, pageLimit, hasOptions, describeOptions, MAX_LOCATIONS, MAX_TARGETS, MAX_TARGET_KEYWORDS, hasTargets } from '../../../lib/seoAuditV2/options';
 
 describe('parseAuditOptions', () => {
   it('returns null options when nothing is set', () => {
@@ -132,5 +132,43 @@ describe('location picks', () => {
     expect(hasOptions(options)).toBe(true);
     expect(describeOptions(options)).toBe('no locations');
     expect(parseAuditOptions({}, 'site.com')).toEqual({ options: null });
+  });
+});
+
+describe('target keywords', () => {
+  it('parses pages and keywords, lowercases and dedupes keywords, and adds each page as a priority page', () => {
+    const { options } = parseAuditOptions({
+      pages: '/about',
+      targets: [
+        { page: '/panel-upgrade/', keywords: 'Panel Upgrade Tampa\npanel  upgrade tampa, electrician tampa' },
+        { page: 'https://www.site.com/ev', keywords: [] },
+        { page: '', keywords: '' },
+      ],
+    }, 'site.com');
+    expect(options.targets).toEqual([
+      { url: 'https://site.com/panel-upgrade', keywords: ['panel upgrade tampa', 'electrician tampa'] },
+      { url: 'https://site.com/ev', keywords: [] },
+    ]);
+    expect(options.pages).toEqual(['https://site.com/about', 'https://site.com/panel-upgrade', 'https://site.com/ev']);
+    expect(hasTargets(options)).toBe(true);
+    expect(describeOptions(options)).toBe('target keywords for 2 pages · 1 priority page');
+  });
+
+  it('targets alone are an option and merge rows for the same page', () => {
+    const { options } = parseAuditOptions({ targets: [{ page: '/a', keywords: 'x' }, { page: '/a/', keywords: 'y' }] }, 'site.com');
+    expect(options.targets).toEqual([{ url: 'https://site.com/a', keywords: ['x', 'y'] }]);
+    expect(describeOptions(options)).toBe('target keywords for 1 page');
+    expect(hasTargets(parseAuditOptions({ pages: '/a' }, 'site.com').options)).toBe(false);
+    expect(hasTargets(null)).toBe(false);
+  });
+
+  it('rejects keywords without a page, off-site pages and too many pages or keywords', () => {
+    expect(parseAuditOptions({ targets: [{ page: '', keywords: 'x' }] }, 'site.com').error).toMatch(/Add the page/);
+    expect(parseAuditOptions({ targets: [{ page: 'https://other.com/a', keywords: 'x' }] }, 'site.com').error).toMatch(/isn't on site.com/);
+    const many = Array.from({ length: MAX_TARGETS + 1 }, (_, i) => ({ page: `/p${i}`, keywords: 'x' }));
+    expect(parseAuditOptions({ targets: many }, 'site.com').error).toMatch(/at most 5 pages/);
+    const kws = Array.from({ length: MAX_TARGET_KEYWORDS + 1 }, (_, i) => `k${i}`).join('\n');
+    expect(parseAuditOptions({ targets: [{ page: '/a', keywords: kws }] }, 'site.com').error).toMatch(/at most 10 keywords/);
+    expect(parseAuditOptions({ targets: [{ page: '/a', keywords: 'x'.repeat(81) }] }, 'site.com').error).toMatch(/under 80/);
   });
 });

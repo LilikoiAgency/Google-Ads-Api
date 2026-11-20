@@ -532,8 +532,36 @@ describe('AdvancedOptions', () => {
 
   it('fromAuditOptions turns saved URLs back into paths', () => {
     expect(fromAuditOptions({ pages: ['https://acme.com/pet-turf'], onlyListed: true, skip: ['/blog/*'], pageCount: null }))
-      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '', gscSite: '', ga4Property: null, locations: null });
+      .toEqual({ pagesText: '/pet-turf', onlyListed: true, skipText: '/blog/*', pageCount: '', gscSite: '', ga4Property: null, locations: null, targets: [] });
     expect(fromAuditOptions(null)).toEqual(EMPTY_ADVANCED);
+  });
+
+  it('target keywords round-trip: rows to options, saved options back to rows without repeating the page', () => {
+    const adv = { ...EMPTY_ADVANCED, targets: [{ page: '/panel', keywords: 'panel upgrade tampa\nelectrician tampa' }, { page: '/ev', keywords: '' }, { page: '', keywords: '' }] };
+    expect(toRequestOptions(adv).targets).toEqual([
+      { page: '/panel', keywords: ['panel upgrade tampa', 'electrician tampa'] },
+      { page: '/ev', keywords: [] },
+    ]);
+    const back = fromAuditOptions({
+      pages: ['https://acme.com/about', 'https://acme.com/panel'], onlyListed: false, skip: [], pageCount: null,
+      targets: [{ url: 'https://acme.com/panel', keywords: ['panel upgrade tampa'] }],
+    });
+    expect(back.pagesText).toBe('/about');
+    expect(back.targets).toEqual([{ page: '/panel', keywords: 'panel upgrade tampa' }]);
+  });
+
+  it('adds, edits and removes target keyword rows', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="full" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a page' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ targets: [{ page: '', keywords: '' }] }));
+    const one = { ...EMPTY_ADVANCED, targets: [{ page: '', keywords: '' }] };
+    rerender(<AdvancedOptions value={one} onChange={onChange} auditType="full" />);
+    fireEvent.change(screen.getByLabelText('Target page 1'), { target: { value: '/panel' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ targets: [{ page: '/panel', keywords: '' }] }));
+    fireEvent.click(screen.getByLabelText('Remove target page 1'));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ targets: [] }));
   });
 
   it('starts collapsed, opens on click and reports edits', () => {
@@ -843,5 +871,55 @@ describe('ProgressSteps time text', () => {
     unmount();
     render(<ProgressSteps progress={{ status: 'running', auditType: 'quick', steps: [] }} />);
     expect(screen.queryByText(/usually/)).toBeNull();
+  });
+});
+
+describe('30/60/90 view and target keywords', () => {
+  it('ActionPlan switches to the 30/60/90 view with the three periods', () => {
+    render(<ActionPlan tasks={TASKS} domain="acme.com" />);
+    expect(screen.getByRole('button', { name: 'Highest value first' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByText('Days 1–30').length).toBeGreaterThan(0); // the period tag in the ranked list
+    fireEvent.click(screen.getByRole('button', { name: '30 / 60 / 90 days' }));
+    for (const label of ['Days 1–30', 'Days 31–60', 'Days 61–90']) expect(screen.getByRole('region', { name: label })).toBeInTheDocument();
+    const first = screen.getByRole('region', { name: 'Days 1–30' });
+    expect(first).toHaveTextContent('Fix canonical pointing to staging');
+    // Filters still apply inside the periods.
+    fireEvent.change(screen.getByLabelText(/category/i), { target: { value: 'local' } });
+    expect(screen.queryByText('Fix canonical pointing to staging')).not.toBeInTheDocument();
+  });
+
+  it('ActionPlan opens a focused task, including the parent of a nested id', () => {
+    render(<ActionPlan tasks={TASKS} domain="acme.com" focusId="T2.1" />);
+    expect(screen.getByRole('button', { name: 'Show details for T2' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  const TARGETS = {
+    volumes_for: 'Tampa, Florida',
+    pages: [{
+      page: '/services/turf', mode: 'recommend', task_ids: ['T1'],
+      keywords: [
+        { keyword: 'artificial turf tampa', role: 'primary', note: 'Best fit', volume: 1300, position: 9.2, ranking_page: '/services/turf', given: false },
+        { keyword: 'turf cost', role: 'secondary', note: '', volume: null, position: 14, ranking_page: '/blog/cost', given: false },
+      ],
+      conflicts: [{ keyword: 'turf cost', other_page: '/blog/cost', note: 'Link the blog post to the service page' }],
+    }],
+  };
+
+  it('the Target keywords tab shows keywords, positions, conflicts, and jumps to a task', () => {
+    render(<ResultsView audit={{ ...V2_RESULT, targets: TARGETS, passes_completed: { technical: true, content: true, local: true, conversion: true, targets: true } }} domain="acme.com" />);
+    fireEvent.click(screen.getByRole('tab', { name: /^Target keywords/ }));
+    expect(screen.getByText(/Keyword Planner estimates for Tampa, Florida/)).toBeInTheDocument();
+    expect(screen.getByText('Keywords recommended for this page')).toBeInTheDocument();
+    expect(screen.getByText('1,300')).toBeInTheDocument();
+    expect(screen.getByText('Main')).toBeInTheDocument();
+    expect(screen.getByText('14 on /blog/cost')).toBeInTheDocument();
+    expect(screen.getByText(/Link the blog post to the service page/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'T1' }));
+    expect(screen.getByRole('button', { name: 'Show details for T1' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('no Target keywords tab without targets', () => {
+    render(<ResultsView audit={V2_RESULT} domain="acme.com" />);
+    expect(screen.queryByRole('tab', { name: /^Target keywords/ })).not.toBeInTheDocument();
   });
 });

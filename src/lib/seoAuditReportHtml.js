@@ -10,6 +10,7 @@
 // touches document/Blob, and only when called. No scripts in the file.
 
 import { kpiCards, planStats, effortLabel, isQuickWin, AREA_LABELS } from './seoAuditV2/overview';
+import { buildRoadmap } from './seoAuditV2/roadmap';
 
 export const REPORT_KINDS = [
   { key: 'client', label: 'Client report', hint: 'The overview and the top 10 tasks in plain terms. No technical evidence.' },
@@ -151,6 +152,42 @@ function reputationHtml(rep) {
   return `<h2>Reputation</h2><div class="card"><ul class="rl rtop">${locs}</ul>${says}${web}${attribution ? `<p class="note">${esc(attribution)}</p>` : ''}</div>`;
 }
 
+// 30/60/90-day plan: three columns of task titles (client: plain titles, first
+// ROADMAP_CLIENT_ITEMS per period; full: every task with its id).
+export const ROADMAP_CLIENT_ITEMS = 8;
+
+function roadmapHtml(plan, { full, clean }) {
+  if (!plan.length) return '';
+  const phases = buildRoadmap(plan);
+  const col = (ph) => {
+    const list = full ? ph.tasks : ph.tasks.slice(0, ROADMAP_CLIENT_ITEMS);
+    const more = ph.tasks.length - list.length;
+    const items = list.map((t) => `<li>${full ? `<span class="id">${esc(t.id)}</span> ` : ''}${esc(clean(t.title))}${isQuickWin(t) ? '<span class="qw">Quick win</span>' : ''}</li>`).join('');
+    return `<div class="card"><p class="phl">${esc(ph.label)}</p><p class="ct">${esc(ph.title)}</p>
+${ph.tasks.length ? `<ul class="phx">${items}</ul>${more > 0 ? `<p class="note">Plus ${more} more.</p>` : ''}` : '<p class="note">Nothing planned here: earlier work carries over.</p>'}</div>`;
+  };
+  return `<h2>Your 90-day plan</h2><div class="grid3">${phases.map(col).join('')}</div>`;
+}
+
+const ROLE_LABEL = { primary: 'Main', secondary: 'Supporting', drop: 'Not for this page' };
+const fmtNum = (n) => (typeof n === 'number' ? n.toLocaleString('en-US') : '—');
+const whereNow = (k, page) => {
+  if (k.position == null) return 'Not showing yet';
+  return k.ranking_page && k.ranking_page !== page ? `${k.position} on ${k.ranking_page}` : String(k.position);
+};
+
+// Target keywords: mirrors the in-app tab (TargetKeywords.jsx).
+function targetsHtml(targets) {
+  if (!targets?.pages?.length) return '';
+  const page = (t) => `<div class="card tk"><div class="ch"><p class="ct">${esc(t.page)}</p><span class="cs">${t.mode === 'recommend' ? 'Recommended keywords' : 'Chosen keywords'}</span></div>
+${t.keywords.length ? `<table><thead><tr><th>Search</th><th>Role</th><th class="r">Monthly searches</th><th>Search Console position</th><th>Why</th></tr></thead><tbody>
+${t.keywords.map((k) => `<tr><td class="q">${esc(k.keyword)}</td><td class="nw">${esc(ROLE_LABEL[k.role] || k.role)}</td><td class="r">${esc(fmtNum(k.volume))}</td><td class="nw mutd">${esc(whereNow(k, t.page))}</td><td class="mutd">${esc(k.note || '')}</td></tr>`).join('')}
+</tbody></table>` : '<p class="note">No keyword picks for this page.</p>'}
+${t.conflicts?.length ? `<p class="lbl">Other pages competing for these searches</p><ul class="ev">${t.conflicts.map((c) => `<li><b>${esc(c.keyword)}</b> · ${esc(c.other_page)}${c.note ? `: ${esc(c.note)}` : ''}</li>`).join('')}</ul>` : ''}</div>`;
+  return `<h2>Target keywords</h2><p class="note tkn">Monthly searches are Google Ads Keyword Planner estimates${targets.volumes_for ? ` for ${esc(targets.volumes_for)}` : ''}, not traffic the page will get. Positions are the Search Console average for the audit period.</p>
+${targets.pages.map(page).join('')}`;
+}
+
 const impactBars = (n) => `<span class="imp" role="img" aria-label="Impact ${n} of 5">${[1, 2, 3, 4, 5].map((i) => `<i${i <= n ? ' class="on"' : ''}></i>`).join('')}</span>`;
 
 function clientTasks(plan) {
@@ -209,6 +246,7 @@ ${plan.map((t) => taskCard(t)).join('')}`
   if (r.data_sources?.ga4?.status === 'ok') sources.push('Google Analytics');
   if (r.data_sources?.reviews?.status === 'ok') sources.push('Google reviews');
   if (r.data_sources?.ai_search?.status === 'ok') sources.push('a web search check');
+  if (r.data_sources?.keyword_planner?.status === 'ok') sources.push('Google Ads Keyword Planner');
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -290,6 +328,9 @@ ul.ev{margin:0;padding-left:1.2em;color:var(--muted);font-size:13px}
 .rloc{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
 .rsub{margin:20px 0 6px}.rl li{margin:0 0 8px}.rq{font-size:13px;font-style:italic;color:var(--muted);margin:2px 0 0}
 .rsq{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;margin:0!important}.rsq>span:first-child{font-weight:700;width:14px}.rqy{flex:0 1 45%}
+.phl{font-size:12.5px;font-weight:700;color:var(--accInk);margin:0 0 4px}
+ul.phx{margin:10px 0 0;padding-left:1.1em;font-size:13.5px;line-height:1.5;color:var(--ink2)}ul.phx li{margin:0 0 6px}
+.tk{margin-top:12px}.tkn{margin-top:0}
 footer{color:var(--dim);font-size:12.5px;margin-top:28px;border-top:1px solid var(--line);padding-top:14px}
 @media (max-width:1100px){.kpis,.kpis.k5,.kpis.k4{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:860px){.grid,.grid3{grid-template-columns:1fr}}
@@ -301,6 +342,8 @@ ${kpisHtml(r)}
 <div class="${opp ? 'grid' : 'grid one'}">${opp}${scoresCard}</div>
 ${movesHtml(r.top_moves, clean)}
 ${breakdownHtml(plan)}
+${roadmapHtml(plan, { full, clean })}
+${targetsHtml(r.targets)}
 ${reputationHtml(r.reputation)}
 ${body}
 <footer>Based on ${esc(sources.join(', '))}${r.audit_date ? `, ${esc(formatDate(r.audit_date))}` : ''}.</footer>

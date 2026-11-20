@@ -5,9 +5,9 @@
 // jobs API `options` (the server validates against the domain).
 
 import { useEffect, useState } from "react";
-import { describeOptions, MAX_LOCATIONS } from "../../../../lib/seoAuditV2/options";
+import { describeOptions, MAX_LOCATIONS, MAX_TARGETS, MAX_TARGET_KEYWORDS } from "../../../../lib/seoAuditV2/options";
 
-export const EMPTY_ADVANCED = { pagesText: "", onlyListed: false, skipText: "", pageCount: "", gscSite: "", ga4Property: null, locations: null };
+export const EMPTY_ADVANCED = { pagesText: "", onlyListed: false, skipText: "", pageCount: "", gscSite: "", ga4Property: null, locations: null, targets: [] };
 export const PAGE_COUNTS = [5, 10, 15, 25, 50];
 
 const splitLines = (text) => String(text || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
@@ -22,13 +22,18 @@ export function toRequestOptions(adv) {
   // locations: null = untouched (the server uses saved picks, else the automatic match); an array = the user's picks,
   // and an empty one means they unticked every location, so no reviews are pulled.
   const locations = Array.isArray(adv?.locations) ? adv.locations : null;
-  if (!pages.length && !skip.length && !pageCount && !gscSite && !ga4Property && !locations) return undefined;
+  // Target keyword rows with a page; keywords left empty ask for recommendations.
+  const targets = (adv?.targets || [])
+    .map((t) => ({ page: String(t.page || "").trim(), keywords: splitLines(t.keywords) }))
+    .filter((t) => t.page || t.keywords.length);
+  if (!pages.length && !skip.length && !pageCount && !gscSite && !ga4Property && !locations && !targets.length) return undefined;
   return {
     pages, skip, onlyListed: !!adv.onlyListed && pages.length > 0,
     ...(pageCount ? { pageCount } : {}),
     ...(gscSite ? { gscSite } : {}),
     ...(ga4Property ? { ga4Property } : {}),
     ...(locations ? { locations } : {}),
+    ...(targets.length ? { targets } : {}),
   };
 }
 
@@ -38,14 +43,17 @@ export function fromAuditOptions(o) {
   const path = (u) => {
     try { return new URL(u).pathname + new URL(u).search; } catch { return u; }
   };
+  // Target pages are added to pages on the server; list them only under target keywords.
+  const targetUrls = new Set((o.targets || []).map((t) => t.url));
   return {
-    pagesText: (o.pages || []).map(path).join("\n"),
+    pagesText: (o.pages || []).filter((u) => !targetUrls.has(u)).map(path).join("\n"),
     onlyListed: !!o.onlyListed,
     skipText: (o.skip || []).join(", "),
     pageCount: o.pageCount ? String(o.pageCount) : "",
     gscSite: o.gscSite || "",
     ga4Property: o.ga4Property || null,
     locations: Array.isArray(o.locations) ? o.locations : null,
+    targets: (o.targets || []).map((t) => ({ page: path(t.url), keywords: (t.keywords || []).join("\n") })),
   };
 }
 
@@ -207,6 +215,55 @@ function LocationPicker({ adv, set, domain, active }) {
   );
 }
 
+// Pages the agency wants to rank, each with its keywords (none = recommend some).
+function TargetsEditor({ adv, set }) {
+  const rows = adv.targets || [];
+  const update = (i, patch) => set({ targets: rows.map((r, k) => (k === i ? { ...r, ...patch } : r)) });
+  const remove = (i) => set({ targets: rows.filter((_, k) => k !== i) });
+  const addRow = () => set({ targets: [...rows, { page: "", keywords: "" }] });
+  return (
+    <div>
+      <span style={label}>Target keywords</span>
+      <p style={{ ...hint, marginTop: 0, marginBottom: 8 }}>
+        Pick a page and the searches it should rank for, or leave the keywords empty to get recommendations. Uses Google Ads Keyword Planner volumes.
+      </p>
+      <div style={{ display: "grid", gap: 10 }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr) auto", gap: 8, alignItems: "start" }}>
+            <input
+              type="text"
+              aria-label={`Target page ${i + 1}`}
+              placeholder="/panel-upgrades"
+              value={r.page}
+              onChange={(e) => update(i, { page: e.target.value })}
+              style={field}
+            />
+            <textarea
+              rows={2}
+              aria-label={`Keywords for target page ${i + 1}`}
+              placeholder={"panel upgrade tampa\nelectrical panel replacement\n(leave empty for recommendations)"}
+              value={r.keywords}
+              onChange={(e) => update(i, { keywords: e.target.value })}
+              style={{ ...field, resize: "vertical" }}
+            />
+            <button type="button" onClick={() => remove(i)} aria-label={`Remove target page ${i + 1}`} style={{ ...field, width: "auto", cursor: "pointer" }}>
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+      {rows.length < MAX_TARGETS ? (
+        <button type="button" onClick={addRow} style={{ ...field, width: "auto", marginTop: rows.length ? 8 : 0, cursor: "pointer", fontWeight: 600 }}>
+          + Add a page
+        </button>
+      ) : (
+        <p style={hint}>Up to {MAX_TARGETS} pages per audit.</p>
+      )}
+      {rows.length > 0 && <p style={hint}>One keyword per line, up to {MAX_TARGET_KEYWORDS} per page. These pages are always audited.</p>}
+    </div>
+  );
+}
+
 const label = { fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.7)", display: "block", marginBottom: 6 };
 const hint = { fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4 };
 const field = {
@@ -337,6 +394,7 @@ export default function AdvancedOptions({ value, onChange, auditType, domain }) 
               <p style={hint}>{lists.ga4Error || "Only properties our reporting account can read are listed."}</p>
             </div>
           </div>
+          <TargetsEditor adv={adv} set={set} />
           <LocationPicker adv={adv} set={set} domain={domain} active={open} />
         </div>
       )}
