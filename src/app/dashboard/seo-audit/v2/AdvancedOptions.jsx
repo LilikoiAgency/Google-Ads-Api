@@ -143,7 +143,11 @@ function BriefEditor({ adv, set, domain, loaded }) {
   const current = toBrief(edited || loaded.brief);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
-  const update = (patch) => set({ brief: { ...current, ...patch }, briefLoaded: loaded.brief, briefDomain: key });
+  useEffect(() => { setInput(""); setError(""); }, [key]);
+  // Not editable until the saved brief is known, or an edit would overwrite it with partial text.
+  const locked = loaded.status !== "ok";
+  // The baseline stays what it was when editing began (page.js advances it after each save).
+  const update = (patch) => set({ brief: { ...current, ...patch }, briefLoaded: edited ? adv.briefLoaded : loaded.brief, briefDomain: key });
   const addExclusion = () => {
     const phrase = input.trim();
     if (!phrase) return;
@@ -159,16 +163,16 @@ function BriefEditor({ adv, set, domain, loaded }) {
     <div>
       <span style={label}>Company brief</span>
       <p style={{ ...hint, marginTop: 0, marginBottom: 8 }}>
-        {loaded.status === "loading" ? "Loading the saved brief…" : "Facts the homepage doesn't show. It is saved for this website and used in every audit."}
+        {loaded.status === "loading" ? "Loading the saved brief…" : loaded.status === "error" ? "Couldn't load the saved brief for this site." : "Facts the homepage doesn't show. It is saved for this website and used in every audit."}
       </p>
       <div style={{ display: "grid", gap: 12 }}>
         <div>
           <label htmlFor="adv-brief-services" style={label}>Services</label>
-          <textarea id="adv-brief-services" rows={3} placeholder="What the business actually sells" value={current.services} onChange={(e) => update({ services: e.target.value })} style={{ ...field, resize: "vertical" }} />
+          <textarea id="adv-brief-services" rows={3} maxLength={1000} disabled={locked} placeholder="What the business actually sells" value={current.services} onChange={(e) => update({ services: e.target.value })} style={{ ...field, resize: "vertical" }} />
         </div>
         <div>
           <label htmlFor="adv-brief-areas" style={label}>Service areas</label>
-          <input id="adv-brief-areas" type="text" placeholder="Tampa, Brandon, Riverview" value={current.areas} onChange={(e) => update({ areas: e.target.value })} style={field} />
+          <input id="adv-brief-areas" type="text" maxLength={300} disabled={locked} placeholder="Tampa, Brandon, Riverview" value={current.areas} onChange={(e) => update({ areas: e.target.value })} style={field} />
         </div>
         <div>
           <label htmlFor="adv-brief-exclude" style={label}>Don&apos;t recommend</label>
@@ -177,7 +181,7 @@ function BriefEditor({ adv, set, domain, loaded }) {
               {current.exclude.map((e) => (
                 <span key={e} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "rgba(255,255,255,0.08)", fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
                   {e}
-                  <button type="button" aria-label={`Remove ${e}`} onClick={() => update({ exclude: current.exclude.filter((x) => x !== e) })} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>✕</button>
+                  <button type="button" aria-label={`Remove ${e}`} onClick={() => update({ exclude: current.exclude.filter((x) => x !== e) })} disabled={locked} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>✕</button>
                 </span>
               ))}
             </div>
@@ -186,13 +190,15 @@ function BriefEditor({ adv, set, domain, loaded }) {
             <input
               id="adv-brief-exclude"
               type="text"
+              maxLength={80}
+              disabled={locked}
               placeholder="A service to never recommend"
               value={input}
               onChange={(e) => { setInput(e.target.value); setError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addExclusion(); } }}
               style={field}
             />
-            <button type="button" aria-label="Add service not to recommend" onClick={addExclusion} disabled={!input.trim()} style={{ ...field, width: "auto", cursor: input.trim() ? "pointer" : "not-allowed", fontWeight: 600, whiteSpace: "nowrap" }}>
+            <button type="button" aria-label="Add service not to recommend" onClick={addExclusion} disabled={locked || !input.trim()} style={{ ...field, width: "auto", cursor: !locked && input.trim() ? "pointer" : "not-allowed", fontWeight: 600, whiteSpace: "nowrap" }}>
               Add
             </button>
           </div>
@@ -200,7 +206,7 @@ function BriefEditor({ adv, set, domain, loaded }) {
         </div>
         <div>
           <label htmlFor="adv-brief-notes" style={label}>Notes</label>
-          <textarea id="adv-brief-notes" rows={2} placeholder="Anything else the audit should know" value={current.notes} onChange={(e) => update({ notes: e.target.value })} style={{ ...field, resize: "vertical" }} />
+          <textarea id="adv-brief-notes" rows={2} maxLength={1000} disabled={locked} placeholder="Anything else the audit should know" value={current.notes} onChange={(e) => update({ notes: e.target.value })} style={{ ...field, resize: "vertical" }} />
         </div>
       </div>
     </div>

@@ -907,7 +907,7 @@ describe('Advanced: company brief', () => {
   it('rejects an exclusion under 4 characters with a message', async () => {
     mockBrief(null);
     const onChange = open();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByLabelText("Don't recommend")).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
     expect(screen.getByText('Use at least 4 characters for each service not to recommend.')).toBeInTheDocument();
@@ -917,11 +917,63 @@ describe('Advanced: company brief', () => {
   it('typing in services reports the edited brief', async () => {
     mockBrief(null);
     const onChange = open();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByLabelText('Services')).toBeEnabled());
     fireEvent.change(screen.getByLabelText('Services'), { target: { value: 'Rewiring' } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
       brief: { services: 'Rewiring', exclude: [], areas: '', notes: '' }, briefLoaded: null,
     }));
+  });
+
+  it('keeps the baseline already set instead of resetting it to the fetched brief', async () => {
+    mockBrief(SAVED);
+    const edited = { ...SAVED, services: 'Newer' };
+    const onChange = open({ ...EMPTY_ADVANCED, brief: edited, briefLoaded: edited, briefDomain: 'acme.com' });
+    await waitFor(() => expect(screen.getByLabelText('Services')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Services'), { target: { value: 'Newest' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ briefLoaded: edited }));
+  });
+
+  it('disables the brief fields while the saved brief loads', () => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    open();
+    expect(screen.getByLabelText('Services')).toBeDisabled();
+    expect(screen.getByLabelText('Service areas')).toBeDisabled();
+    expect(screen.getByLabelText("Don't recommend")).toBeDisabled();
+    expect(screen.getByLabelText('Notes')).toBeDisabled();
+  });
+
+  it('keeps the fields disabled and says so when the saved brief fails to load', async () => {
+    global.fetch = vi.fn(async (url) => (String(url).includes('/v2/brief')
+      ? { ok: false, json: async () => ({ error: 'boom' }) }
+      : { ok: true, json: async () => ({ sites: [], properties: [] }) }));
+    open();
+    expect(await screen.findByText("Couldn't load the saved brief for this site.")).toBeInTheDocument();
+    expect(screen.getByLabelText('Services')).toBeDisabled();
+    expect(screen.getByLabelText('Notes')).toBeDisabled();
+  });
+
+  it('limits the brief field lengths', async () => {
+    mockBrief(null);
+    open();
+    await waitFor(() => expect(screen.getByLabelText('Services')).toBeEnabled());
+    expect(screen.getByLabelText('Services')).toHaveAttribute('maxLength', '1000');
+    expect(screen.getByLabelText('Service areas')).toHaveAttribute('maxLength', '300');
+    expect(screen.getByLabelText('Notes')).toHaveAttribute('maxLength', '1000');
+    expect(screen.getByLabelText("Don't recommend")).toHaveAttribute('maxLength', '80');
+  });
+
+  it('clears the exclusion input and its error when the domain changes', async () => {
+    mockBrief(null);
+    const onChange = vi.fn();
+    const { rerender } = render(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="full" domain="acme.com" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    await waitFor(() => expect(screen.getByLabelText("Don't recommend")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    rerender(<AdvancedOptions value={EMPTY_ADVANCED} onChange={onChange} auditType="full" domain="other.com" />);
+    expect(screen.getByLabelText("Don't recommend")).toHaveValue('');
+    expect(screen.queryByText(/Use at least 4 characters/)).toBeNull();
   });
 });
 
