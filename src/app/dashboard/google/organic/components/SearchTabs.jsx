@@ -48,7 +48,7 @@ function useMultiHost(pages) {
 // Says when a list is the API's top-N rather than everything.
 function CapNote({ count, limit, what }) {
   if (!limit || count < limit) return null;
-  return <p className="ga4-sub gsc-tab-intro">Showing the top {limit.toLocaleString("en-US")} {what} by clicks (Search Console's limit per request). Totals above include everything.</p>;
+  return <p className="ga4-sub gsc-tab-intro">Showing the top {limit.toLocaleString("en-US")} {what} by clicks (Search Console&apos;s limit per request). Totals above include everything.</p>;
 }
 
 function Seg({ value, onChange, options, label }) {
