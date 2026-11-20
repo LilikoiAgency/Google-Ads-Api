@@ -18,6 +18,7 @@ import { getSavedLocations, saveReviewTexts, getReviewTexts } from './reputation
 import { brandName, businessCity } from './reviews';
 import { buildSearchQueries, runWebSearch } from './search';
 import { guardTargets, buildTargetsResult } from './targets';
+import { matchesExclusion } from './corrections';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -115,7 +116,7 @@ async function runGather(job) {
   }
   const pages = crawl?.pages_crawled || [];
   const homepage = pages.find((p) => p.page_type === 'homepage') || pages[0] || null;
-  const sharedContext = buildSharedContext({ domain: job.domain, profile: job.auditType, homepage, gaps: describeGaps(gaps) });
+  const sharedContext = buildSharedContext({ domain: job.domain, profile: job.auditType, homepage, gaps: describeGaps(gaps), brief: job.brief });
   return { ok: true, patch: { 'data.sources': data, 'data.gaps': gaps, 'data.sharedContext': sharedContext } };
 }
 
@@ -233,11 +234,12 @@ async function runPass(job, key) {
     const { output } = await call(input);
     out = { ...output, tasks: normalizeTaskIds(pass, null, output?.tasks) };
     if (pass === 'reputation') out.themes = guardThemes(out.themes, data?.reviews, reviewTexts);
-    if (pass === 'targets') out.targets = guardTargets(out.targets, input);
+    if (pass === 'targets') out.targets = guardTargets(out.targets, input, { exclude: job.brief?.exclude });
   }
   out.tasks = (out.tasks || [])
     .map((t) => ({ ...t, page: pathKey(t.page) }))
-    .filter((t) => !isGenericTask(t) && !isEmptyTask(t));
+    .filter((t) => !isGenericTask(t) && !isEmptyTask(t))
+    .filter((t) => !matchesExclusion(t, job.brief?.exclude));
   const res = { ok: true, patch: { [`passes.${pass}`]: out } };
   if (gaps.length) res.gaps = gaps;
   return res;

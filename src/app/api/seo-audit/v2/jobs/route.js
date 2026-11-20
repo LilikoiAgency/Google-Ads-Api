@@ -7,6 +7,8 @@ import { checkRateLimit } from "../../../../../lib/seoRateLimit";
 import { newJob } from "../../../../../lib/seoAuditV2/jobs";
 import { saveLocations } from "../../../../../lib/seoAuditV2/reputationStore";
 import { parseAuditOptions, hasTargets } from "../../../../../lib/seoAuditV2/options";
+import { getBrief } from "../../../../../lib/seoAuditV2/briefStore";
+import { parseBrief } from "../../../../../lib/seoAuditV2/briefs";
 import {
   findReusable, getDailyUsage, incrementUsage, createJob, refundUsage,
 } from "../../../../../lib/seoAuditV2/jobStore";
@@ -63,9 +65,18 @@ export async function POST(request) {
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
 
+    // The saved company brief, snapshotted on the job (fixed key order, null when none).
+    // A failed lookup never blocks the audit starting.
+    let brief = null;
+    try {
+      brief = parseBrief(await getBrief(domain)).brief ?? null;
+    } catch (err) {
+      console.error("[seo-audit/v2/jobs] loading the company brief failed:", err?.message);
+    }
+
     // A custom page selection always runs fresh.
     if (!forceRerun && !options) {
-      const existing = await findReusable({ domain, auditType, todayStart });
+      const existing = await findReusable({ domain, auditType, todayStart, brief });
       if (existing) return NextResponse.json({ jobId: existing.id, reused: true });
     }
 
@@ -96,7 +107,7 @@ export async function POST(request) {
     }
 
     await incrementUsage(email, usageDate);
-    const job = { ...newJob({ email, domain, auditType, now: new Date(), targets: hasTargets(options) }), usageDate, ...(options ? { options } : {}) };
+    const job = { ...newJob({ email, domain, auditType, now: new Date(), targets: hasTargets(options) }), usageDate, brief, ...(options ? { options } : {}) };
     try {
       const jobId = await createJob(job);
       if (options?.locations?.length) {

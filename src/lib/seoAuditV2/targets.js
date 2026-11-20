@@ -2,6 +2,7 @@
 // and the result section. Pure: no server imports.
 
 import { pathKey } from './tasks';
+import { matchesExclusion } from './corrections';
 
 export const normKeyword = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -73,7 +74,7 @@ export function targetsInput(crawl, data, targetOptions) {
 
 // Keywords must come from the input (given, ideas or the page's own queries),
 // with at most one primary; conflicts must name another known page.
-export function guardTargets(outTargets, input) {
+export function guardTargets(outTargets, input, { exclude } = {}) {
   const known = new Set([
     ...(input?.other_pages || []).map((p) => p.page),
     ...(input?.targets || []).map((t) => t.page),
@@ -96,6 +97,7 @@ export function guardTargets(outTargets, input) {
     for (const k of out.keywords || []) {
       const keyword = normKeyword(k?.keyword);
       if (!keyword || !allowed.has(keyword) || seen.has(keyword) || !ROLES.includes(k.role)) continue;
+      if (matchesExclusion({ title: keyword }, exclude)) continue;
       let role = k.role;
       if (role === 'primary' && primary) role = 'secondary';
       if (!givenSet.has(keyword)) {

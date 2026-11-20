@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { briefBlock, BRIEF_HEADING } from '@/lib/seoAuditV2/briefs';
 import {
   PASSES, PASS_SYSTEM, SYNTH_SYSTEM, CONTENT_CHUNK_SIZE, buildPassInput, buildSharedContext, passSchema, synthSchema,
   normalizeTaskIds, buildSynthInput, buildActionPlan, resolveTopMoves, resolveContentChunk, fixPageCount,
@@ -259,6 +260,20 @@ describe('buildSharedContext', () => {
     expect(ctx).toContain('quick');
     expect(ctx).toContain('Title 0');
     expect(ctx).toContain('Page speed unavailable');
+  });
+
+  it('ends with the brief block when given and is unchanged without one', () => {
+    const base = { domain: 'x.com', profile: 'full', homepage: null, gaps: [] };
+    const brief = { services: 'turf', exclude: ['roof repairs'], areas: '', notes: '' };
+    const ctx = buildSharedContext({ ...base, brief });
+    expect(ctx.endsWith(briefBlock(brief))).toBe(true);
+    expect(ctx.indexOf(BRIEF_HEADING)).toBeGreaterThan(ctx.indexOf('## Data gaps'));
+    expect(buildSharedContext({ ...base, brief: null })).toBe(buildSharedContext(base));
+    expect(buildSharedContext(base)).not.toContain(BRIEF_HEADING);
+  });
+
+  it('rules treat the brief as fact', () => {
+    expect(buildSharedContext({ domain: 'x.com', profile: 'full', homepage: null, gaps: [] })).toMatch(/company brief, it is fact/);
   });
 
   it('says there are no gaps when none', () => {

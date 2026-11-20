@@ -23,11 +23,13 @@ vi.mock('@/lib/seoAuditV2/jobStore', () => ({
   refundUsage: vi.fn(),
   listOpenJobs: vi.fn(),
 }));
+vi.mock('@/lib/seoAuditV2/briefStore', () => ({ getBrief: vi.fn() }));
 vi.mock('@/lib/seoAuditV2/runStep', () => ({ runStep: vi.fn() }));
 
 const { getServerSession } = await import('next-auth');
 const { getMonthlyClaudeCost, getClaudeBudgetCap } = await import('@/lib/usageLogger');
 const store = await import('@/lib/seoAuditV2/jobStore');
+const { getBrief } = await import('@/lib/seoAuditV2/briefStore');
 const { runStep } = await import('@/lib/seoAuditV2/runStep');
 const { newJob, STEP_KEYS } = await import('@/lib/seoAuditV2/jobs');
 const { resetRateLimitMap } = await import('@/lib/seoRateLimit');
@@ -60,6 +62,7 @@ beforeEach(() => {
   getServerSession.mockResolvedValue({ user: { email: USER } });
   getMonthlyClaudeCost.mockResolvedValue(10);
   getClaudeBudgetCap.mockResolvedValue(100);
+  getBrief.mockResolvedValue(null);
   store.findReusable.mockResolvedValue(null);
   store.getDailyUsage.mockResolvedValue(0);
   store.createJob.mockResolvedValue('newjob');
@@ -131,6 +134,27 @@ describe('POST /api/seo-audit/v2/jobs', () => {
     await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full', options: { pages: [], skip: [] } }));
     expect(store.findReusable).toHaveBeenCalled();
     expect(store.createJob.mock.calls[0][0].options).toBeUndefined();
+  });
+
+  it('stores the saved brief on the job and passes it to findReusable', async () => {
+    getBrief.mockResolvedValue({ notes: 'n', areas: 'Tampa', services: 'turf', exclude: ['roof repairs'] });
+    await jobsRoute.POST(post({ domain: 'www.Acme.com', auditType: 'full' }));
+    const brief = { services: 'turf', exclude: ['roof repairs'], areas: 'Tampa', notes: 'n' };
+    expect(getBrief).toHaveBeenCalledWith('acme.com');
+    expect(store.findReusable.mock.calls[0][0].brief).toEqual(brief);
+    expect(Object.keys(store.createJob.mock.calls[0][0].brief)).toEqual(['services', 'exclude', 'areas', 'notes']);
+    expect(store.createJob.mock.calls[0][0].brief).toEqual(brief);
+  });
+
+  it('stores a null brief when none is saved or the lookup fails', async () => {
+    await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full' }));
+    expect(store.createJob.mock.calls[0][0].brief).toBeNull();
+    expect(store.findReusable.mock.calls[0][0].brief).toBeNull();
+    getBrief.mockRejectedValue(new Error('mongo down'));
+    resetRateLimitMap();
+    const res = await jobsRoute.POST(post({ domain: 'acme.com', auditType: 'full' }));
+    expect(res.body).toMatchObject({ jobId: 'newjob' });
+    expect(store.createJob.mock.calls[1][0].brief).toBeNull();
   });
 
   it('reuse returns the existing job without a new use', async () => {
@@ -573,9 +597,13 @@ describe('jobStore (Mongo calls)', () => {
       domain: 'acme.com',
       auditType: 'full',
       options: null,
+      brief: null,
       status: { $in: ['queued', 'running', 'done'] },
       createdAt: { $gte: '2026-11-18T00:00:00.000Z' },
     });
+    const brief = { services: 's', exclude: [], areas: '', notes: '' };
+    await actual.findReusable({ domain: 'acme.com', auditType: 'full', todayStart, brief });
+    expect(coll('SeoAuditJobs').findOne.mock.calls[1][0].brief).toEqual(brief);
   });
 
   it('getJob returns null for a malformed id', async () => {

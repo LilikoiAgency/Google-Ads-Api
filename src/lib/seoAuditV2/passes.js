@@ -4,6 +4,7 @@
 // input entirely, never sent as an empty list.
 
 import { brandName } from './reviews';
+import { briefBlock } from './briefs';
 import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask, effectiveImpact, priorityScore } from './tasks';
 import { targetsInput } from './targets';
 
@@ -273,7 +274,8 @@ Writing rules:
 - impact: 1 (minor) to 5 (likely to move traffic or leads noticeably). effort: 1 (minutes, a text edit) to 5 (multi-day build). confidence: high when the evidence directly shows the problem, medium when it strongly suggests it, low when it is a reasoned bet.
 - id: a short label such as "TECH-1"; it will be renumbered later.
 - Write in plain, professional English that the agency can show a client. ${NO_AUTOMATION}
-- findings: what you observed, each with the evidence that supports it, including "can't verify" notes for data gaps. Keep each detail to a few sentences.`;
+- findings: what you observed, each with the evidence that supports it, including "can't verify" notes for data gaps. Keep each detail to a few sentences.
+- When the audit context has a company brief, it is fact: never write a task, keyword pick, move or summary line that promotes a service under Do not recommend, and follow the brief's service areas over guesses from the site.`;
 
 const OWN_AREA = "Only write tasks in this pass's area; leave others to their own pass.";
 
@@ -286,7 +288,7 @@ function gapLine(g) {
 
 // gaps: describeGaps() output (strings) or raw gap objects. The static role
 // and rules come first, then the audit-specific context.
-export function buildSharedContext({ domain, profile, homepage, gaps } = {}) {
+export function buildSharedContext({ domain, profile, homepage, gaps, brief } = {}) {
   const lines = [
     ROLE,
     '',
@@ -315,6 +317,9 @@ export function buildSharedContext({ domain, profile, homepage, gaps } = {}) {
     '## Data gaps (sources that are missing; do not judge anything that depends on them)',
     ...(gapLines.length ? gapLines.map((g) => `- ${g}`) : ['- None: every source returned data.']),
   );
+  // Last, so a later step can cut from the brief heading and re-append it.
+  const block = briefBlock(brief);
+  if (block) lines.push('', block);
   return lines.join('\n');
 }
 
