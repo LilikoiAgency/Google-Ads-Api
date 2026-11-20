@@ -3,7 +3,7 @@
 // almost win next to the scores, the top moves, the plan by area and impact vs
 // effort, then the Action Plan / Pages / per-area tabs and "About this audit".
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import s from "./audit.module.css";
 import { auditSans } from "./fonts";
 import { SectionTitle } from "../ui";
@@ -16,6 +16,8 @@ import TargetKeywords from "./TargetKeywords";
 import ReportDownload from "./ReportDownload";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
 import { flattenTasks } from "../../../../lib/seoAuditV2/tasks";
+import { applyCorrections } from "../../../../lib/seoAuditV2/corrections";
+import p from "./plan.module.css";
 
 const SOURCES = [
   ["crawl", "Site crawl"],
@@ -78,10 +80,40 @@ function AboutAudit({ sources, gaps }) {
   );
 }
 
-export default function V2Results({ result, domain, actions, onBack }) {
+// Corrections added after the plan was last built (or rebuilt) call for "Update the plan".
+export function needsReplan(result, corrections) {
+  const built = Date.parse(result?.replanned_at || result?.audit_date || "");
+  if (Number.isNaN(built)) return false;
+  return (corrections || []).some((c) => Date.parse(c?.at) > built);
+}
+
+function ReplanBar({ review }) {
+  return (
+    <div className={p.replanBar}>
+      <p>Rewrites the summary, scores and plan without the hidden work. About a minute.</p>
+      <button type="button" className={p.primary} disabled={review.replanning} onClick={() => review.onReplan?.()}>
+        {review.replanning ? "Updating the plan…" : "Update the plan"}
+      </button>
+      {review.replanError && <p role="alert" className={p.error} style={{ flexBasis: "100%" }}>{review.replanError}</p>}
+    </div>
+  );
+}
+
+// review (saved audits only): { auditId, corrections, canReplan, onCorrect, onUndo,
+// onReplan, replanning, replanError }. Without it nothing is hidden or editable.
+export default function V2Results({ result: raw, domain, actions, onBack, review }) {
   const [tab, setTab] = useState("plan");
   const [focusTask, setFocusTask] = useState(null); // a task opened from another tab
+  const corrections = review?.corrections;
+  const { result, hidden } = useMemo(() => {
+    if (!raw || !corrections?.length) return { result: raw, hidden: [] };
+    const out = applyCorrections(raw, corrections);
+    // A hidden task's follow-ups go with it; list only the task itself.
+    const tied = new Set(out.hidden.flatMap((h) => h.task.follow_ups || []));
+    return { result: out.result, hidden: out.hidden.filter((h) => !tied.has(h.task)) };
+  }, [raw, corrections]);
   if (!result) return null;
+  const showReplan = Boolean(review?.canReplan && (review.replanning || needsReplan(result, corrections)));
   const tasks = result.action_plan || [];
   // Page cards list each page's own fixes, including ones nested in groups.
   const pageTasks = flattenTasks(tasks).filter((t) => !t.group);
@@ -128,11 +160,12 @@ export default function V2Results({ result, domain, actions, onBack }) {
           {result.audit_options && <p className={s.custom}>Custom pages: {describeOptions(result.audit_options)}</p>}
         </div>
         <div className={s.actions}>
-          <ReportDownload result={result} />
+          <ReportDownload result={result} hiddenCount={hidden.length} />
           {actions}
         </div>
       </header>
 
+      {showReplan && <ReplanBar review={review} />}
       <KpiRow result={result} />
       <div className={s.grid}>
         <Opportunities search={result.search} gscStatus={result.data_sources?.search_console?.status} />
@@ -152,7 +185,18 @@ export default function V2Results({ result, domain, actions, onBack }) {
 
       <div className={`${s.card} ${s.panel}`}>
         <div role="tabpanel">
-          {tab === "plan" && <ActionPlan key={focusTask || "plan"} tasks={tasks} domain={site} auditDate={result.audit_date} focusId={focusTask} />}
+          {tab === "plan" && (
+            <ActionPlan
+              key={focusTask || "plan"}
+              tasks={tasks}
+              domain={site}
+              auditDate={result.audit_date}
+              focusId={focusTask}
+              hidden={hidden}
+              onCorrect={review?.onCorrect}
+              onUndo={review?.onUndo}
+            />
+          )}
           {tab === "pages" && (
             <>
               {incomplete("content") && <IncompleteNotice area="Content" />}

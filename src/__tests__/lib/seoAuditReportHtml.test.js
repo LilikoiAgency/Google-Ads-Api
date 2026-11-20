@@ -202,3 +202,14 @@ describe('90-day plan and target keywords in the report', () => {
     expect(generateSeoReportHtml(RESULT, { kind: 'client' })).not.toContain('<h2>Target keywords</h2>');
   });
 });
+
+describe('seo audit report: hidden tasks', () => {
+  it('full report notes hidden tasks under data gaps; the client report never does', () => {
+    const full = generateSeoReportHtml(RESULT, { kind: 'full', hiddenCount: 1 });
+    expect(full).toContain('1 task hidden by the agency');
+    expect(generateSeoReportHtml({ ...RESULT, data_gaps: [] }, { kind: 'full', hiddenCount: 2 })).toContain('2 tasks hidden by the agency');
+    expect(generateSeoReportHtml(RESULT, { kind: 'full' })).not.toContain('hidden by the agency');
+    const client = generateSeoReportHtml(RESULT, { kind: 'client', hiddenCount: 1 });
+    expect(client).not.toMatch(/hidden by|agency|correction|\bbrief\b/i);
+  });
+});

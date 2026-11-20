@@ -2,9 +2,10 @@
 // The v2 Action Plan: ranked tasks with filters, expandable evidence and exact change,
 // and export as a Markdown checklist or CSV.
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { tasksToCsv } from "@/lib/seoAuditV2/tasks";
 import { buildRoadmap, phaseByTaskId } from "@/lib/seoAuditV2/roadmap";
+import { guessService, isUsablePhrase, MIN_PHRASE } from "@/lib/seoAuditV2/corrections";
 import p from "./plan.module.css";
 
 export const CATEGORY_META = {
@@ -171,7 +172,127 @@ function ExpandedTask({ task, domain, onCopy, copyNotice }) {
   );
 }
 
-function SubTasks({ task, domain, notice, onCopy }) {
+// "Not for this business": hide this task (and, for a service the business
+// doesn't offer, every task about it). Only for tasks that carry source ids.
+function CorrectionControl({ task, onCorrect }) {
+  const uid = useId();
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState("not_offered");
+  const [service, setService] = useState(() => guessService(task.title));
+  const [saveToBrief, setSaveToBrief] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  if (!onCorrect || !task.source_ids?.length) return null;
+
+  if (!open) {
+    return (
+      <button type="button" className={p.correctBtn} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
+        Not for this business
+      </button>
+    );
+  }
+
+  async function save() {
+    const offered = kind === "not_offered";
+    if (offered && !isUsablePhrase(service)) {
+      setError(`Name the service in at least ${MIN_PHRASE} characters.`);
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await onCorrect(offered
+        ? { kind, service: service.trim(), source_ids: task.source_ids, saveToBrief }
+        : { kind, source_ids: task.source_ids, saveToBrief: false });
+      setOpen(false);
+    } catch (err) {
+      setError(err?.message || "Couldn't save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const offered = kind === "not_offered";
+  return (
+    <fieldset className={p.correctForm} onClick={(e) => e.stopPropagation()} style={{ minWidth: 0 }}>
+      <legend>Not for this business</legend>
+      <label className={p.choice}>
+        <input type="radio" name={`${uid}-kind`} checked={offered} onChange={() => setKind("not_offered")} />
+        We don&apos;t offer this
+      </label>
+      <div className={p.choiceBody}>
+        <label className={p.field} htmlFor={`${uid}-service`}>Service</label>
+        <input
+          id={`${uid}-service`}
+          className={p.input}
+          value={service}
+          maxLength={80}
+          disabled={!offered}
+          onChange={(e) => setService(e.target.value)}
+        />
+        <label className={p.check}>
+          <input type="checkbox" checked={saveToBrief} disabled={!offered} onChange={(e) => setSaveToBrief(e.target.checked)} />
+          Don&apos;t recommend it in future audits
+        </label>
+      </div>
+      <label className={p.choice}>
+        <input type="radio" name={`${uid}-kind`} checked={!offered} onChange={() => setKind("not_relevant")} />
+        Not relevant here
+      </label>
+      {error && <p role="alert" className={p.error}>{error}</p>}
+      <div className={p.formActions}>
+        <button type="button" className={p.primary} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        <button type="button" className={p.secondary} disabled={saving} onClick={() => { setOpen(false); setError(null); }}>Cancel</button>
+      </div>
+    </fieldset>
+  );
+}
+
+const hiddenReason = (c) => (c?.kind === "not_offered"
+  ? (c.service ? `You don't offer ${c.service}` : "You don't offer this")
+  : "Marked not relevant");
+
+// "N hidden · Show hidden" and the greyed list of hidden tasks, each with Undo.
+function HiddenTasks({ hidden, onUndo }) {
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState(null);
+  if (!hidden?.length) return null;
+  async function undo(id) {
+    setError(null);
+    try {
+      await onUndo?.(id);
+    } catch (err) {
+      setError(err?.message || "Couldn't undo. Try again.");
+    }
+  }
+  return (
+    <div>
+      <p className={p.hiddenBar}>
+        <span>{hidden.length} hidden · </span>
+        <button type="button" className={p.linkBtn} aria-expanded={show} onClick={() => setShow((v) => !v)}>
+          {show ? "Hide hidden" : "Show hidden"}
+        </button>
+      </p>
+      {error && <p role="alert" className={p.error}>{error}</p>}
+      {show && (
+        <ul className={p.hiddenList}>
+          {hidden.map(({ task, correction }, i) => (
+            <li key={`${task.id || i}-${correction?.id || ""}`} className={p.hiddenItem}>
+              <span className={p.rank}>{task.id}</span>
+              <span className={p.hiddenTitle}>{task.title}</span>
+              <span className={p.hiddenReason}>{hiddenReason(correction)}</span>
+              {onUndo && correction?.id && (
+                <button type="button" className={p.secondary} onClick={() => undo(correction.id)}>Undo</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SubTasks({ task, domain, notice, onCopy, onCorrect }) {
   const children = childrenOf(task);
   if (!children.length) return null;
   return (
@@ -210,6 +331,8 @@ function SubTasks({ task, domain, notice, onCopy }) {
               {c.evidence?.length > 0 && (
                 <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>Evidence: {c.evidence.join(" · ")}</p>
               )}
+              {/* Group items can be corrected one by one; follow-ups go with their task. */}
+              {task.group && task.items?.includes(c) && <CorrectionControl task={c} onCorrect={onCorrect} />}
             </li>
           );
         })}
@@ -219,7 +342,9 @@ function SubTasks({ task, domain, notice, onCopy }) {
 }
 
 // focusId: a task to show opened (from another tab); a nested id (T2.1) opens its parent.
-export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId = null }) {
+// hidden / onCorrect / onUndo: corrections on a saved audit; without them the
+// plan shows no correction controls.
+export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId = null, hidden = [], onCorrect, onUndo }) {
   const [category, setCategory] = useState("");
   const [page, setPage] = useState("");
   const [quickOnly, setQuickOnly] = useState(false);
@@ -275,8 +400,15 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId
     downloadCsv(tasksToCsv(visible, { phases: phaseLabels }), `${domain} SEO action plan ${date}.csv`);
   }
 
+  const hiddenTasks = <HiddenTasks hidden={hidden} onUndo={onUndo} />;
+
   if (!tasks.length) {
-    return <p style={{ color: "var(--muted)", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>;
+    return (
+      <>
+        <p style={{ color: "var(--muted)", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>
+        {hiddenTasks}
+      </>
+    );
   }
 
   const renderRows = (list) => list.map((t) => {
@@ -313,7 +445,8 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId
           <td />
           <td colSpan={5} style={{ padding: "0 12px 18px" }}>
             <ExpandedTask task={t} domain={domain} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
-            <SubTasks task={t} domain={domain} notice={notice} onCopy={handleCopyChange} />
+            <CorrectionControl task={t} onCorrect={onCorrect} />
+            <SubTasks task={t} domain={domain} notice={notice} onCopy={handleCopyChange} onCorrect={onCorrect} />
           </td>
         </tr>
       ),
@@ -441,6 +574,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId
         </button>
       )}
       {!visible.length && <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 12 }}>No tasks match these filters.</p>}
+      {hiddenTasks}
     </div>
   );
 }

@@ -5,7 +5,8 @@
 import { useEffect, useRef, useState } from "react";
 import { REPORT_KINDS, downloadSeoReport } from "../../../../lib/seoAuditReportHtml";
 
-export default function ReportDownload({ result }) {
+// result: the corrected plan; hiddenCount: tasks hidden from it (noted in the full report).
+export default function ReportDownload({ result, hiddenCount = 0 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -44,7 +45,7 @@ export default function ReportDownload({ result }) {
               key={k.key}
               role="menuitem"
               type="button"
-              onClick={() => { downloadSeoReport(result, { kind: k.key }); setOpen(false); }}
+              onClick={() => { downloadSeoReport(result, { kind: k.key, hiddenCount }); setOpen(false); }}
               style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "10px 12px", borderRadius: 8, cursor: "pointer" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--panel-2)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}

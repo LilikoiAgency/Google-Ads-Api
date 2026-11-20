@@ -1036,3 +1036,105 @@ describe('30/60/90 view and target keywords', () => {
     expect(screen.queryByRole('tab', { name: /^Target keywords/ })).not.toBeInTheDocument();
   });
 });
+
+describe('corrections and Update the plan', () => {
+  const PLAN = TASKS.map((t, i) => ({ ...t, source_ids: [`S${i + 1}`] }));
+  const RESULT = { ...V2_RESULT, action_plan: PLAN, top_moves: [{ headline: 'Answer pricing questions on the turf page', task: PLAN[0] }] };
+  const C_RELEVANT = { id: 'c1', kind: 'not_relevant', source_ids: ['S1'], by: 'a@lilikoiagency.com', at: '2026-11-19T10:00:00.000Z' };
+  const C_OFFERED = { id: 'c2', kind: 'not_offered', service: 'localbusiness schema', source_ids: ['S3'], by: 'a@lilikoiagency.com', at: '2026-11-19T10:00:00.000Z' };
+  const review = (o = {}) => ({
+    auditId: 'a1', corrections: [], canReplan: true,
+    onCorrect: vi.fn(async () => {}), onUndo: vi.fn(async () => {}), onReplan: vi.fn(async () => {}),
+    replanning: false, replanError: null, ...o,
+  });
+
+  it('a correction hides the task from the plan, the 30/60/90 view and the top moves', () => {
+    render(<ResultsView audit={RESULT} domain="acme.com" review={review({ corrections: [C_RELEVANT] })} />);
+    expect(screen.queryByText('Add pricing section to turf page')).not.toBeInTheDocument();
+    expect(screen.queryByText('Answer pricing questions on the turf page')).not.toBeInTheDocument();
+    expect(screen.getByText('Fix canonical pointing to staging')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '30 / 60 / 90 days' }));
+    expect(screen.queryByText('Add pricing section to turf page')).not.toBeInTheDocument();
+    expect(screen.getByText('Fix canonical pointing to staging')).toBeInTheDocument();
+  });
+
+  it('without review nothing is hidden and no correction controls show', () => {
+    render(<ResultsView audit={RESULT} domain="acme.com" />);
+    expect(screen.getByText('Add pricing section to turf page')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T1' }));
+    expect(screen.queryByRole('button', { name: 'Not for this business' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Show hidden/)).not.toBeInTheDocument();
+  });
+
+  it('Show hidden lists hidden tasks with the reason, and Undo calls onUndo', () => {
+    const r = review({ corrections: [C_RELEVANT, C_OFFERED] });
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    expect(screen.getByText(/2 hidden/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden' }));
+    expect(screen.getByText('Add pricing section to turf page')).toBeInTheDocument();
+    expect(screen.getByText('Marked not relevant')).toBeInTheDocument();
+    expect(screen.getByText("You don't offer localbusiness schema")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Undo' })[0]);
+    expect(r.onUndo).toHaveBeenCalledWith('c1');
+  });
+
+  it('the form sends the source ids and the edited service', async () => {
+    const r = review();
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    expect(screen.getByLabelText("We don't offer this")).toBeChecked();
+    const service = screen.getByLabelText('Service');
+    expect(service).toHaveValue('pricing section to turf');
+    expect(screen.getByLabelText("Don't recommend it in future audits")).toBeChecked();
+    fireEvent.change(service, { target: { value: 'turf installation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_offered', service: 'turf installation', source_ids: ['S1'], saveToBrief: true }));
+  });
+
+  it('Not relevant here sends no service and nothing for the brief; a short service is rejected', async () => {
+    const r = review();
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'ab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByText(/at least 4 characters/)).toBeInTheDocument();
+    expect(r.onCorrect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Not relevant here'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_relevant', source_ids: ['S2'], saveToBrief: false }));
+  });
+
+  it('shows the save error from onCorrect inline', async () => {
+    const r = review({ onCorrect: vi.fn(async () => { throw new Error("Couldn't save the correction."); }) });
+    render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    fireEvent.click(screen.getByLabelText('Not relevant here'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText("Couldn't save the correction.")).toBeInTheDocument();
+  });
+
+  it('Update the plan appears only after a newer correction and calls onReplan', () => {
+    const old = { ...C_RELEVANT, at: '2026-11-19T10:00:00.000Z' };
+    const { unmount } = render(<ResultsView audit={{ ...RESULT, replanned_at: '2026-11-19T12:00:00.000Z' }} domain="acme.com" review={review({ corrections: [old] })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+    unmount();
+
+    const r = review({ corrections: [old] });
+    const { unmount: u2 } = render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);
+    expect(screen.getByText('Rewrites the summary, scores and plan without the hidden work. About a minute.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Update the plan' }));
+    expect(r.onReplan).toHaveBeenCalled();
+    u2();
+
+    const { unmount: u3 } = render(<ResultsView audit={RESULT} domain="acme.com" review={review({ corrections: [old], canReplan: false })} />);
+    expect(screen.queryByRole('button', { name: 'Update the plan' })).not.toBeInTheDocument();
+    u3();
+
+    render(<ResultsView audit={RESULT} domain="acme.com" review={review({ corrections: [old], replanning: true, replanError: 'Updating the plan failed. Try again.' })} />);
+    expect(screen.getByText('Updating the plan…')).toBeInTheDocument();
+    expect(screen.getByText('Updating the plan failed. Try again.')).toBeInTheDocument();
+  });
+});

@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../components/DashboardToolHeader";
@@ -45,6 +45,14 @@ export default function SEOAuditPage() {
   const [auditResult, setAuditResult] = useState(null);
   const [jobId, setJobId] = useState(null);
 
+  // Corrections on the saved audit shown in the results, and "Update the plan".
+  const [auditId, setAuditId] = useState(null);
+  const [corrections, setCorrections] = useState([]);
+  const [canReplan, setCanReplan] = useState(false);
+  const [replanning, setReplanning] = useState(false);
+  const [replanError, setReplanError] = useState(null);
+  const shownAuditRef = useRef(null); // drops a late reply for an audit no longer shown
+
   // History
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -73,13 +81,74 @@ export default function SEOAuditPage() {
   }, [authStatus]);
 
   // ── Job finished: show its results ─────────────────────────────────────
+  const finishedAuditId = job.progress?.auditId;
   useEffect(() => {
     if (step !== STEPS.PROGRESS || !job.result) return;
     setCrawlData(null);
     setAuditResult(job.result);
+    // A just-finished job is saved with no corrections and its job data intact.
+    setReview({ id: finishedAuditId || null, corrections: [], canReplan: Boolean(finishedAuditId) });
     setStep(STEPS.RESULTS);
     refreshHistory();
-  }, [step, job.result]);
+  }, [step, job.result, finishedAuditId]);
+
+  function setReview({ id = null, corrections: list = [], canReplan: can = false } = {}) {
+    setAuditId(id);
+    shownAuditRef.current = id;
+    setCorrections(list);
+    setCanReplan(can);
+    setReplanning(false);
+    setReplanError(null);
+  }
+
+  // Add or undo a correction; both return the audit's updated corrections.
+  async function saveCorrection(id, url, init, fallback) {
+    let res;
+    try {
+      res = await fetch(url, init);
+    } catch {
+      throw new Error("Couldn't reach the server. Check your connection and try again.");
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 401 ? "Your session has expired. Sign in again and retry." : body.error || fallback);
+    if (shownAuditRef.current === id) setCorrections(Array.isArray(body.corrections) ? body.corrections : []);
+  }
+
+  function handleCorrect(correction) {
+    return saveCorrection(auditId, `/api/seo-audit/v2/audits/${auditId}/corrections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(correction),
+    }, "Couldn't save the correction. Try again.");
+  }
+
+  function handleUndo(correctionId) {
+    return saveCorrection(auditId, `/api/seo-audit/v2/audits/${auditId}/corrections/${correctionId}`, { method: "DELETE" }, "Couldn't undo. Try again.");
+  }
+
+  async function handleReplan() {
+    const id = auditId;
+    if (replanning || !id) return;
+    setReplanning(true);
+    setReplanError(null);
+    let error = null;
+    let result = null;
+    try {
+      const res = await fetch(`/api/seo-audit/v2/audits/${id}/replan`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.result) result = body.result;
+      else if (res.status === 401) error = "Your session has expired. Sign in again and retry.";
+      else if (res.status === 429) error = "The monthly usage limit is reached. Contact an admin.";
+      else if (res.status === 404) error = "This audit no longer exists.";
+      else error = body.error || "Updating the plan failed. Try again.";
+    } catch {
+      error = "Couldn't reach the server. Check your connection and try again.";
+    }
+    if (shownAuditRef.current !== id) return; // another audit is open now
+    if (result) setAuditResult(result.version ? result : { ...result, version: 2 });
+    setReplanError(error);
+    setReplanning(false);
+  }
 
   // ── Start (or reuse) a v2 audit job ────────────────────────────────────
   async function handleRunAudit(forceRerun = false) {
@@ -119,6 +188,7 @@ export default function SEOAuditPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(friendlyError(res.status, body));
       setAuditResult(null);
+      setReview();
       setCrawlData(null);
       setJobId(body.jobId);
       setStep(STEPS.PROGRESS);
@@ -135,6 +205,7 @@ export default function SEOAuditPage() {
     setStep(STEPS.CONFIGURE);
     setCrawlData(null);
     setAuditResult(null);
+    setReview();
     setJobId(null);
     setError(null);
     setDomain("");
@@ -174,6 +245,7 @@ export default function SEOAuditPage() {
       setCrawlData(doc.crawlData || null);
       const result = doc.auditResult;
       setAuditResult(doc.version === 2 && result && !result.version ? { ...result, version: 2 } : result);
+      setReview({ id: doc._id || auditId, corrections: Array.isArray(doc.corrections) ? doc.corrections : [], canReplan: Boolean(doc.canReplan) });
       setDomain(doc.domain || "");
       setAuditType(doc.auditType || "full");
       // "Run again" repeats the same page selection.
@@ -537,7 +609,14 @@ export default function SEOAuditPage() {
 
         {/* ── Step 2: Results (v2 or v1 view, by version) ────────────────── */}
         {step === STEPS.RESULTS && auditResult && (
-          <ResultsView audit={auditResult} crawlData={crawlData} domain={domain} actions={resultActions} onBack={handleBackToAudits} />
+          <ResultsView
+            audit={auditResult}
+            crawlData={crawlData}
+            domain={domain}
+            actions={resultActions}
+            onBack={handleBackToAudits}
+            review={auditId ? { auditId, corrections, canReplan, onCorrect: handleCorrect, onUndo: handleUndo, onReplan: handleReplan, replanning, replanError } : undefined}
+          />
         )}
       </div>
     </div>
