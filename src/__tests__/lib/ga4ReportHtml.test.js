@@ -126,7 +126,7 @@ describe('ga4ReportHtml', () => {
   it('labels landing-page users as approximate and explains why', () => {
     const html = generateTrafficReportHtml(report, { view: 'all' });
     expect(html).toContain('<th>Users (approx.)</th>');
-    expect(html).toContain('Landing-page users are added up across channels, so someone who arrived through two channels counts twice there.');
+    expect(html).toContain('Landing-page and city users are added up across channels, so someone who arrived through two channels counts twice there.');
   });
 
   it('discloses sampled / grouped / thresholded data, never the suspected-paid text', () => {

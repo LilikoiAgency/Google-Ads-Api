@@ -17,9 +17,9 @@ function emptyReports() {
 }
 
 describe('ga4Report', () => {
-  it('builds 8 requests with view filters', () => {
+  it('builds 13 requests with view filters', () => {
     const r = buildReportRequests({ ...ctx.range, compareRange: ctx.compareRange, granularity: 'week' });
-    expect(r).toHaveLength(8);
+    expect(r).toHaveLength(13);
     expect(r[1].dimensionFilter.filter.inListFilter.values).toEqual(['Organic Search']);
     expect(r[4].dimensionFilter).toBeUndefined();
     expect(r[5].dimensions[0].name).toBe('isoYearIsoWeek');
@@ -34,7 +34,7 @@ describe('ga4Report', () => {
         { ...ctx.compareRange, name: 'compare' },
       ]);
     }
-    for (const i of [5, 6, 7]) expect(r[i].dateRanges).toEqual([{ ...ctx.range, name: 'current' }]);
+    for (const i of [5, 6, 7, 8, 9, 10, 11, 12]) expect(r[i].dateRanges).toEqual([{ ...ctx.range, name: 'current' }]);
     expect(r[5].dimensions[0].name).toBe('date');
     expect(r[6].limit).toBe(1000);
     expect(r[7].limit).toBe(500);

@@ -59,6 +59,32 @@ function cellDelta(d, hasCompare) {
   return { t, dir: dirOf(t) };
 }
 
+const pct = (x) => `${((x || 0) * 100).toFixed(1)}%`;
+const place = (v) => (v && v !== '(not set)' ? v : 'Unknown');
+const prettyEvent = (n) => { const s = String(n || '').replace(/_/g, ' ').trim(); return s ? s[0].toUpperCase() + s.slice(1) : '(unnamed)'; };
+
+// Audience tables for the download; null when the report predates them.
+function audienceData(a) {
+  if (!a) return null;
+  const split = (rows, key) => rows.map((r) => ({
+    name: r[key], sessions: int(r.sessions), share: pct(r.share), rate: rate(r.engagementRate), conv: pct(r.keyEventRate),
+  }));
+  return {
+    cities: a.cities.slice(0, TOP_N).map((c) => ({
+      city: place(c.city),
+      where: [place(c.region), c.country].filter((x) => x && x !== 'Unknown' && x !== '(not set)').join(', '),
+      sessions: int(c.sessions), users: int(c.users), rate: rate(c.engagementRate), keyEvents: int(c.keyEvents),
+    })),
+    regions: a.regions.slice(0, 10).map((r) => ({
+      region: place(r.region), country: r.country && r.country !== '(not set)' ? r.country : '',
+      sessions: int(r.sessions), share: pct(r.share), keyEvents: int(r.keyEvents),
+    })),
+    devices: split(a.devices, 'device'),
+    visitors: split(a.visitorTypes, 'type'),
+    events: a.keyEvents.map((e) => ({ event: prettyEvent(e.event), count: int(e.count), share: pct(e.share) })),
+  };
+}
+
 function buildViewData(report, viewKey, { hasCompare, compareLabel, range, showKeyEvents }) {
   const v = selectView(report, viewKey);
   const t = v.totals;
@@ -116,6 +142,7 @@ function buildViewData(report, viewKey, { hasCompare, compareLabel, range, showK
     pages: v.pages.slice(0, TOP_N).map((p) => ({
       page: p.page, sessions: int(p.sessions), users: int(p.users), keyEvents: int(p.keyEvents),
     })),
+    aud: audienceData(v.audience),
     defs: CHANNEL_DEFINITIONS
       .filter((d) => d.name.split(' / ').some((n) => inView(n, viewKey)))
       .map((d) => ({ name: d.name, text: d.text })),
@@ -170,7 +197,8 @@ export function generateTrafficReportHtml(report, { view, views } = {}) {
   const note = `Source: Google Analytics 4, Session primary channel group, ${range}.`
     + (hasCompare ? ` Compared with ${compareLabel}.` : '')
     + ` Users are unique visitors for the whole period; the chart counts users per ${unit}, so someone who visits in several periods appears in each.`
-    + ' Landing-page users are added up across channels, so someone who arrived through two channels counts twice there.'
+    + ' Landing-page and city users are added up across channels, so someone who arrived through two channels counts twice there.'
+    + ' Locations come from visitors’ internet connections and are approximate.'
     + (dq.sampled || dq.otherRow || dq.thresholded
       ? ' Google Analytics sampled or grouped some of this data, so small numbers may be approximate.'
       : '');
@@ -219,7 +247,7 @@ h2{font-size:1.15rem;font-weight:800;margin:48px 0 0;letter-spacing:-.005em}
 .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:16px}
 .tw.first{margin-top:36px}
 table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
-#tbl{min-width:640px}#tbl.nc{min-width:480px}#src{min-width:440px}#pg{min-width:0}
+#tbl{min-width:640px}#tbl.nc{min-width:480px}#src{min-width:440px}#pg{min-width:0}#city{min-width:480px}
 th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
 th:first-child,td:first-child{text-align:left}
 th{font-weight:600;color:var(--muted);white-space:nowrap}
@@ -227,6 +255,8 @@ td.d{font-size:.82rem;font-weight:600;white-space:nowrap}
 td.l{text-align:left}
 td.pg{max-width:420px;overflow-wrap:anywhere;word-break:break-word}
 td.none{text-align:left;color:var(--muted)}
+td .m{color:var(--muted);font-size:.82rem;margin-left:6px}
+[hidden]{display:none!important}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:baseline}
 .sum td{font-weight:800;border-top:2px solid var(--ink)}
 .note{color:var(--muted);font-size:.85rem;margin-top:24px;max-width:75ch}
@@ -251,6 +281,17 @@ ${toggle}
 <div class="tw"><table id="src"></table></div>
 <h2>Top landing pages</h2>
 <div class="tw"><table id="pg"></table></div>
+<div id="aud">
+<h2>Where visitors are</h2>
+<div class="tw"><table id="city"></table></div>
+<div class="tw"><table id="reg"></table></div>
+<h2>Devices</h2>
+<div class="tw"><table id="dev"></table></div>
+<h2>New vs returning visitors</h2>
+<div class="tw"><table id="vis"></table></div>
+<div id="kew"><h2>Key events by action</h2>
+<div class="tw"><table id="ke"></table></div></div>
+</div>
 <p class="note defs" id="defs"></p>
 <p class="note">${esc(note)}</p>
 </main>
@@ -283,6 +324,28 @@ function render(){
  if(!v.pages.length)p+='<tr><td class="none" colspan="'+(ke?4:3)+'">No landing pages for these channels in this period.</td></tr>';
  v.pages.forEach(r=>{p+='<tr><td class="pg">'+esc(r.page)+'</td><td>'+esc(r.sessions)+'</td><td>'+esc(r.users)+'</td>'+(ke?'<td>'+esc(r.keyEvents)+'</td>':'')+'</tr>';});
  $('pg').innerHTML=p+'</tbody>';
+ const a=v.aud;$('aud').hidden=!a;
+ if(a){
+  const none=(n,m)=>'<tr><td class="none" colspan="'+n+'">'+m+'</td></tr>';
+  let c='<thead><tr><th>City</th><th>Sessions</th><th>Users (approx.)</th><th>Engagement rate</th>'+(ke?'<th>Key events</th>':'')+'</tr></thead><tbody>';
+  if(!a.cities.length)c+=none(ke?5:4,'No city data for these channels in this period.');
+  a.cities.forEach(r=>{c+='<tr><td>'+esc(r.city)+(r.where?' <span class="m">'+esc(r.where)+'</span>':'')+'</td><td>'+esc(r.sessions)+'</td><td>'+esc(r.users)+'</td><td>'+esc(r.rate)+'</td>'+(ke?'<td>'+esc(r.keyEvents)+'</td>':'')+'</tr>';});
+  $('city').innerHTML=c+'</tbody>';
+  let g='<thead><tr><th>State / region</th><th>Sessions</th><th>Share</th>'+(ke?'<th>Key events</th>':'')+'</tr></thead><tbody>';
+  if(!a.regions.length)g+=none(ke?4:3,'No region data for these channels in this period.');
+  a.regions.forEach(r=>{g+='<tr><td>'+esc(r.region)+(r.country?' <span class="m">'+esc(r.country)+'</span>':'')+'</td><td>'+esc(r.sessions)+'</td><td>'+esc(r.share)+'</td>'+(ke?'<td>'+esc(r.keyEvents)+'</td>':'')+'</tr>';});
+  $('reg').innerHTML=g+'</tbody>';
+  const split=(rows,head)=>{let x='<thead><tr><th>'+head+'</th><th>Sessions</th><th>Share</th><th>Engagement rate</th>'+(ke?'<th>Key events per session</th>':'')+'</tr></thead><tbody>';
+   if(!rows.length)x+=none(ke?5:4,'No data for these channels in this period.');
+   rows.forEach(r=>{x+='<tr><td>'+esc(r.name)+'</td><td>'+esc(r.sessions)+'</td><td>'+esc(r.share)+'</td><td>'+esc(r.rate)+'</td>'+(ke?'<td>'+esc(r.conv)+'</td>':'')+'</tr>';});return x+'</tbody>';};
+  $('dev').innerHTML=split(a.devices,'Device');
+  $('vis').innerHTML=split(a.visitors,'Visitor');
+  $('kew').hidden=!ke;
+  let k='<thead><tr><th>Key event</th><th>Count</th><th>Share</th></tr></thead><tbody>';
+  if(!a.events.length)k+=none(3,'No key events from these channels in this period.');
+  a.events.forEach(r=>{k+='<tr><td>'+esc(r.event)+'</td><td>'+esc(r.count)+'</td><td>'+esc(r.share)+'</td></tr>';});
+  $('ke').innerHTML=k+'</tbody>';
+ }
  $('defs').innerHTML='<strong>What each channel means</strong><br>'+v.defs.map(d=>'<strong>'+esc(d.name)+':</strong> '+esc(d.text)).join('<br>');
 }
 function build(){

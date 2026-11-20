@@ -46,7 +46,7 @@ export async function GET(request) {
     }
     if (!match) return fail(403, "no_access", "Property is not visible to the service account");
 
-    const key = `ga4:v2:report:${property}:${startDate}:${endDate}:${compare}:${granularity}`;
+    const key = `ga4:v3:report:${property}:${startDate}:${endDate}:${compare}:${granularity}`;
     const cached = await getCached(key);
     if (cached) return NextResponse.json(cached);
 

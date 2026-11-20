@@ -19,6 +19,7 @@ import TrafficChart from "./components/TrafficChart";
 import ChannelTable from "./components/ChannelTable";
 import SourcesAndPages, { SOURCES_ANCHOR } from "./components/SourcesAndPages";
 import ChannelDefinitions from "./components/ChannelDefinitions";
+import AudiencePanels from "./components/AudiencePanels";
 import DownloadMenu from "./components/DownloadMenu";
 import { localToday, parseParams, buildQuery, resolveProperty, isUrlPropertyMissing } from "./urlState";
 import { useTrafficReport, makeReportKey, fetchJson } from "./useTrafficReport";
@@ -380,6 +381,7 @@ function WebTrafficPage() {
                     )}
 
                     <SourcesAndPages sources={selected.sources} pages={selected.pages} />
+                    <AudiencePanels audience={selected.audience} showKeyEvents={showKeyEvents} />
                     <ChannelDefinitions viewKey={view} rangeText={rangeLabel(report.range)} />
                   </>
                 ) : (
