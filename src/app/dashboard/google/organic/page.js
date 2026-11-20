@@ -1,612 +1,460 @@
 "use client";
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardToolHeader from "../../components/DashboardToolHeader";
 import DashboardLoader from "../../components/DashboardLoader";
-import { SearchConsoleIcon } from "../../components/DashboardIcons";
 import MobileFilterSheet from "../../components/MobileFilterSheet";
+import { SearchConsoleIcon } from "../../components/DashboardIcons";
+import PropertyPicker from "../analytics/components/PropertyPicker";
+import RangeControls from "../analytics/components/RangeControls";
+import { localToday } from "../analytics/urlState";
+import { presetRange, autoGranularity, rangeLabel, compareRange } from "@/lib/ga4Dates";
+import { SEARCH_TYPES } from "@/lib/gscReport";
+import { expectedCtrModel } from "@/lib/gscInsights";
+import { ga4ByPath, normalizePath } from "@/lib/gscGa4Join";
+import { downloadSearchReport } from "@/lib/gscReportHtml";
+import { parseParams, buildQuery, siteLabel, siteKind } from "./urlState";
+import { useSearchReport, makeSearchKey, fetchJson } from "./useSearchReport";
+import SearchKpis from "./components/SearchKpis";
+import SearchTrend from "./components/SearchTrend";
+import BrandPanel from "./components/BrandPanel";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer,
-} from "recharts";
+  QueriesTab, PagesTab, GroupsTab, OpportunitiesTab, CannibalizationTab, AudienceTab, IndexingTab, DetailDrawer,
+} from "./components/SearchTabs";
 import "../../../globals.css";
+import "../analytics/ga4.css";
+import "./organic.css";
 
-// ─── date helpers ─────────────────────────────────────────────────────────────
+const PAGE_PATH = "/dashboard/google/organic";
+const LAST_SITE_KEY = "gsc:lastSite";
 
-function toYMD(d) {
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const ERROR_COPY = {
+  no_access: "The connected Google account can't read this Search Console property anymore.",
+  quota: "Search Console is rate-limiting us. Try again in a minute.",
+  gsc_not_connected: "Search Console isn't connected (or the connection expired).",
+  unauthorized: "Your session has expired. Reload the page to sign in again.",
+  bad_params: "That request wasn't valid. Pick another range.",
+};
+
+function readStored() {
+  try { return window.localStorage.getItem(LAST_SITE_KEY); } catch { return null; }
+}
+function store(site) {
+  try { window.localStorage.setItem(LAST_SITE_KEY, site); } catch { /* storage unavailable */ }
 }
 
-function calcRange(preset, custom) {
-  const today = new Date();
-  switch (preset) {
-    case "7d":   { const s = new Date(today); s.setDate(today.getDate() - 7);   return { startDate: toYMD(s), endDate: toYMD(today) }; }
-    case "28d":  { const s = new Date(today); s.setDate(today.getDate() - 28);  return { startDate: toYMD(s), endDate: toYMD(today) }; }
-    case "3m":   { const s = new Date(today); s.setMonth(today.getMonth() - 3); return { startDate: toYMD(s), endDate: toYMD(today) }; }
-    case "6m":   { const s = new Date(today); s.setMonth(today.getMonth() - 6); return { startDate: toYMD(s), endDate: toYMD(today) }; }
-    case "custom": return custom.startDate && custom.endDate ? custom : null;
-    default:     return null;
-  }
+function Notice({ tone = "neutral", children, actions }) {
+  return (
+    <div className={`ga4-card ga4-notice ga4-notice-${tone}`} role={tone === "error" ? "alert" : undefined}>
+      <p className="ga4-notice-text">{children}</p>
+      {actions && <div className="ga4-notice-actions">{actions}</div>}
+    </div>
+  );
 }
 
-const PRESETS = [
-  { value: "7d",  label: "7 days" },
-  { value: "28d", label: "28 days" },
-  { value: "3m",  label: "3 months" },
-  { value: "6m",  label: "6 months" },
-  { value: "custom", label: "Custom" },
+// Which GA4 property the Pages tab joins with, and a way to change it.
+function Ga4Link({ ga4, properties, onLoadProperties, onPick }) {
+  const [open, setOpen] = useState(false);
+  if (!ga4) return null;
+  if (ga4.loading) return <p className="gsc-ga4-line">Matching GA4 landing pages…</p>;
+  return (
+    <div className="gsc-ga4-line">
+      {ga4.error ? <span>GA4 data unavailable: {ga4.error}</span>
+        : ga4.propertyName ? <span>Sessions and key events from GA4 <b>{ga4.propertyName}</b> (google / organic){ga4.matchedBy === "stream" ? ", matched by domain" : ""}.</span>
+          : <span>No GA4 property found for this domain, so the Pages tab shows Search Console data only.</span>}
+      {!open ? (
+        <button type="button" className="ga4-link" onClick={() => { setOpen(true); onLoadProperties(); }}>
+          {ga4.propertyName ? "Change" : "Pick a GA4 property"}
+        </button>
+      ) : (
+        <select className="ga4-control gsc-ga4-select" defaultValue="" onChange={(e) => { onPick(e.target.value || null); setOpen(false); }}>
+          <option value="" disabled>{properties ? "Choose a property…" : "Loading…"}</option>
+          {(properties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.account})</option>)}
+          <option value="">Auto-match by domain</option>
+        </select>
+      )}
+    </div>
+  );
+}
+
+const TAB_LIST = [
+  { key: "queries", label: "Queries", needsQueries: true },
+  { key: "pages", label: "Pages" },
+  { key: "groups", label: "Site sections" },
+  { key: "opportunities", label: "Opportunities", needsQueries: true },
+  { key: "cannibalization", label: "Competing pages", needsQueries: true },
+  { key: "audience", label: "Devices & countries" },
+  { key: "indexing", label: "Indexing & sitemaps" },
 ];
 
-// ─── formatters ───────────────────────────────────────────────────────────────
-
-function fmtN(n)   { return n == null ? "—" : Number(n).toLocaleString("en-US"); }
-function fmtPct(n) { return n == null ? "—" : `${n}%`; }
-
-// ─── site picker ──────────────────────────────────────────────────────────────
-
-function SitePicker({ sites, selectedSite, onChange }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const domain  = (url) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const favicon = (url) => `https://www.google.com/s2/favicons?domain=${domain(url)}&sz=32`;
-  const current = sites.find((s) => s.url === selectedSite);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition min-w-[220px]"
-      >
-        {current && (
-          <img src={favicon(current.url)} alt="" className="w-4 h-4 rounded-sm flex-shrink-0"
-            onError={(e) => { e.target.style.display = "none"; }} />
-        )}
-        <span className="flex-1 text-left truncate">{current ? domain(current.url) : "Select property"}</span>
-        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
-          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-[260px] rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden">
-          {sites.map((s) => (
-            <button
-              key={s.url}
-              onClick={() => { onChange(s.url); setOpen(false); }}
-              className={`flex items-center gap-3 w-full px-4 py-3 text-sm text-left transition hover:bg-gray-50 ${
-                s.url === selectedSite ? "bg-purple-50 text-purple-700 font-medium" : "text-gray-700"
-              }`}
-            >
-              <img src={favicon(s.url)} alt="" className="w-5 h-5 rounded-sm flex-shrink-0"
-                onError={(e) => { e.target.style.display = "none"; }} />
-              <span className="truncate">{domain(s.url)}</span>
-              {s.url === selectedSite && (
-                <svg className="ml-auto w-4 h-4 text-purple-600 flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                  <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── KPI card ─────────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, color, loading }) {
-  return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100" style={{ borderTop: `3px solid ${color}` }}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">{label}</p>
-      {loading
-        ? <div className="h-8 w-24 rounded-lg bg-gray-100 animate-pulse mt-1" />
-        : <p className="text-2xl font-bold text-gray-900">{value}</p>
-      }
-    </div>
-  );
-}
-
-// ─── sortable table ───────────────────────────────────────────────────────────
-
-function SortIcon({ col, sortCol, sortDir }) {
-  if (sortCol !== col) return <span className="ml-1 opacity-30 text-gray-500">↕</span>;
-  return <span className="ml-1 text-purple-600">{sortDir === "asc" ? "↑" : "↓"}</span>;
-}
-
-function DataTable({ rows, columns, sortCol, sortDir, onSort, search, setSearch, emptyMsg }) {
-  const [page, setPage] = useState(1);
-  const PAGE = 25;
-
-  useEffect(() => setPage(1), [rows, search]);
-
-  const filtered = rows.filter((r) => {
-    const first = Object.values(r)[0];
-    return String(first).toLowerCase().includes(search.toLowerCase());
-  });
-  const sorted = [...filtered].sort((a, b) => {
-    const va = a[sortCol]; const vb = b[sortCol];
-    return sortDir === "asc" ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
-  });
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE));
-  const pageRows = sorted.slice((page - 1) * PAGE, page * PAGE);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-        <p className="text-xs text-gray-400">{fmtN(filtered.length)} results</p>
-        <input
-          type="text"
-          placeholder="Search…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-700 w-52 focus:outline-none focus:border-purple-400"
-        />
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => onSort(col.key)}
-                  className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 cursor-pointer select-none hover:text-gray-800 ${col.align === "right" ? "text-right" : "text-left"}`}
-                >
-                  {col.label}<SortIcon col={col.key} sortCol={sortCol} sortDir={sortDir} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.length === 0 ? (
-              <tr><td colSpan={columns.length} className="px-5 py-10 text-center text-gray-400 text-sm">{emptyMsg || "No data."}</td></tr>
-            ) : pageRows.map((row, i) => (
-              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
-                {columns.map((col) => (
-                  <td key={col.key} className={`px-5 py-3 text-gray-700 ${col.align === "right" ? "text-right tabular-nums" : "max-w-xs truncate font-medium text-gray-800"}`}>
-                    {col.render ? col.render(row[col.key], row) : row[col.key]}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
-          <p className="text-xs text-gray-400">Page {page} of {totalPages}</p>
-          <div className="flex gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40">Previous</button>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── position badge ───────────────────────────────────────────────────────────
-
-function PosBadge({ pos }) {
-  const p = parseFloat(pos);
-  const color = p <= 3 ? "#22c55e" : p <= 10 ? "#f59e0b" : "#ef4444";
-  return (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: color + "18", color }}>
-      {pos}
-    </span>
-  );
-}
-
-// ─── main page ────────────────────────────────────────────────────────────────
-
-export default function OrganicPage() {
+function OrganicPage() {
   const router = useRouter();
   const { status } = useSession();
+  const searchParams = useSearchParams();
+  const [initial] = useState(() => parseParams(searchParams));
+  const [today] = useState(localToday);
 
-  // GSC connection
-  const [sites, setSites] = useState([]);
-  const [gscConnected, setGscConnected] = useState(null);
-  const [selectedSite, setSelectedSite] = useState("");
+  const [sites, setSites] = useState(null);
+  const [connected, setConnected] = useState(null);
+  const [sitesError, setSitesError] = useState(null);
+  const [site, setSite] = useState(null);
 
-  // Date range
-  const [preset, setPreset] = useState("28d");
-  const [custom, setCustom] = useState({ startDate: "", endDate: "" });
-  const [customError, setCustomError] = useState("");
-  const [showCustom, setShowCustom] = useState(false);
-
-  // Data
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Tabs + table state
-  const [activeTab, setActiveTab] = useState("queries");
-  const [sortCol, setSortCol] = useState("clicks");
-  const [sortDir, setSortDir] = useState("desc");
-  const [search, setSearch] = useState("");
-
-  // Mobile filter sheet
+  const [rangeKey, setRangeKey] = useState(initial.rangeKey);
+  const [custom, setCustom] = useState(initial.custom);
+  const [compare, setCompare] = useState(initial.compare);
+  const [type, setType] = useState(initial.type);
+  const [tab, setTab] = useState(initial.tab);
+  const [granOverride, setGranOverride] = useState(initial.gran);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // ── auth guard ────────────────────────────────────────────────────────────
+  const [settings, setSettings] = useState(null);
+  const [brandVersion, setBrandVersion] = useState(0);
+  const [ga4, setGa4] = useState(null);
+  const [ga4Props, setGa4Props] = useState(null);
+  const [inspections, setInspections] = useState({});
+  const [detail, setDetail] = useState(null);
+  const [actionError, setActionError] = useState(null);
+
   useEffect(() => {
-    if (status === "unauthenticated") router.replace("/?callbackUrl=/dashboard/google/organic");
+    if (status === "unauthenticated") router.replace(`/?callbackUrl=${PAGE_PATH}`);
   }, [status, router]);
 
-  // ── load GSC sites + check sessionStorage ─────────────────────────────────
-  useEffect(() => {
-    if (status !== "authenticated") return;
-
-    const loadSites = (list) => {
-      setSites(list);
-      setGscConnected(true);
-      // Restore previously selected site if it still exists in the list
-      const savedUrl = sessionStorage.getItem("gsc_selected_site");
-      if (savedUrl && list.some((s) => s.url === savedUrl)) {
-        setSelectedSite(savedUrl); // skip picker — remembered from session
-      }
-      // Otherwise selectedSite stays "" → picker screen will show
-    };
-
-    // Always fetch fresh: a cached list hides properties shared after the tab opened.
-    sessionStorage.removeItem("gsc_sites_list");
-    fetch("/api/gsc-sites")
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.connected) { setGscConnected(false); return; }
-        loadSites(d.sites || []);
-      })
-      .catch(() => setGscConnected(false));
-  }, [status]);
-
-  // ── fetch data whenever site or preset changes ────────────────────────────
-  const fetchData = useCallback(async (site, p, c) => {
-    const range = calcRange(p, c);
-    if (!site || !range) return;
-    setLoading(true);
-    setError(null);
-    setSearch("");
+  // ── sites ───────────────────────────────────────────────────────────────
+  const loadSites = useCallback(async () => {
+    setSitesError(null);
     try {
-      const params = new URLSearchParams({ siteUrl: site, startDate: range.startDate, endDate: range.endDate });
-      const res = await fetch(`/api/organic?${params}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to fetch");
-      setData(json);
+      const d = await fetchJson("/api/gsc-sites");
+      setConnected(!!d.connected);
+      setSites(d.sites || []);
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setSitesError(err);
+      setSites([]);
     }
   }, []);
+  useEffect(() => { if (status === "authenticated") loadSites(); }, [status, loadSites]);
 
   useEffect(() => {
-    if (gscConnected && selectedSite && preset !== "custom") {
-      fetchData(selectedSite, preset, custom);
+    if (!sites?.length) return;
+    setSite((cur) => {
+      const listed = (s) => !!s && sites.some((x) => x.url === s);
+      if (listed(cur)) return cur;
+      if (cur === null && listed(initial.site)) return initial.site;
+      const stored = readStored();
+      if (listed(stored)) return stored;
+      return sites[0].url;
+    });
+  }, [sites, initial.site]);
+  useEffect(() => { if (site) store(site); }, [site]);
+
+  // Per-site state resets when the site changes.
+  useEffect(() => {
+    setInspections({});
+    setDetail(null);
+    setSettings(null);
+    if (!site) return;
+    let live = true;
+    fetchJson(`/api/gsc/settings?siteUrl=${encodeURIComponent(site)}`)
+      .then((s) => { if (live) setSettings(s); })
+      .catch(() => { if (live) setSettings({ siteUrl: site, brandTerms: [], annotations: [], ga4Property: null }); });
+    return () => { live = false; };
+  }, [site]);
+
+  // ── range ───────────────────────────────────────────────────────────────
+  const range = useMemo(() => (rangeKey === "custom" ? custom : presetRange(rangeKey, today)), [rangeKey, custom, today]);
+  const autoGran = range ? autoGranularity(range) : "day";
+  const granularity = granOverride || autoGran;
+  const pendingCompare = useMemo(() => (range ? compareRange(range, compare) : null), [range, compare]);
+
+  useEffect(() => {
+    if (!site) return;
+    const qs = buildQuery({ site, rangeKey, custom, compare, type, tab, gran: granOverride });
+    if (window.location.search !== qs) window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs}`);
+  }, [site, rangeKey, custom, compare, type, tab, granOverride]);
+
+  // ── report ──────────────────────────────────────────────────────────────
+  const fetchKey = site && range && settings
+    ? makeSearchKey({ site, startDate: range.startDate, endDate: range.endDate, compare, type, brandVersion })
+    : null;
+  const result = useSearchReport(fetchKey, { refreshNonce });
+  const { loading } = result;
+  const report = result.report && result.report.site === site ? result.report : null;
+  const reportError = !loading && result.key === fetchKey ? result.error : null;
+  const stale = loading && !!report;
+  const hasCompare = !!report?.compareRange;
+  const compareLabel = hasCompare ? rangeLabel(report.compareRange) : null;
+  const brandTerms = settings?.brandTerms || [];
+  const ctrAt = useMemo(() => expectedCtrModel(report?.queries || []), [report]);
+  const noData = !!report && !loading && !(report.totals.impressions > 0);
+  const tabs = TAB_LIST.filter((t) => !t.needsQueries || report?.hasQueries !== false);
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : "pages";
+
+  // ── GA4 landing pages (web search only) ─────────────────────────────────
+  const ga4Property = settings?.ga4Property ?? null;
+  useEffect(() => {
+    setGa4(null);
+    if (!site || !range || type !== "web" || !settings) return undefined;
+    const ctrl = new AbortController();
+    setGa4({ loading: true });
+    const qs = new URLSearchParams({ siteUrl: site, startDate: range.startDate, endDate: range.endDate });
+    fetchJson(`/api/gsc/ga4-pages?${qs}`, { signal: ctrl.signal })
+      .then((d) => {
+        if (ctrl.signal.aborted) return;
+        if (!d.property) { setGa4({ propertyName: null }); return; }
+        const map = ga4ByPath(d.rows);
+        setGa4({
+          propertyName: d.property.name, matchedBy: d.matchedBy, byPath: map,
+          lookup: (url) => map.get(normalizePath(url)) || null,
+        });
+      })
+      .catch((err) => { if (!ctrl.signal.aborted && err?.name !== "AbortError") setGa4({ error: err.message }); });
+    return () => ctrl.abort();
+  }, [site, range?.startDate, range?.endDate, type, ga4Property, settings !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── settings writes ─────────────────────────────────────────────────────
+  const saveSettings = useCallback(async (patch) => {
+    setActionError(null);
+    try {
+      const saved = await fetchJson("/api/gsc/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteUrl: site, ...patch }),
+      });
+      setSettings(saved);
+      return saved;
+    } catch (err) {
+      setActionError(`Couldn't save: ${err.message}`);
+      throw err;
     }
-  }, [selectedSite, preset, gscConnected]);
+  }, [site]);
 
-  const handleSort = (col) => {
-    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortCol(col); setSortDir("desc"); }
+  const onSaveTerms = async (terms) => {
+    await saveSettings({ brandTerms: terms });
+    setBrandVersion((v) => v + 1);
+  };
+  const onAddAnnotation = (a) => saveSettings({ annotations: [...(settings?.annotations || []), a] });
+  const onRemoveAnnotation = (id) => saveSettings({ annotations: (settings?.annotations || []).filter((a) => a.id !== id) }).catch(() => {});
+  const onPickGa4 = (id) => saveSettings({ ga4Property: id }).catch(() => {});
+  const loadGa4Props = () => {
+    if (ga4Props) return;
+    fetchJson("/api/ga4/properties").then((d) => setGa4Props(d.properties || [])).catch(() => setGa4Props([]));
   };
 
-  const handlePreset = (val) => {
-    setPreset(val);
-    setShowCustom(val === "custom");
-    setCustomError("");
+  // ── URL inspection ──────────────────────────────────────────────────────
+  const onInspect = useCallback(async (urls) => {
+    const todo = urls.filter((u) => !inspections[u] || inspections[u].error);
+    if (!todo.length) return;
+    setInspections((m) => ({ ...m, ...Object.fromEntries(todo.map((u) => [u, { url: u, loading: true }])) }));
+    try {
+      const d = await fetchJson("/api/gsc/inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteUrl: site, urls: todo.slice(0, 10) }),
+      });
+      setInspections((m) => ({ ...m, ...Object.fromEntries(d.results.map((r) => [r.url, r])) }));
+    } catch (err) {
+      setInspections((m) => ({ ...m, ...Object.fromEntries(todo.map((u) => [u, { url: u, error: err.message }])) }));
+    }
+  }, [inspections, site]);
+
+  const onRangeChange = useCallback(({ rangeKey: k, custom: c }) => {
+    setRangeKey(k);
+    setCustom(c);
+    setGranOverride(null);
+  }, []);
+  const openQuery = useCallback((q) => setDetail({ kind: "query", value: q }), []);
+  const openPage = useCallback((p) => setDetail({ kind: "page", value: p }), []);
+  const closeDetail = useCallback(() => setDetail(null), []);
+
+  const onDownload = () => {
+    if (!report) return;
+    try {
+      downloadSearchReport(report, { brandTerms, granularity });
+    } catch (err) {
+      console.error("[gsc] download failed", err);
+      window.alert("Couldn't build the report file. Please try again.");
+    }
   };
 
-  const applyCustom = () => {
-    if (!custom.startDate || !custom.endDate) { setCustomError("Select both dates."); return; }
-    if (custom.startDate > custom.endDate) { setCustomError("Start must be before end."); return; }
-    setCustomError("");
-    fetchData(selectedSite, "custom", custom);
-  };
+  // ── render ──────────────────────────────────────────────────────────────
+  if (status !== "authenticated") return <DashboardLoader label="Loading..." />;
+  if (sites === null) return <DashboardLoader label="Loading Search Console properties..." />;
 
-  // ── computed ──────────────────────────────────────────────────────────────
-  const opportunities = (data?.queries || []).filter((q) => q.position >= 4 && q.position <= 20);
-
-  const QUERY_COLS = [
-    { key: "query",       label: "Query",         align: "left" },
-    { key: "clicks",      label: "Clicks",        align: "right", render: fmtN },
-    { key: "impressions", label: "Impressions",   align: "right", render: fmtN },
-    { key: "ctr",         label: "CTR",           align: "right", render: fmtPct },
-    { key: "position",    label: "Position",      align: "right", render: (v) => <PosBadge pos={v} /> },
-  ];
-
-  const PAGE_COLS = [
-    { key: "page",        label: "Page",          align: "left",  render: (v) => <span className="text-blue-600 truncate block max-w-xs" title={v}>{v.replace(/^https?:\/\/[^/]+/, "")}</span> },
-    { key: "clicks",      label: "Clicks",        align: "right", render: fmtN },
-    { key: "impressions", label: "Impressions",   align: "right", render: fmtN },
-    { key: "ctr",         label: "CTR",           align: "right", render: fmtPct },
-    { key: "position",    label: "Position",      align: "right", render: (v) => <PosBadge pos={v} /> },
-  ];
-
-  const TABS = [
-    { id: "queries",       label: "Top Queries",    count: data?.queries?.length },
-    { id: "opportunities", label: "Opportunities",  count: opportunities.length,   badge: true },
-    { id: "pages",         label: "Top Pages",      count: data?.pages?.length },
-  ];
-
-  // ── render ────────────────────────────────────────────────────────────────
-  if (status === "loading" || gscConnected === null) {
-    return <DashboardLoader label="Loading..." />;
-  }
+  const siteOptions = (sites || []).map((s) => ({ id: s.url, name: siteLabel(s.url), account: siteKind(s.url) }));
+  const pickerProps = { properties: siteOptions, value: site, onChange: setSite, onRefresh: loadSites, refreshing: false };
+  const rangeProps = { rangeKey, range, today, compare, onRangeChange, onCompareChange: setCompare };
+  const typeSelect = (
+    <label className="ga4-field">
+      <span className="ga4-field-label">Search type</span>
+      <select className="ga4-control ga4-select" value={type} onChange={(e) => setType(e.target.value)}>
+        {SEARCH_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+    </label>
+  );
+  const rangeText = range ? rangeLabel(range) : "";
+  const compareText = pendingCompare ? `vs ${rangeLabel(pendingCompare)}` : "No comparison";
+  const prelimInRange = report?.firstIncompleteDate && report.firstIncompleteDate <= report.range.endDate;
+  const csvBase = `${siteLabel(site)} ${rangeText}`.replace(/[\\/:*?"<>|–]/g, "-");
+  const hasSites = connected && sites.length > 0;
+  const downloadBtn = (
+    <button type="button" className="ga4-btn ga4-btn-primary" onClick={onDownload} disabled={!report || loading || noData}>
+      Download report
+    </button>
+  );
 
   return (
-    <div className="flex flex-col flex-1">
-
-      <DashboardToolHeader
-        icon={<SearchConsoleIcon />}
-        title="Google Search Organic"
-        subtitle="Search Console Performance"
-      >
-        {gscConnected && sites.length > 0 && selectedSite && (
-          <div className="desktop-only">
-            <SitePicker sites={sites} selectedSite={selectedSite} onChange={(url) => {
-              sessionStorage.setItem("gsc_selected_site", url);
-              setSelectedSite(url);
-            }} />
-          </div>
-        )}
+    <div className="ga4-page">
+      <DashboardToolHeader icon={<SearchConsoleIcon />} title="Organic Search" subtitle="Google Search Console performance">
+        {hasSites && <div className="desktop-only">{downloadBtn}</div>}
       </DashboardToolHeader>
 
-      {/* Mobile filter row */}
-      <div className="mobile-only" style={{ display: "flex", gap: 8, padding: "8px 16px", background: "rgba(14,8,28,0.4)", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-        <button
-          onClick={() => setFilterOpen(true)}
-          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
-        >
-          Filters <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
-        </button>
-        {selectedSite && (
-          <span style={{ display: "flex", alignItems: "center", fontSize: 11, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>
-            {selectedSite.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-          </span>
-        )}
-      </div>
-
-      {/* Mobile filter sheet */}
-      <MobileFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} onApply={() => setFilterOpen(false)}>
-        {gscConnected && sites.length > 0 && (
-          <div style={{ marginBottom: 18 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" }}>Property</p>
-            <SitePicker sites={sites} selectedSite={selectedSite} onChange={(url) => {
-              sessionStorage.setItem("gsc_selected_site", url);
-              setSelectedSite(url);
-            }} />
-          </div>
-        )}
-      </MobileFilterSheet>
-
-      {/* ── Date range bar — only shown once a site is selected ── */}
-      {gscConnected && selectedSite && (
-        <div className="bg-customPurple-dark border-b border-white/10 px-6 py-3">
-          <div className="mx-auto max-w-7xl flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-medium text-gray-400 mr-1">Date range:</span>
-            {PRESETS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => handlePreset(p.value)}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                  preset === p.value
-                    ? "bg-purple-600 text-white"
-                    : "bg-white/10 text-gray-300 hover:bg-white/20"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {showCustom && (
-            <div className="mx-auto max-w-7xl mt-3 flex items-end gap-3 flex-wrap">
-              <label className="text-xs text-gray-400">
-                From
-                <input type="date" value={custom.startDate} onChange={(e) => setCustom((c) => ({ ...c, startDate: e.target.value }))}
-                  className="ml-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white" />
-              </label>
-              <label className="text-xs text-gray-400">
-                To
-                <input type="date" value={custom.endDate} onChange={(e) => setCustom((c) => ({ ...c, endDate: e.target.value }))}
-                  className="ml-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white" />
-              </label>
-              <button onClick={applyCustom} className="rounded-lg bg-purple-600 hover:bg-purple-500 px-4 py-1.5 text-xs font-semibold text-white transition">Apply</button>
-              {customError && <p className="text-xs text-red-400">{customError}</p>}
+      {hasSites && (
+        <>
+          <div className="ga4-toolbar desktop-only">
+            <div className="ga4-field">
+              <span className="ga4-field-label">Site</span>
+              <PropertyPicker {...pickerProps} />
             </div>
-          )}
-        </div>
+            <RangeControls {...rangeProps} />
+            {typeSelect}
+            <div className="ga4-range-summary" aria-live="polite">
+              <span className="ga4-range-main">{rangeText}</span>
+              <span className="ga4-range-vs">{compareText}</span>
+            </div>
+          </div>
+          <div className="ga4-mobile-bar mobile-only">
+            <button type="button" className="ga4-chip" onClick={() => setFilterOpen(true)}>Filters <span aria-hidden="true">▾</span></button>
+            <span className="ga4-mobile-summary">
+              <span className="ga4-mobile-prop">{siteLabel(site)}</span>
+              <span className="ga4-mobile-range">{rangeText}</span>
+            </span>
+          </div>
+          <MobileFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} onApply={() => setFilterOpen(false)}>
+            <div data-theme="dark" className="ga4-sheet">
+              <p className="ga4-sheet-label">Site</p>
+              <PropertyPicker {...pickerProps} />
+              <p className="ga4-sheet-label">Dates</p>
+              <RangeControls {...rangeProps} stacked />
+              <p className="ga4-sheet-label">Search type</p>
+              <select className="ga4-control ga4-select" style={{ width: "100%" }} value={type} onChange={(e) => setType(e.target.value)}>
+                {SEARCH_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+              <p className="ga4-sheet-summary">{rangeText} · {compareText}</p>
+            </div>
+          </MobileFilterSheet>
+        </>
       )}
 
-      {/* ── Body ── */}
-      <div className="bg-gray-50 min-h-[calc(100vh-73px)]">
-        <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="ga4-body">
+        {sitesError && <Notice tone="error" actions={<button type="button" className="ga4-btn" onClick={loadSites}>Try again</button>}>Couldn&apos;t load Search Console properties: {sitesError.message}</Notice>}
 
-          {/* ── Site picker screen (connected but no site chosen yet) ── */}
-          {gscConnected && !selectedSite && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="w-full max-w-lg">
-                <div className="text-center mb-8">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm border border-gray-100 mb-4">
-                    <svg viewBox="0 0 48 48" className="w-8 h-8"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                  </div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">Select a Search Console Property</h2>
-                  <p className="text-sm text-gray-500">Your selection will be remembered for this session</p>
-                </div>
-                {sites.length === 0 ? (
-                  <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center shadow-sm">
-                    <p className="text-gray-400 text-sm">No properties found in your Search Console account.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {sites.map((s) => {
-                      const domain = s.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-                      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-                      return (
-                        <button key={s.url} onClick={() => {
-                          sessionStorage.setItem("gsc_selected_site", s.url);
-                          setSelectedSite(s.url);
-                        }}
-                          className="w-full flex items-center gap-4 rounded-2xl bg-white border border-gray-100 px-5 py-4 shadow-sm hover:border-purple-300 hover:shadow-md transition text-left group"
-                        >
-                          <img src={faviconUrl} alt="" className="w-10 h-10 rounded-xl flex-shrink-0"
-                            onError={(e) => { e.target.style.display = "none"; }} />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 truncate">{domain}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{s.url}</p>
-                          </div>
-                          <svg className="w-5 h-5 text-gray-300 group-hover:text-purple-500 transition flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                            <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+        {!sitesError && connected === false && (
+          <Notice actions={<a className="ga4-btn ga4-btn-primary" href="/api/gsc-auth">Connect Search Console</a>}>
+            Connect the agency&apos;s Google account to Search Console to see clicks, impressions, rankings and indexing for client sites.
+          </Notice>
+        )}
+        {!sitesError && connected && sites.length === 0 && (
+          <Notice actions={<button type="button" className="ga4-btn" onClick={loadSites}>Refresh list</button>}>
+            The connected Google account has no Search Console properties. Ask the client to add it as a user in Search Console (Settings → Users and permissions).
+          </Notice>
+        )}
 
-          {/* GSC not connected */}
-          {!gscConnected && (
-            <div className="rounded-2xl border border-white/10 bg-white p-12 text-center shadow-sm">
-              <div className="text-4xl mb-4">🔗</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Connect Google Search Console</h2>
-              <p className="text-gray-500 text-sm mb-6 max-w-md mx-auto">
-                Link your Search Console account to view organic query data, clicks, impressions, and rankings.
-              </p>
-              <a href="/api/gsc-auth" className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 transition px-6 py-3 text-white font-semibold text-sm">
-                Connect Search Console
-              </a>
-            </div>
-          )}
-
-          {gscConnected && selectedSite && (
-            <>
-              {/* Error */}
-              {error && (
-                <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-                  ⚠️ {error}
-                </div>
+        {hasSites && site && (
+          <>
+            <div className="ga4-view-row gsc-status-row">
+              {loading && <span className="ga4-loading-pill"><span className="ga4-spinner" aria-hidden="true" />Loading Search Console…</span>}
+              {report && !loading && (
+                <span className="gsc-fetched">
+                  Updated {new Date(report.fetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  <button type="button" className="ga4-link" onClick={() => setRefreshNonce((n) => n + 1)}>Refresh</button>
+                </span>
               )}
+              <span className="mobile-only">{downloadBtn}</span>
+            </div>
 
-              {/* KPI cards */}
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-6">
-                <KpiCard label="Total Clicks"       value={fmtN(data?.totals?.clicks)}      color="#4285F4" loading={loading} />
-                <KpiCard label="Total Impressions"  value={fmtN(data?.totals?.impressions)}  color="#a855f7" loading={loading} />
-                <KpiCard label="Avg. CTR"           value={fmtPct(data?.totals?.ctr)}        color="#34A853" loading={loading} />
-                <KpiCard label="Avg. Position"      value={data?.totals?.position ?? "—"}    color="#FBBC04" loading={loading} />
-              </div>
+            {actionError && <Notice tone="error">{actionError}</Notice>}
 
-              {/* Trend chart */}
-              <div className="rounded-2xl bg-white shadow-sm border border-gray-100 p-5 mb-6">
-                <p className="text-sm font-semibold text-gray-700 mb-4">Clicks &amp; Impressions Over Time</p>
-                {loading ? (
-                  <div className="h-48 bg-gray-50 rounded-xl animate-pulse" />
-                ) : data?.trend?.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={data.trend} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => v.slice(5)} />
-                      <YAxis yAxisId="left"  tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
-                      <Tooltip contentStyle={{ fontSize: 12 }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Line yAxisId="left"  type="monotone" dataKey="clicks"      stroke="#4285F4" strokeWidth={2} dot={false} name="Clicks" />
-                      <Line yAxisId="right" type="monotone" dataKey="impressions" stroke="#a855f7" strokeWidth={2} dot={false} name="Impressions" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No trend data available</div>
+            {reportError ? (
+              <Notice tone="error" actions={
+                <>
+                  <button type="button" className="ga4-btn" onClick={() => setRefreshNonce((n) => n + 1)}>Try again</button>
+                  {reportError.code === "gsc_not_connected" && <a className="ga4-btn ga4-btn-primary" href="/api/gsc-auth">Reconnect</a>}
+                </>
+              }>
+                {ERROR_COPY[reportError.code] || `Search Console returned an error: ${reportError.message}`}
+              </Notice>
+            ) : noData ? (
+              <Notice>No {type === "web" ? "" : `${SEARCH_TYPES.find((t) => t.key === type)?.label} `}search impressions for this site in this range.</Notice>
+            ) : (
+              <div className={`ga4-content${stale ? " is-stale" : ""}`} aria-busy={loading}>
+                <SearchKpis totals={report?.totals} prev={report?.totalsCompare} compareLabel={compareLabel}
+                  hasPosition={report?.hasQueries !== false} loading={!report} />
+
+                {prelimInRange && (
+                  <p className="ga4-dq-note" role="note">
+                    Data from {rangeLabel({ startDate: report.firstIncompleteDate, endDate: report.firstIncompleteDate })} on is preliminary: Google is still counting, so recent days usually rise.
+                  </p>
                 )}
-              </div>
 
-              {/* Tabs */}
-              <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-                {/* Tab bar */}
-                <div className="flex border-b border-gray-100">
-                  {TABS.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => { setActiveTab(tab.id); setSearch(""); setSortCol("clicks"); setSortDir("desc"); }}
-                      className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold transition border-b-2 ${
-                        activeTab === tab.id
-                          ? "border-purple-600 text-purple-700"
-                          : "border-transparent text-gray-500 hover:text-gray-700"
-                      }`}
-                    >
-                      {tab.label}
-                      {tab.count != null && (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                          tab.badge && tab.count > 0
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-gray-100 text-gray-500"
-                        }`}>
-                          {fmtN(tab.count)}
-                        </span>
+                <SearchTrend
+                  trend={report?.trend} trendCompare={report?.trendCompare} granularity={granularity}
+                  onGranularityChange={(g) => setGranOverride(g === autoGran ? null : g)}
+                  firstIncompleteDate={report?.firstIncompleteDate} annotations={settings?.annotations || []}
+                  onAddAnnotation={onAddAnnotation} onRemoveAnnotation={onRemoveAnnotation}
+                  hasPosition={report?.hasQueries !== false} loading={!report}
+                />
+
+                {report?.hasQueries && (
+                  <BrandPanel brand={report.brand} terms={brandTerms} site={site} totals={report.totals}
+                    granularity={granularity} onSaveTerms={onSaveTerms} hasCompare={hasCompare} />
+                )}
+
+                {report ? (
+                  <section className="ga4-card ga4-panel gsc-tabs-card">
+                    <div className="gsc-tabs" role="tablist" aria-label="Report sections">
+                      {tabs.map((t) => (
+                        <button key={t.key} type="button" role="tab" aria-selected={activeTab === t.key}
+                          className={`gsc-tab${activeTab === t.key ? " is-active" : ""}`} onClick={() => setTab(t.key)}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="gsc-tab-body" role="tabpanel">
+                      {activeTab === "queries" && <QueriesTab report={report} brandTerms={brandTerms} onOpenQuery={openQuery} csvBase={csvBase} />}
+                      {activeTab === "pages" && (
+                        <>
+                          {type === "web" && <Ga4Link ga4={ga4} properties={ga4Props} onLoadProperties={loadGa4Props} onPick={onPickGa4} />}
+                          <PagesTab report={report} ga4={ga4} inspections={inspections} onInspect={onInspect} onOpenPage={openPage} csvBase={csvBase} />
+                        </>
                       )}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Tab description */}
-                {activeTab === "opportunities" && (
-                  <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 text-xs text-amber-800 font-medium">
-                    💡 Queries ranking positions 4–20 with significant impressions. These are your best SEO quick wins — a small ranking improvement means a big jump in clicks.
-                  </div>
-                )}
-
-                {/* Tab content */}
-                {loading ? (
-                  <div className="p-8 text-center text-gray-400 text-sm animate-pulse">Loading data…</div>
+                      {activeTab === "groups" && <GroupsTab report={report} csvBase={csvBase} />}
+                      {activeTab === "opportunities" && <OpportunitiesTab report={report} ctrAt={ctrAt} brandTerms={brandTerms} onOpenQuery={openQuery} onOpenPage={openPage} csvBase={csvBase} />}
+                      {activeTab === "cannibalization" && <CannibalizationTab report={report} brandTerms={brandTerms} onOpenQuery={openQuery} />}
+                      {activeTab === "audience" && <AudienceTab report={report} csvBase={csvBase} />}
+                      {activeTab === "indexing" && <IndexingTab report={report} inspections={inspections} onInspect={onInspect} csvBase={csvBase} />}
+                    </div>
+                  </section>
                 ) : (
-                  <>
-                    {activeTab === "queries" && (
-                      <DataTable
-                        rows={data?.queries || []}
-                        columns={QUERY_COLS}
-                        sortCol={sortCol} sortDir={sortDir} onSort={handleSort}
-                        search={search} setSearch={setSearch}
-                        emptyMsg="No query data available."
-                      />
-                    )}
-                    {activeTab === "opportunities" && (
-                      <DataTable
-                        rows={opportunities}
-                        columns={QUERY_COLS}
-                        sortCol={sortCol} sortDir={sortDir} onSort={handleSort}
-                        search={search} setSearch={setSearch}
-                        emptyMsg="No opportunities found — all your top queries are already in positions 1–3! 🎉"
-                      />
-                    )}
-                    {activeTab === "pages" && (
-                      <DataTable
-                        rows={data?.pages || []}
-                        columns={PAGE_COLS}
-                        sortCol={sortCol} sortDir={sortDir} onSort={handleSort}
-                        search={search} setSearch={setSearch}
-                        emptyMsg="No page data available."
-                      />
-                    )}
-                  </>
+                  <div className="ga4-card ga4-skel" style={{ height: 320 }} />
                 )}
               </div>
-            </>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
+
+      <DetailDrawer detail={detail} report={report} onClose={closeDetail} onOpenQuery={openQuery} onOpenPage={openPage} />
     </div>
+  );
+}
+
+export default function OrganicPageRoute() {
+  return (
+    <Suspense fallback={<DashboardLoader label="Loading..." />}>
+      <OrganicPage />
+    </Suspense>
   );
 }

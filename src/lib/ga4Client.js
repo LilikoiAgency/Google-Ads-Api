@@ -54,8 +54,9 @@ export async function fetchTrafficReport({ property, startDate, endDate, compare
 }
 
 // Web data streams for the given properties, so a website domain can be matched
-// to its GA4 property. One Admin API call per property.
-export async function listWebStreams(properties) {
+// to its GA4 property. One Admin API call per property. onError(property) is
+// called for each property whose streams could not be listed.
+export async function listWebStreams(properties, { onError } = {}) {
   const admin = google.analyticsadmin({ version: 'v1beta', auth: getGa4Auth() });
   const out = [];
   for (const p of properties) {
@@ -68,6 +69,7 @@ export async function listWebStreams(properties) {
       }
     } catch (err) {
       console.warn('[ga4] could not list streams for', p.id, err?.message || err);
+      onError?.(p);
     }
   }
   return out;
