@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAuditOptions, matchesSkip, filterSkipped, pageLimit, hasOptions } from '../../../lib/seoAuditV2/options';
+import { parseAuditOptions, matchesSkip, filterSkipped, pageLimit, hasOptions, describeOptions, MAX_LOCATIONS } from '../../../lib/seoAuditV2/options';
 
 describe('parseAuditOptions', () => {
   it('returns null options when nothing is set', () => {
@@ -92,5 +92,45 @@ describe('pageLimit / hasOptions', () => {
   it('hasOptions is false for null', () => {
     expect(hasOptions(null)).toBe(false);
     expect(hasOptions({ pages: ['x'] })).toBe(true);
+  });
+});
+
+describe('location picks', () => {
+  const place = (i) => ({ source: 'places', id: `ChIJ${String(i).padStart(10, '0')}`, name: `Shop ${i}` });
+
+  it('locations parsed and capped at 10', () => {
+    const raw = [...Array.from({ length: 12 }, (_, i) => place(i)), place(0)];
+    raw.push({ source: 'gbp', id: 'locations/123', name: `  ${'x'.repeat(300)}  ` });
+    const { options } = parseAuditOptions({ locations: raw }, 'site.com');
+    expect(options.locations).toHaveLength(MAX_LOCATIONS);
+    expect(options.locations[0]).toEqual(place(0));
+    const gbp = parseAuditOptions({ locations: [{ source: 'gbp', id: 'locations/123', name: `  ${'x'.repeat(300)}  ` }] }, 'site.com').options.locations[0];
+    expect(gbp.name).toHaveLength(200);
+    const dupes = parseAuditOptions({ locations: [place(1), place(1)] }, 'site.com').options.locations;
+    expect(dupes).toHaveLength(1);
+  });
+
+  it('rejects malformed location id', () => {
+    const err = { error: 'Pick locations from the list.' };
+    expect(parseAuditOptions({ locations: [{ source: 'places', id: 'short', name: 'x' }] }, 'site.com')).toEqual(err);
+    expect(parseAuditOptions({ locations: [{ source: 'gbp', id: 'accounts/1', name: 'x' }] }, 'site.com')).toEqual(err);
+    expect(parseAuditOptions({ locations: [{ source: 'yelp', id: 'abcdefghijk', name: 'x' }] }, 'site.com')).toEqual(err);
+    expect(parseAuditOptions({ locations: ['nope'] }, 'site.com')).toEqual(err);
+  });
+
+  it('locations alone is an option', () => {
+    const { options } = parseAuditOptions({ locations: [place(1)] }, 'site.com');
+    expect(options).toMatchObject({ pages: [], skip: [], locations: [place(1)] });
+    expect(hasOptions(options)).toBe(true);
+    expect(describeOptions(options)).toBe('1 location');
+    expect(describeOptions({ ...options, locations: [place(1), place(2)] })).toBe('2 locations');
+  });
+
+  it('an explicit empty locations list is kept as an option (the user unticked every location)', () => {
+    const { options } = parseAuditOptions({ locations: [] }, 'site.com');
+    expect(options).toEqual({ pages: [], onlyListed: false, skip: [], pageCount: null, locations: [] });
+    expect(hasOptions(options)).toBe(true);
+    expect(describeOptions(options)).toBe('no locations');
+    expect(parseAuditOptions({}, 'site.com')).toEqual({ options: null });
   });
 });

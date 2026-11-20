@@ -5,6 +5,7 @@
 import * as store from './jobStore';
 import { runStep } from './runStep';
 import { describeGaps } from './gather';
+import { dropReviewTexts, slimReviewSources } from './reputationStore';
 import {
   STEP_KEYS, runnableSteps, applyStepResult, expireStale, resetFailed, jobStatus, shouldRefund,
 } from './jobs';
@@ -12,10 +13,12 @@ import {
 export const STEP_LABELS = {
   crawl: 'Crawling pages',
   gather: 'Reading Search Console, Analytics & page speed',
+  search: 'Searching the web for the business',
   'pass:technical': 'Technical & indexing',
   'pass:content': 'Content & keywords',
   'pass:local': 'Local & AI search',
   'pass:conversion': 'Conversion',
+  'pass:reputation': 'Reviews & reputation',
   synthesize: 'Building action plan',
 };
 
@@ -28,11 +31,12 @@ export function toProgress(job) {
     auditType: job.auditType,
     status: job.status,
     createdAt: job.createdAt,
-    steps: STEP_KEYS.map((key) => {
-      const s = job.steps.find((x) => x.key === key) || { status: 'pending' };
+    steps: STEP_KEYS.flatMap((key) => {
+      const s = job.steps.find((x) => x.key === key);
+      if (!s || s.skipped) return []; // skipped (quick audit) or absent (job predates the step)
       const step = { key, label: STEP_LABELS[key], status: UI_STATUS[s.status] || s.status };
       if (step.status === 'failed' && s.error) step.error = s.error;
-      return step;
+      return [step];
     }),
     dataGaps: [...new Set([...describeGaps(job.data?.gaps), ...(job.gaps || [])])],
   };
@@ -78,8 +82,24 @@ async function settleJob(id, fresh, now) {
 // store (historySaved / refunded flags), so calling again on every advance of a
 // finished job retries a follow-up that failed earlier and is a no-op otherwise.
 async function finishFollowUps(job) {
+  if (job.status === 'done' || job.status === 'failed') {
+    // Public Places data is trimmed off the job once it is over; the saved result keeps the audit-date numbers.
+    try {
+      await slimReviewSources(job.id);
+    } catch (err) {
+      console.error('[seo-audit-v2] slimming review data failed:', err?.message || err);
+    }
+  }
   if (job.status === 'done') {
     const auditId = await store.saveFinished(job);
+    // Cached review text is only needed while the audit runs. The store has no
+    // one-time flag for it and deleteOne on a missing doc is cheap, so this runs
+    // on every advance of a done job; a failure is logged and retried next time.
+    try {
+      await dropReviewTexts(job.id);
+    } catch (err) {
+      console.error('[seo-audit-v2] dropping cached reviews failed:', err?.message || err);
+    }
     if (auditId) return { ...job, auditId };
   }
   if (job.status === 'failed' && shouldRefund(job)) await store.refundUsage(job);

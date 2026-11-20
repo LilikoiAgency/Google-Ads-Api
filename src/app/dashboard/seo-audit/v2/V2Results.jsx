@@ -11,6 +11,7 @@ import { KpiRow, Opportunities, ScoresCard, TopMoves, PlanBreakdown } from "./Cl
 import ActionPlan from "./ActionPlan";
 import PageCards from "./PageCards";
 import PassFindings, { IncompleteNotice } from "./PassFindings";
+import Reputation from "./Reputation";
 import ReportDownload from "./ReportDownload";
 import { describeOptions } from "../../../../lib/seoAuditV2/options";
 import { flattenTasks } from "../../../../lib/seoAuditV2/tasks";
@@ -22,6 +23,8 @@ const SOURCES = [
   ["sitemaps", "Sitemaps"],
   ["ga4", "Google Analytics"],
   ["pagespeed", "Page speed"],
+  ["reviews", "Google reviews"],
+  ["ai_search", "Web search check"],
 ];
 
 const STATUS_TEXT = {
@@ -92,6 +95,8 @@ export default function V2Results({ result, domain, actions, onBack }) {
     { key: "technical", label: "Technical", ...flagged("technical", findings.technical?.length || 0) },
     { key: "local", label: "Local & AI search", ...flagged("local", findings.local?.length || 0) },
     { key: "conversion", label: "Conversion", ...flagged("conversion", findings.conversion?.length || 0) },
+    // Only present when reviews or the web search produced data; a skipped pass is never flagged.
+    ...(result.reputation ? [{ key: "reputation", label: "Reputation", count: result.reputation.locations?.length || 0 }] : []),
   ];
   const areaLabel = (key) => tabs.find((t) => t.key === key).label;
   const meta = [
@@ -164,6 +169,17 @@ export default function V2Results({ result, domain, actions, onBack }) {
               incomplete={incomplete("conversion") ? areaLabel("conversion") : undefined}
               intro={result.data_sources?.ga4 && result.data_sources.ga4.status !== "ok" ? "Conversion analysis needs Google Analytics, which wasn't available for this site." : undefined}
             />
+          )}
+          {tab === "reputation" && (
+            <>
+              <Reputation reputation={result.reputation} />
+              {findings.reputation?.length > 0 && (
+                <>
+                  <SectionTitle>Reputation findings</SectionTitle>
+                  <PassFindings findings={findings.reputation} />
+                </>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -12,8 +12,11 @@ import {
 import { runStructured } from './llm';
 import { isGenericTask, isEmptyTask, pathKey } from './tasks';
 import { effortForAttempt } from './jobs';
-import { pageLimit, filterSkipped } from './options';
+import { pageLimit, filterSkipped, bareHost } from './options';
 import { buildSearchSummary } from './overview';
+import { getSavedLocations, saveReviewTexts, getReviewTexts } from './reputationStore';
+import { brandName } from './reviews';
+import { buildSearchQueries, runWebSearch } from './search';
 
 const SOURCES = {
   search_console: 'gsc',
@@ -21,6 +24,8 @@ const SOURCES = {
   sitemaps: 'googleSitemaps',
   ga4: 'ga4',
   pagespeed: 'pagespeed',
+  reviews: 'reviews',
+  ai_search: 'aiSearch',
 };
 
 const PASS_AREA = {
@@ -28,6 +33,7 @@ const PASS_AREA = {
   content: 'Content & keywords',
   local: 'Local & AI search',
   conversion: 'Conversion',
+  reputation: 'Reputation',
 };
 
 const errText = (err) => {
@@ -79,22 +85,107 @@ async function runCrawl(job) {
 async function runGather(job) {
   const crawl = job.data?.crawl;
   const o = job.options;
-  const { data, gaps } = await gatherAll(o
+  let locations = o?.locations ?? null;
+  if (!locations) {
+    try {
+      locations = (await getSavedLocations(job.domain)) ?? null;
+    } catch (err) {
+      console.warn('[seo-audit-v2] saved review locations unavailable:', errText(err));
+    }
+  }
+  const { data, gaps, reviewTexts } = await gatherAll(o
     ? {
       domain: job.domain, crawl, profile: job.auditType, priorityUrls: o.pages || [], onlyListed: !!o.onlyListed, skip: o.skip || [],
       ...(o.gscSite ? { gscSite: o.gscSite } : {}),
       ...(o.ga4Property ? { ga4Property: o.ga4Property } : {}),
+      locations,
     }
-    : { domain: job.domain, crawl, profile: job.auditType });
+    : { domain: job.domain, crawl, profile: job.auditType, locations });
+  // Review text is cached by job id for the reputation step and kept off the job document.
+  if (reviewTexts && Object.keys(reviewTexts).length) {
+    try {
+      await saveReviewTexts(job.id, reviewTexts);
+    } catch (err) {
+      console.warn('[seo-audit-v2] saving review text failed:', errText(err));
+    }
+  }
   const pages = crawl?.pages_crawled || [];
   const homepage = pages.find((p) => p.page_type === 'homepage') || pages[0] || null;
   const sharedContext = buildSharedContext({ domain: job.domain, profile: job.auditType, homepage, gaps: describeGaps(gaps) });
   return { ok: true, patch: { 'data.sources': data, 'data.gaps': gaps, 'data.sharedContext': sharedContext } };
 }
 
+const SEARCH_GAP = "Web search check didn't complete.";
+
+// "123 Main St, Tampa, FL 33602" -> { city: 'Tampa', region: 'FL' }; null when it isn't a US "City, ST" address.
+function cityFromAddress(address) {
+  const m = /(?:^|,)[ ]*([A-Za-z][A-Za-z.' -]*?)[ ]*,[ ]*([A-Z]{2})(?![A-Za-z])(?:[ ]+[0-9]{5}(?:-[0-9]{4})?)?(?:[ ]*,?[ ]*(?:USA|US|United States))?[ ]*$/.exec(String(address || '').trim());
+  return m ? { city: m[1], region: m[2] } : null;
+}
+
+// A search or API failure only leaves a gap; a timeout fails the step so it retries.
+async function runSearch(job) {
+  const sources = job.data?.sources || {};
+  const crawl = job.data?.crawl;
+  const brand = brandName(crawl, job.domain);
+  const loc = (sources.reviews || []).find((r) => r?.city)
+    || cityFromAddress(crawl?.site_wide?.contact_info?.addresses?.[0]);
+  const city = loc?.city || null;
+  const region = loc?.region || null;
+  const queries = buildSearchQueries({ gscPages: sources.gscPages, crawl, brand, city });
+  const failed = { ok: true, patch: { 'data.sources.aiSearch': null }, gaps: [SEARCH_GAP] };
+  if (!queries.length) return failed;
+  try {
+    const out = await runWebSearch({ queries, brand, domain: job.domain, city, region, email: job.email });
+    if (out.status === 'error') {
+      console.warn('[seo-audit-v2] web search failed:', out.error);
+      return failed;
+    }
+    return { ok: true, patch: { 'data.sources.aiSearch': out } };
+  } catch (err) {
+    if (err?.code === 'timeout') return { ok: false, error: errText(err) };
+    console.warn('[seo-audit-v2] web search failed:', errText(err));
+    return failed;
+  }
+}
+
+const MAX_QUOTE_CHARS = 200;
+
+// Theme quotes must be short and really appear in a cached review; counts can't exceed the reviews given.
+function guardThemes(themes, locations, reviewTexts) {
+  if (!Array.isArray(themes)) return themes;
+  const byLoc = {};
+  const all = [];
+  for (const l of locations || []) {
+    const list = (reviewTexts?.[l.id] || []).map((r) => String(r.text || '').toLowerCase());
+    byLoc[l.name] = list;
+    all.push(...list);
+  }
+  const known = all.length > 0;
+  return themes.map((t) => {
+    const pool = byLoc[t.location]?.length ? byLoc[t.location] : all;
+    const quotes = known
+      ? (t.quotes || []).filter((q) => {
+        const lq = String(q || '').trim().toLowerCase();
+        return lq && lq.length <= MAX_QUOTE_CHARS && pool.some((x) => x.includes(lq));
+      })
+      : [];
+    const count = known && Number.isFinite(t.count) ? Math.min(t.count, pool.length) : t.count;
+    return { ...t, quotes, count };
+  });
+}
+
 async function runPass(job, key) {
   const pass = key.slice('pass:'.length);
-  const input = buildPassInput(pass, { crawl: job.data?.crawl, data: job.data?.sources });
+  const data = job.data?.sources;
+  let passData = data;
+  let reviewTexts = null;
+  if (pass === 'reputation') {
+    // Review text is cached by job id, never stored on the job; a failed lookup just means stats only.
+    reviewTexts = await getReviewTexts(job.id).catch(() => null);
+    passData = { ...data, reviewTexts };
+  }
+  const input = buildPassInput(pass, { crawl: job.data?.crawl, data: passData, domain: job.domain });
   const call = (inp) => runStructured({
     system: PASS_SYSTEM[pass],
     sharedContext: job.data?.sharedContext,
@@ -144,6 +235,7 @@ async function runPass(job, key) {
   } else {
     const { output } = await call(input);
     out = { ...output, tasks: normalizeTaskIds(pass, null, output?.tasks) };
+    if (pass === 'reputation') out.themes = guardThemes(out.themes, data?.reviews, reviewTexts);
   }
   out.tasks = (out.tasks || [])
     .map((t) => ({ ...t, page: pathKey(t.page) }))
@@ -230,9 +322,57 @@ function buildPages(job) {
   });
 }
 
+// Skipped on purpose (quick audit), or a step an older job never had.
+function passSkipped(job, pass) {
+  const step = stepOf(job, `pass:${pass}`);
+  return step.skipped === true || (pass === 'reputation' && !step.key);
+}
+
+function resultHost(r) {
+  if (r?.host) return bareHost(r.host);
+  try {
+    return bareHost(new URL(r?.url).hostname);
+  } catch {
+    return '';
+  }
+}
+
+// Reviews stats, themes and the web search check, or undefined when neither source has data.
+function buildReputation(job, reputationDone) {
+  const reviews = job.data?.sources?.reviews;
+  const search = job.data?.sources?.aiSearch;
+  const hasReviews = Array.isArray(reviews) && reviews.length > 0;
+  const hasSearch = Array.isArray(search?.queries) && search.queries.length > 0;
+  if (!hasReviews && !hasSearch) return undefined;
+  const pass = reputationDone ? job.passes.reputation : null;
+  const domain = bareHost(job.domain);
+  const queries = hasSearch ? search.queries : [];
+  const checked = queries.filter((q) => !q.error); // an errored query was never really searched
+  return {
+    locations: hasReviews
+      ? reviews.map((l) => ({ name: l.name, city: l.city, source: l.source, coverage: l.coverage, stats: l.stats }))
+      : [],
+    themes: pass?.themes || [],
+    search: hasSearch
+      ? {
+        appear_count: checked.filter((q) => q.you_appear).length,
+        total: checked.length,
+        summary: pass?.search_summary?.summary ?? null,
+        queries: queries.map((q) => ({
+          query: q.query,
+          you_appear: !!q.you_appear,
+          ...(q.error ? { error: String(q.error) } : {}),
+          others: [...new Set((q.results || []).map(resultHost).filter((h) => h && h !== domain))].slice(0, 3),
+        })),
+      }
+      : null,
+    attribution: hasReviews && reviews.some((l) => l.source === 'places') ? 'Source: Google reviews' : null,
+  };
+}
+
 async function runSynthesize(job) {
-  const done = PASSES.filter((p) => stepOf(job, `pass:${p}`).status === 'done' && job.passes?.[p]);
-  const notCompleted = PASSES.filter((p) => !done.includes(p)).map((p) => PASS_AREA[p]);
+  const done = PASSES.filter((p) => stepOf(job, `pass:${p}`).status === 'done' && !passSkipped(job, p) && job.passes?.[p]);
+  const notCompleted = PASSES.filter((p) => !done.includes(p) && !passSkipped(job, p)).map((p) => PASS_AREA[p]);
   const passOutputs = Object.fromEntries(done.map((p) => [p, job.passes[p]]));
 
   const { output: synth } = await runStructured({
@@ -248,6 +388,7 @@ async function runSynthesize(job) {
   const plan = buildActionPlan(done.map((p) => job.passes[p].tasks || []), synth);
   // One deterministic list: source gaps plus job gaps (incomplete passes, crawl cut short).
   const dataGaps = [...new Set([...describeGaps(job.data?.gaps), ...(job.gaps || [])])];
+  const reputation = buildReputation(job, done.includes('reputation'));
   const result = {
     version: 2,
     domain: job.domain,
@@ -259,10 +400,13 @@ async function runSynthesize(job) {
     scores: synth.scores,
     action_plan: plan,
     pages: buildPages(job),
-    findings: Object.fromEntries(PASSES.map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []])),
-    passes_completed: Object.fromEntries(PASSES.map((p) => [p, done.includes(p)])),
+    findings: Object.fromEntries(
+      PASSES.filter((p) => p !== 'reputation' || done.includes(p)).map((p) => [p, done.includes(p) ? job.passes[p].findings || [] : []]),
+    ),
+    passes_completed: Object.fromEntries(PASSES.filter((p) => !passSkipped(job, p)).map((p) => [p, done.includes(p)])),
     data_gaps: dataGaps,
     data_sources: dataSources(job),
+    ...(reputation ? { reputation } : {}),
     // Headline search numbers and index counts for the overview.
     ...buildSearchSummary(job.data?.sources?.gsc, job.data?.sources?.inspection),
   };
@@ -273,6 +417,7 @@ export async function runStep(job, key) {
   try {
     if (key === 'crawl') return await runCrawl(job);
     if (key === 'gather') return await runGather(job);
+    if (key === 'search') return await runSearch(job);
     if (key.startsWith('pass:')) return await runPass(job, key);
     if (key === 'synthesize') return await runSynthesize(job);
     return { ok: false, error: `Unknown step: ${key}` };

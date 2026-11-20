@@ -5,6 +5,11 @@ const m = vi.hoisted(() => ({
   seedPages: vi.fn(),
   gatherAll: vi.fn(),
   runStructured: vi.fn(),
+  getSavedLocations: vi.fn(),
+  saveReviewTexts: vi.fn(),
+  getReviewTexts: vi.fn(),
+  runWebSearch: vi.fn(),
+  buildSearchQueries: vi.fn(),
 }));
 
 vi.mock('@/lib/seoCrawler', () => ({ crawlSite: m.crawlSite }));
@@ -15,6 +20,12 @@ vi.mock('@/lib/seoAuditV2/gather', () => ({
   AUDIT_PROFILES: { quick: { effort: 'medium' }, full: { effort: 'high' } },
 }));
 vi.mock('@/lib/seoAuditV2/llm', () => ({ runStructured: m.runStructured }));
+vi.mock('@/lib/seoAuditV2/reputationStore', () => ({ getSavedLocations: m.getSavedLocations, saveReviewTexts: m.saveReviewTexts, getReviewTexts: m.getReviewTexts }));
+
+vi.mock('@/lib/seoAuditV2/search', () => ({
+  buildSearchQueries: m.buildSearchQueries,
+  runWebSearch: m.runWebSearch,
+}));
 
 const { runStep } = await import('@/lib/seoAuditV2/runStep');
 const { newJob } = await import('@/lib/seoAuditV2/jobs');
@@ -38,7 +49,12 @@ const crawl = {
   site_wide: {},
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  m.getSavedLocations.mockResolvedValue(null);
+  m.saveReviewTexts.mockResolvedValue(undefined);
+  m.getReviewTexts.mockResolvedValue(null);
+});
 
 describe('runStep', () => {
   it('crawl seeds from Search Console pages then crawls', async () => {
@@ -76,7 +92,7 @@ describe('runStep', () => {
     const options = { pages: ['https://acme.com/money'], onlyListed: false, skip: ['/blog/*'], pageCount: null };
     await runStep(job({}, { data: { crawl }, options }), 'gather');
     expect(m.gatherAll).toHaveBeenCalledWith({
-      domain: 'acme.com', crawl, profile: 'full', priorityUrls: options.pages, onlyListed: false, skip: ['/blog/*'],
+      domain: 'acme.com', crawl, profile: 'full', priorityUrls: options.pages, onlyListed: false, skip: ['/blog/*'], locations: null,
     });
   });
 
@@ -101,7 +117,7 @@ describe('runStep', () => {
   it('gather stores sources, gaps and the shared context', async () => {
     m.gatherAll.mockResolvedValue({ data: { gsc: null }, gaps: [{ source: 'ga4', status: 'no_property' }] });
     const res = await runStep(job({}, { data: { crawl } }), 'gather');
-    expect(m.gatherAll).toHaveBeenCalledWith({ domain: 'acme.com', crawl, profile: 'full' });
+    expect(m.gatherAll).toHaveBeenCalledWith({ domain: 'acme.com', crawl, profile: 'full', locations: null });
     expect(res.patch['data.sources']).toEqual({ gsc: null });
     expect(res.patch['data.gaps']).toEqual([{ source: 'ga4', status: 'no_property' }]);
     expect(res.patch['data.sharedContext']).toMatch(/Domain: acme\.com/);
@@ -150,6 +166,55 @@ describe('runStep', () => {
     expect(res.patch['passes.conversion']).toMatchObject({ skipped: true, tasks: [] });
   });
 
+  it('reputation pass reads cached review text by job id', async () => {
+    const loc = { source: 'places', id: 'p1', name: 'Acme', city: 'Tampa', region: 'FL', coverage: 'full', stats: { rating: 4.5, count: 80 } };
+    m.getReviewTexts.mockResolvedValue({ p1: [{ stars: 1, date: '2026-01-01', text: 'Late again' }] });
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [{ ...task('Reply to reviews', 'https://acme.com/'), category: 'reputation' }], themes: [], search_summary: { summary: '', competitors: [], cited_sites: [] } } });
+    const j = job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } });
+    const res = await runStep(j, 'pass:reputation');
+    expect(m.getReviewTexts).toHaveBeenCalledWith(j.id);
+    const input = m.runStructured.mock.calls[0][0].input;
+    expect(input.locations[0].reviews[0].text).toBe('Late again');
+    expect(input.domain).toBe('acme.com');
+    expect(res.patch['passes.reputation'].tasks[0].id).toBe('REP-1');
+    expect(res.patch['passes.reputation']).toHaveProperty('themes');
+  });
+
+  it('reputation pass keeps only real, short quotes, clamps counts, and stores no other review text', async () => {
+    const loc = { source: 'places', id: 'p1', name: 'Acme', stats: {} };
+    const long = 'Great crew but they were late. ' + 'filler text '.repeat(40);
+    m.getReviewTexts.mockResolvedValue({ p1: [{ stars: 4, text: long }, { stars: 1, text: 'Late again' }] });
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [], themes: [
+      { kind: 'complaint', theme: 't', count: 9, location: 'Acme', quotes: ['late AGAIN', 'made up quote', 'Great crew but they were late. ' + 'filler text '.repeat(20)] },
+    ], search_summary: { summary: '', competitors: [], cited_sites: [] } } });
+    const res = await runStep(job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } }), 'pass:reputation');
+    const themes = res.patch['passes.reputation'].themes;
+    expect(themes[0].quotes).toEqual(['late AGAIN']);
+    expect(themes[0].count).toBe(2);
+    expect(JSON.stringify(res.patch)).not.toContain(long);
+  });
+
+  it('reputation pass drops all quotes when no review text was loaded', async () => {
+    m.getReviewTexts.mockResolvedValue(null);
+    const loc = { source: 'places', id: 'p1', name: 'Acme', stats: {} };
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [], themes: [{ kind: 'praise', theme: 't', count: 3, location: 'Acme', quotes: ['Great'] }] } });
+    const res = await runStep(job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } }), 'pass:reputation');
+    expect(res.patch['passes.reputation'].themes[0]).toMatchObject({ quotes: [], count: 3 });
+  });
+
+  it('reputation pass tolerates a failed text lookup and skips without sources', async () => {
+    m.getReviewTexts.mockRejectedValue(new Error('db down'));
+    m.runStructured.mockResolvedValue({ output: { findings: [], tasks: [] } });
+    const loc = { source: 'places', id: 'p1', name: 'Acme', stats: {} };
+    const ok = await runStep(job({}, { data: { crawl, sources: { reviews: [loc] }, sharedContext: 'ctx' } }), 'pass:reputation');
+    expect(ok.ok).toBe(true);
+    expect(m.runStructured.mock.calls[0][0].input.locations[0]).not.toHaveProperty('reviews');
+    m.runStructured.mockClear();
+    const skipped = await runStep(job({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } }), 'pass:reputation');
+    expect(m.runStructured).not.toHaveBeenCalled();
+    expect(skipped.patch['passes.reputation']).toMatchObject({ skipped: true });
+  });
+
   it('synthesize builds the result from completed passes', async () => {
     const passes = {
       technical: { findings: [{ title: 'tf' }], tasks: [{ ...task('Fix canonical'), id: 'TECH-1' }] },
@@ -170,6 +235,7 @@ describe('runStep', () => {
       'pass:content': { status: 'done' },
       'pass:local': { status: 'done' },
       'pass:conversion': { status: 'failed_final' },
+      'pass:reputation': { status: 'done', skipped: true },
       synthesize: { status: 'running', attempts: 1 },
     }, {
       data: { crawl, sources: { gsc: { a: 1 } }, gaps: [{ source: 'ga4', status: 'no_property' }], sharedContext: 'ctx' },
@@ -233,7 +299,7 @@ describe('runStep', () => {
       },
     });
     const r = (await runStep(j, 'synthesize')).patch.result;
-    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: true });
+    expect(r.passes_completed).toEqual({ technical: true, content: true, local: true, conversion: true, reputation: false });
     expect(r.pages.map((p) => p.page)).toEqual(['/services/turf', '/about', '/']);
     const [turf, about, home] = r.pages;
     expect(turf.fixes).toHaveLength(1);
@@ -357,6 +423,155 @@ describe('runStep', () => {
     expect(r.data_gaps).toEqual(['ga4 unavailable', 'Crawl stopped early after 6 pages because the site responded slowly.']);
   });
 
+  describe('result.reputation', () => {
+    const base = (statuses, extra) => job({
+      'pass:technical': { status: 'done' }, 'pass:content': { status: 'done' }, 'pass:local': { status: 'done' },
+      'pass:conversion': { status: 'done' }, synthesize: { status: 'running', attempts: 1 }, ...statuses,
+    }, {
+      passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] } },
+      ...extra,
+    });
+    const synth = () => m.runStructured.mockResolvedValue({
+      output: { client_summary: 'S', top_moves: [], scores: {}, drop_task_ids: [] },
+    });
+    const stats = { rating: 4.6, total: 120 };
+    const reviews = [
+      { source: 'places', id: 'p1', name: 'Acme Turf', city: 'Austin', coverage: 'sample', stats },
+      { source: 'places', id: 'p2', name: 'Acme Lawn', city: 'Dallas', coverage: 'sample', stats },
+    ];
+    const aiSearch = {
+      status: 'ok',
+      queries: [
+        { query: 'turf austin', you_appear: true, results: [
+          { title: 'a', url: 'https://www.acme.com/', host: 'www.acme.com' },
+          { title: 'b', url: 'https://b.com/x', host: 'b.com' },
+          { title: 'c', url: 'https://b.com/y', host: 'b.com' },
+          { title: 'd', url: 'https://c.com/', host: 'c.com' },
+          { title: 'e', url: 'https://d.com/', host: 'd.com' },
+          { title: 'f', url: 'https://e.com/', host: 'e.com' },
+        ] },
+        { query: 'turf dallas', you_appear: false, results: [] },
+      ],
+      notes: [],
+    };
+    const reputationPass = {
+      findings: [{ title: 'rf' }], tasks: [],
+      themes: [{ kind: 'praise', theme: 'Fast', count: 4, location: 'Acme Turf', quotes: ['Great'] }],
+      search_summary: { summary: 'You show up in one of two.', competitors: [], cited_sites: [] },
+    };
+
+    it('result.reputation built from stats, themes and search', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews, aiSearch }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r.reputation.locations[0]).toEqual({ name: 'Acme Turf', city: 'Austin', source: 'places', coverage: 'sample', stats });
+      expect(r.reputation.themes).toEqual(reputationPass.themes);
+      expect(r.reputation.search).toEqual({
+        appear_count: 1, total: 2, summary: 'You show up in one of two.',
+        queries: [
+          { query: 'turf austin', you_appear: true, others: ['b.com', 'c.com', 'd.com'] },
+          { query: 'turf dallas', you_appear: false, others: [] },
+        ],
+      });
+      expect(r.findings.reputation).toEqual([{ title: 'rf' }]);
+      expect(r.passes_completed.reputation).toBe(true);
+    });
+
+    it('queries that errored are kept with their error and left out of the counts', async () => {
+      synth();
+      const mixed = { status: 'ok', notes: [], queries: [
+        { query: 'turf austin', you_appear: true, results: [] },
+        { query: 'turf dallas', you_appear: false, results: [] },
+        { query: 'turf waco', you_appear: false, results: [], error: 'not searched' },
+      ] };
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews, aiSearch: mixed }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const s = (await runStep(j, 'synthesize')).patch.result.reputation.search;
+      expect(s.appear_count).toBe(1);
+      expect(s.total).toBe(2);
+      expect(s.queries[2]).toEqual({ query: 'turf waco', you_appear: false, error: 'not searched', others: [] });
+      expect(s.queries[0]).not.toHaveProperty('error');
+    });
+
+    it('tolerates review locations slimmed off the job (no stats, no city), e.g. a retried failed job', async () => {
+      synth();
+      const slim = [{ source: 'places', id: 'p1', name: 'Acme Turf', coverage: 'sample' }];
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews: slim, aiSearch }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const res = await runStep(j, 'synthesize');
+      expect(res.ok).toBe(true);
+      expect(res.patch.result.reputation.locations).toEqual([{ name: 'Acme Turf', city: undefined, source: 'places', coverage: 'sample', stats: undefined }]);
+    });
+
+    it('every query erroring gives total 0', async () => {
+      synth();
+      const none = { status: 'ok', notes: [], queries: [{ query: 'a', you_appear: false, results: [], error: 'x' }] };
+      const j = base({ 'pass:reputation': { status: 'done' } }, {
+        data: { crawl, sources: { reviews, aiSearch: none }, sharedContext: 'ctx' },
+        passes: { technical: { tasks: [] }, content: { tasks: [], pages: [] }, local: { tasks: [] }, conversion: { skipped: true, tasks: [] }, reputation: reputationPass },
+      });
+      const s = (await runStep(j, 'synthesize')).patch.result.reputation.search;
+      expect(s.total).toBe(0);
+      expect(s.appear_count).toBe(0);
+    });
+
+    it('quick result has reputation stats and no themes', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'done', skipped: true } }, {
+        auditType: 'quick', data: { crawl, sources: { reviews }, sharedContext: 'ctx' },
+      });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r.reputation.locations).toHaveLength(2);
+      expect(r.reputation.themes).toEqual([]);
+      expect(r.reputation.search).toBeNull();
+      expect(r.findings).not.toHaveProperty('reputation');
+      expect(r.passes_completed).not.toHaveProperty('reputation');
+    });
+
+    it('a failed reputation pass keeps stats, drops summary and is reported incomplete', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'failed_final' } }, {
+        data: { crawl, sources: { reviews, aiSearch }, sharedContext: 'ctx' },
+      });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r.reputation.search.summary).toBeNull();
+      expect(r.reputation.themes).toEqual([]);
+      expect(r.passes_completed.reputation).toBe(false);
+    });
+
+    it('attribution set only for public data', async () => {
+      synth();
+      const mk = (src) => base({ 'pass:reputation': { status: 'done', skipped: true } }, {
+        data: { crawl, sources: { reviews: [{ ...reviews[0], source: src }] }, sharedContext: 'ctx' },
+      });
+      expect((await runStep(mk('places'), 'synthesize')).patch.result.reputation.attribution).toBe('Source: Google reviews');
+      expect((await runStep(mk('gbp'), 'synthesize')).patch.result.reputation.attribution).toBeNull();
+    });
+
+    it('no reputation key when neither source exists', async () => {
+      synth();
+      const j = base({ 'pass:reputation': { status: 'done', skipped: true } }, { data: { crawl, sources: {}, sharedContext: 'ctx' } });
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(r).not.toHaveProperty('reputation');
+    });
+
+    it('an old job without the reputation step is not reported incomplete', async () => {
+      synth();
+      const j = base({}, { data: { crawl, sources: {}, sharedContext: 'ctx' } });
+      j.steps = j.steps.filter((s) => s.key !== 'pass:reputation' && s.key !== 'search');
+      const r = (await runStep(j, 'synthesize')).patch.result;
+      expect(m.runStructured.mock.calls[0][0].input.passes_not_completed).toBeUndefined();
+      expect(r.passes_completed).not.toHaveProperty('reputation');
+    });
+  });
+
   it('a sitemap read cut short becomes a job gap', async () => {
     m.seedPages.mockResolvedValue([]);
     m.crawlSite.mockResolvedValue({ ...crawl, sitemap_partial: true });
@@ -380,5 +595,103 @@ describe('runStep with picked data sources', () => {
     m.gatherAll.mockResolvedValue({ data: {}, gaps: [] });
     await runStep(job({}, { data: { crawl }, options }), 'gather');
     expect(m.gatherAll.mock.calls[0][0]).toMatchObject({ gscSite: 'sc-domain:acme.com', ga4Property: { id: 'properties/9' } });
+  });
+});
+
+describe('runStep gather reviews', () => {
+  const reviewLoc = { source: 'places', id: 'p1', name: 'Acme', city: 'Tampa', region: 'FL', coverage: 'sample', stats: { rating: 4.5 } };
+
+  it('caches review text by job id and keeps it out of the patch', async () => {
+    const texts = { p1: [{ stars: 5, date: '2026-01-01', text: 'Great' }] };
+    m.gatherAll.mockResolvedValue({ data: { reviews: [reviewLoc] }, gaps: [], reviewTexts: texts });
+    const j = job({}, { data: { crawl } });
+    const res = await runStep(j, 'gather');
+    expect(m.saveReviewTexts).toHaveBeenCalledWith(j.id, texts);
+    const stored = res.patch['data.sources'].reviews[0];
+    expect(stored).not.toHaveProperty('reviews');
+    expect(JSON.stringify(res.patch)).not.toContain('Great');
+  });
+
+  it('uses picked locations, else saved ones, and survives lookup and save failures', async () => {
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [], reviewTexts: { p1: [] } });
+    const picked = [{ source: 'places', id: 'a', name: 'A' }];
+    await runStep(job({}, { data: { crawl }, options: { pages: [], skip: [], locations: picked } }), 'gather');
+    expect(m.gatherAll.mock.calls[0][0].locations).toBe(picked);
+    expect(m.getSavedLocations).not.toHaveBeenCalled();
+
+    const saved = [{ source: 'places', id: 's', name: 'S' }];
+    m.getSavedLocations.mockResolvedValue(saved);
+    await runStep(job({}, { data: { crawl } }), 'gather');
+    expect(m.gatherAll.mock.calls[1][0].locations).toBe(saved);
+
+    // an explicit empty pick list means "no locations": neither saved picks nor auto-match
+    m.getSavedLocations.mockClear();
+    const none = [];
+    await runStep(job({}, { data: { crawl }, options: { pages: [], skip: [], locations: none } }), 'gather');
+    expect(m.gatherAll.mock.calls[2][0].locations).toBe(none);
+    expect(m.getSavedLocations).not.toHaveBeenCalled();
+    m.gatherAll.mockClear();
+    m.gatherAll.mockResolvedValue({ data: {}, gaps: [], reviewTexts: { p1: [] } });
+    m.getSavedLocations.mockRejectedValue(new Error('db down'));
+    m.saveReviewTexts.mockRejectedValue(new Error('db down'));
+    const res = await runStep(job({}, { data: { crawl } }), 'gather');
+    expect(m.gatherAll.mock.calls[0][0].locations).toBeNull();
+    expect(res.ok).toBe(true);
+  });
+});
+
+describe('runStep search', () => {
+  const sources = {
+    gscPages: [{ page: 'https://acme.com/', queries: [{ query: 'turf installation', impressions: 50 }] }],
+    reviews: [{ source: 'places', id: 'a', name: 'A', city: 'Austin', region: 'TX' }],
+  };
+  const searchJob = () => job({}, { data: { crawl, sources } });
+  beforeEach(() => { m.buildSearchQueries.mockReturnValue(['turf installation Austin']); });
+
+  it('runs the web search with queries, city and region and stores the result', async () => {
+    const value = { status: 'ok', queries: [], notes: 'n' };
+    m.runWebSearch.mockResolvedValue(value);
+    const res = await runStep(searchJob(), 'search');
+    const arg = m.runWebSearch.mock.calls[0][0];
+    expect(arg).toMatchObject({ domain: 'acme.com', city: 'Austin', region: 'TX', email: 'a@lilikoiagency.com' });
+    expect(arg.queries[0]).toBe('turf installation Austin');
+    expect(res).toEqual({ ok: true, patch: { 'data.sources.aiSearch': value } });
+  });
+
+  it('falls back to the crawl contact address for city and region when no review location has one', async () => {
+    m.runWebSearch.mockResolvedValue({ status: 'ok', queries: [], notes: '' });
+    const withAddress = (address) => job({}, { data: {
+      crawl: { ...crawl, site_wide: { contact_info: { addresses: [address] } } },
+      sources: { ...sources, reviews: [] },
+    } });
+    await runStep(withAddress('123 Main St, Tampa, FL 33602'), 'search');
+    expect(m.runWebSearch.mock.calls[0][0]).toMatchObject({ city: 'Tampa', region: 'FL' });
+    await runStep(withAddress('Suite 4, Fort Worth, TX'), 'search');
+    expect(m.runWebSearch.mock.calls[1][0]).toMatchObject({ city: 'Fort Worth', region: 'TX' });
+    await runStep(withAddress('somewhere along the highway'), 'search');
+    expect(m.runWebSearch.mock.calls[2][0]).toMatchObject({ city: null, region: null });
+    await runStep(job({}, { data: { crawl, sources: { ...sources, reviews: null } } }), 'search');
+    expect(m.runWebSearch.mock.calls[3][0]).toMatchObject({ city: null, region: null });
+  });
+
+  it('review location city wins over the crawl address', async () => {
+    m.runWebSearch.mockResolvedValue({ status: 'ok', queries: [], notes: '' });
+    await runStep(job({}, { data: { crawl: { ...crawl, site_wide: { contact_info: { addresses: ['1 A St, Tampa, FL 33602'] } } }, sources } }), 'search');
+    expect(m.runWebSearch.mock.calls[0][0]).toMatchObject({ city: 'Austin', region: 'TX' });
+  });
+
+  it('turns an API error into a gap, not a failed step', async () => {
+    m.runWebSearch.mockResolvedValue({ status: 'error', error: 'boom', queries: [], notes: '' });
+    expect(await runStep(searchJob(), 'search')).toEqual({
+      ok: true, patch: { 'data.sources.aiSearch': null }, gaps: ["Web search check didn't complete."],
+    });
+    m.runWebSearch.mockRejectedValue(new Error('network'));
+    expect((await runStep(searchJob(), 'search')).ok).toBe(true);
+  });
+
+  it('fails the step on a timeout so it retries', async () => {
+    m.runWebSearch.mockRejectedValue(Object.assign(new Error('The request timed out'), { code: 'timeout' }));
+    const res = await runStep(searchJob(), 'search');
+    expect(res.ok).toBe(false);
   });
 });

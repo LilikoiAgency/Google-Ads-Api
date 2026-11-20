@@ -1,19 +1,27 @@
 // Pure, resumable job state machine for SEO Audit v2. No I/O; `now` is always passed in.
 
 export const STEP_KEYS = [
-  'crawl', 'gather', 'pass:technical', 'pass:content', 'pass:local', 'pass:conversion', 'synthesize',
+  'crawl', 'gather', 'search', 'pass:technical', 'pass:content', 'pass:local', 'pass:conversion',
+  'pass:reputation', 'synthesize',
 ];
 
 const PASS_KEYS = STEP_KEYS.filter((k) => k.startsWith('pass:'));
+// Passes every audit has; "all failed" means nothing to synthesize only across these.
+const CORE_PASS_KEYS = PASS_KEYS.filter((k) => k !== 'pass:reputation');
+// Steps added later: jobs created before them lack the key and treat it as skipped.
+const OPTIONAL_KEYS = ['search', 'pass:reputation'];
 const MAX_ATTEMPTS = 3; // 1 try + 2 retries
 const STALE_MS = 6 * 60 * 1000;
 const EFFORTS = ['high', 'medium', 'low'];
+
+const SEARCH_GAP = "Web search check didn't complete."; // same text runStep adds on a soft failure
 
 const PASS_AREA = {
   'pass:technical': 'Technical & indexing',
   'pass:content': 'Content & keywords',
   'pass:local': 'Local & AI search',
   'pass:conversion': 'Conversion',
+  'pass:reputation': 'Reputation',
 };
 
 const ms = (now) => (now instanceof Date ? now.getTime() : typeof now === 'string' ? Date.parse(now) : Number(now));
@@ -28,7 +36,11 @@ export function newJob({ email, domain, auditType, now }) {
     auditType,
     status: 'queued',
     steps: STEP_KEYS.map((key) => ({
-      key, status: 'pending', attempts: 0, startedAt: null, finishedAt: null, error: null,
+      key,
+      ...(auditType === 'quick' && OPTIONAL_KEYS.includes(key)
+        ? { status: 'done', skipped: true }
+        : { status: 'pending' }),
+      attempts: 0, startedAt: null, finishedAt: null, error: null,
     })),
     gaps: [],
     createdAt: t,
@@ -38,7 +50,10 @@ export function newJob({ email, domain, auditType, now }) {
 
 const find = (job, key) => {
   const step = job.steps.find((s) => s.key === key);
-  if (!step) throw new Error(`Unknown step: ${key}`);
+  if (!step) {
+    if (OPTIONAL_KEYS.includes(key)) return { key, status: 'done', skipped: true };
+    throw new Error(`Unknown step: ${key}`);
+  }
   return step;
 };
 
@@ -55,12 +70,15 @@ function available(step, now) {
 export function runnableSteps(job, now) {
   if (job.status === 'done' || job.status === 'failed') return [];
   const st = (k) => find(job, k);
-  if (STEP_KEYS.some((k) => st(k).status === 'failed_final' && !k.startsWith('pass:'))) return [];
+  if (STEP_KEYS.some((k) => st(k).status === 'failed_final' && !k.startsWith('pass:') && k !== 'search')) return [];
 
   if (st('crawl').status !== 'done') return available(st('crawl'), now) ? ['crawl'] : [];
   if (st('gather').status !== 'done') return available(st('gather'), now) ? ['gather'] : [];
 
-  const open = PASS_KEYS.filter((k) => st(k).status !== 'done' && st(k).status !== 'failed_final');
+  const finished = (k) => st(k).status === 'done' || st(k).status === 'failed_final';
+  // Reputation reads the search result, so it waits until search has settled.
+  const open = ['search', ...PASS_KEYS]
+    .filter((k) => !finished(k) && (k !== 'pass:reputation' || finished('search')));
   if (open.length) return open.filter((k) => available(st(k), now));
   return available(st('synthesize'), now) ? ['synthesize'] : [];
 }
@@ -89,7 +107,7 @@ export function markRunning(job, key, now) {
 export function jobStatus(job) {
   const status = (k) => find(job, k).status;
   if (['crawl', 'gather', 'synthesize'].some((k) => status(k) === 'failed_final')) return 'failed';
-  if (PASS_KEYS.every((k) => status(k) === 'failed_final')) return 'failed'; // nothing to synthesize
+  if (CORE_PASS_KEYS.every((k) => status(k) === 'failed_final')) return 'failed'; // nothing to synthesize
   if (status('synthesize') === 'done') return 'done';
   return 'running';
 }
@@ -104,6 +122,7 @@ function failFinal(job, key, error, now) {
   if (PASS_AREA[key]) {
     next.gaps = [...(job.gaps || []), `${PASS_AREA[key]} analysis didn't complete — rerun to include it`];
   }
+  if (key === 'search' && !(job.gaps || []).includes(SEARCH_GAP)) next.gaps = [...(job.gaps || []), SEARCH_GAP];
   return next;
 }
 
@@ -146,7 +165,7 @@ export function resetFailed(job, now) {
   const resetKeys = new Set(
     ['crawl', 'gather', 'synthesize'].filter((k) => find(job, k).status === 'failed_final'),
   );
-  if (PASS_KEYS.every((k) => find(job, k).status === 'failed_final')) PASS_KEYS.forEach((k) => resetKeys.add(k));
+  if (CORE_PASS_KEYS.every((k) => find(job, k).status === 'failed_final')) CORE_PASS_KEYS.forEach((k) => resetKeys.add(k));
   const gapFor = new Set([...resetKeys].filter((k) => PASS_AREA[k]).map((k) => `${PASS_AREA[k]} analysis didn't complete — rerun to include it`));
   return {
     ...job,

@@ -4,9 +4,10 @@
 export const MAX_LISTED_PAGES = 50;
 export const MAX_SKIP_PATTERNS = 20;
 export const MAX_PAGE_COUNT = 50;
+export const MAX_LOCATIONS = 10;
 export const DEFAULT_PAGES = { quick: 5, full: 50 };
 
-const bareHost = (h) => h.toLowerCase().replace(/^www\./, '');
+export const bareHost = (h) => h.toLowerCase().replace(/^www\./, '');
 
 // A pasted line (full URL, host/path or /path) -> https URL on the domain, or null.
 function toUrl(line, domain) {
@@ -70,17 +71,34 @@ export function parseAuditOptions(raw, domain) {
     ga4Property = { id, name: String(raw.ga4Property.name || id).slice(0, 200), account: String(raw.ga4Property.account || "").slice(0, 200) };
   }
 
-  if (!pages.length && !skip.length && pageCount == null && !gscSite && !ga4Property) return { options: null };
+  // Business locations whose Google reviews to check (picked from GBP or Places).
+  // An explicit empty list means "no locations" (the user unticked them all) and is kept.
+  const locations = [];
+  const locationsGiven = Array.isArray(raw.locations);
+  if (locationsGiven) {
+    for (const loc of raw.locations) {
+      const id = typeof loc?.id === 'string' ? loc.id.trim() : '';
+      const ok = (loc?.source === 'places' && /^[A-Za-z0-9_-]{10,}$/.test(id))
+        || (loc?.source === 'gbp' && /^locations\/\d+$/.test(id));
+      if (!ok) return { error: 'Pick locations from the list.' };
+      if (locations.some((l) => l.id === id)) continue;
+      locations.push({ source: loc.source, id, name: String(loc.name || id).trim().slice(0, 200) });
+    }
+    locations.splice(MAX_LOCATIONS);
+  }
+
+  if (!pages.length && !skip.length && pageCount == null && !gscSite && !ga4Property && !locationsGiven) return { options: null };
   return {
     options: {
       pages, onlyListed, skip, pageCount,
       ...(gscSite ? { gscSite } : {}),
       ...(ga4Property ? { ga4Property } : {}),
+      ...(locationsGiven ? { locations } : {}),
     },
   };
 }
 
-export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property);
+export const hasOptions = (o) => !!o && (o.pages?.length > 0 || o.skip?.length > 0 || o.pageCount != null || !!o.gscSite || !!o.ga4Property || Array.isArray(o.locations));
 
 // How many pages the crawl may fetch.
 export function pageLimit(auditType, options) {
@@ -119,6 +137,8 @@ export function describeOptions(o) {
   if (o.skip?.length) parts.push(`skip ${o.skip.join(', ')}`);
   if (o.gscSite) parts.push(`Search Console ${o.gscSite}`);
   if (o.ga4Property) parts.push(`Analytics ${o.ga4Property.name}`);
+  if (Array.isArray(o.locations) && !o.locations.length) parts.push('no locations');
+  else if (o.locations?.length) parts.push(`${o.locations.length} location${o.locations.length === 1 ? '' : 's'}`);
   if (o.pageCount && !o.onlyListed) parts.push(`${o.pageCount} pages`);
   return parts.join(' · ');
 }

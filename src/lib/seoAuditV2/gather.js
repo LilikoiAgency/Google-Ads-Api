@@ -9,6 +9,7 @@ import { joinPagesToQueries, inspectUrls, listGoogleSitemaps, ga4PerPage } from 
 import { fetchPageSpeed } from './pagespeed';
 import { filterSkipped } from './options';
 import { pathKey } from './tasks';
+import { fetchReviews } from './reviews';
 
 export const AUDIT_PROFILES = {
   quick: { pages: 5, inspect: 5, pagespeed: 2, effort: 'medium' },
@@ -126,7 +127,7 @@ function onePerPage(urls, gscUrls) {
 
 const crawlUrls = (crawl) => (crawl?.pages_crawled || []).map((p) => p.final_url || p.url).filter(Boolean);
 
-const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, ga4Property: null, pagespeed: null });
+const emptyData = () => ({ gsc: null, gscPages: null, inspection: null, googleSitemaps: null, ga4: null, ga4Pages: null, ga4Property: null, pagespeed: null, reviews: null });
 
 const blocked = (s) => ({ status: s.status, error: s.error });
 
@@ -140,7 +141,10 @@ async function runPageSpeed(urls) {
 // priorityUrls (listed by the user) are inspected and speed-tested first; skip
 // patterns drop Search Console pages; onlyListed limits targets to the crawl.
 // gscSite / ga4Property: data sources picked by hand instead of matched by domain.
-export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [], gscSite, ga4Property } = {}) {
+// locations: Google review locations picked by hand (null matches by website).
+// reviewTexts (review text by location id) is returned apart from data so it
+// never lands on the job document.
+export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls = [], onlyListed = false, skip = [], gscSite, ga4Property, locations = null } = {}) {
   try {
     const prof = profileOf(profile);
     const ranges = auditRanges(today());
@@ -157,9 +161,10 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
       ? settle(() => inspectUrls(s.auth, s.site, urls.slice(0, prof.inspect), { concurrency: 5 }))
       : blocked(s)));
     const ga4P = settle(() => fetchGa4(domain, ranges, ga4Property));
+    const reviewsP = settle(() => fetchReviews({ domain, crawl, locations }));
     const pagespeedP = targetsP.then((urls) => runPageSpeed(urls.slice(0, prof.pagespeed)));
 
-    const [gsc, sitemaps, inspection, ga4, pagespeed, targets] = await Promise.all([gscP, sitemapsP, inspectionP, ga4P, pagespeedP, targetsP]);
+    const [gsc, sitemaps, inspection, ga4, pagespeed, targets, reviews] = await Promise.all([gscP, sitemapsP, inspectionP, ga4P, pagespeedP, targetsP, reviewsP]);
 
     const data = emptyData();
     const gaps = [];
@@ -187,6 +192,12 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
       }
     } else gap('ga4', ga4.status, ga4.error || '');
 
+    let reviewTexts = {};
+    if (reviews.status === 'ok') {
+      data.reviews = reviews.locations;
+      reviewTexts = reviews.texts || {};
+    } else gap('reviews', reviews.status, reviews.error || '');
+
     if (pagespeed.status !== 'ok') gap('pagespeed', pagespeed.status, pagespeed.error || '');
     else {
       const ok = pagespeed.results.filter((r) => r.status === 'ok');
@@ -200,9 +211,9 @@ export async function gatherAll({ domain, crawl, profile = 'quick', priorityUrls
         else gap('pagespeed', r.status, `${r.url}: ${r.error || ''}`);
       }
     }
-    return { data, gaps };
+    return { data, gaps, reviewTexts };
   } catch (err) {
-    return { data: emptyData(), gaps: [{ source: 'gather', status: 'error', detail: errText(err) }] };
+    return { data: emptyData(), gaps: [{ source: 'gather', status: 'error', detail: errText(err) }], reviewTexts: {} };
   }
 }
 
@@ -212,6 +223,7 @@ const SOURCE_LABEL = {
   sitemaps: "Google's sitemap report",
   ga4: 'Google Analytics data',
   pagespeed: 'Page speed',
+  reviews: 'Google reviews',
   gather: 'Search and analytics data',
 };
 
@@ -233,6 +245,11 @@ export function describeGaps(gaps) {
       }
     }
     if (source === 'ga4' && status === 'no_property') return 'No Google Analytics property was found for this website.';
+    if (source === 'reviews') {
+      if (status === 'not_connected') return 'Google reviews: not connected (no Places API key).';
+      if (status === 'no_data') return 'Google reviews: no Google listing found that links to this website.';
+      if (status === 'permission') return "Google reviews: the Places API key isn't allowed to read this data.";
+    }
     const label = SOURCE_LABEL[source] || source;
     let reason = REASON[status];
     if (source === 'ga4' && status === 'not_connected') reason = 'Google Analytics is not connected.';

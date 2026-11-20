@@ -73,7 +73,7 @@ export default function ProgressSteps({ progress, error, onRetry, onBack }) {
           </span>
         </div>
         <p style={{ fontSize: 12, color: "#888", marginBottom: 18 }}>
-          {progress?.auditType === "quick" ? "Quick audit" : progress?.auditType === "full" ? "Full audit · usually 5–9 minutes" : "Loading…"}
+          {progress?.auditType === "quick" ? "Quick audit" : progress?.auditType === "full" ? "Full audit · usually 6–10 minutes" : "Loading…"}
           {steps.length > 0 && ` · ${doneCount} of ${steps.length} steps done`}
           {!finished && " · keep this tab open"}
         </p>

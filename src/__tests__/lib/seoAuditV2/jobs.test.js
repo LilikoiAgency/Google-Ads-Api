@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  STEP_KEYS, newJob, runnableSteps, applyStepResult, markRunning, expireStale, effortForAttempt, shouldRefund, resetFailed,
+  STEP_KEYS, newJob, runnableSteps, applyStepResult, markRunning, expireStale, effortForAttempt, shouldRefund, resetFailed, jobStatus,
 } from '@/lib/seoAuditV2/jobs';
 
 const T0 = 1_000_000;
@@ -33,10 +33,10 @@ describe('runnableSteps order', () => {
     job = finish(job, 'crawl');
     expect(runnableSteps(job, T0)).toEqual(['gather']);
     job = finish(job, 'gather');
-    expect(runnableSteps(job, T0)).toEqual(PASSES);
-    for (const p of PASSES.slice(0, 3)) job = finish(job, p);
-    expect(runnableSteps(job, T0)).toEqual(['pass:conversion']);
-    job = finish(job, 'pass:conversion');
+    expect(runnableSteps(job, T0)).toEqual(['search', ...PASSES]);
+    for (const p of ['search', ...PASSES.slice(0, 3)]) job = finish(job, p);
+    expect(runnableSteps(job, T0)).toEqual(['pass:conversion', 'pass:reputation']);
+    job = finish(finish(job, 'pass:conversion'), 'pass:reputation');
     expect(runnableSteps(job, T0)).toEqual(['synthesize']);
     job = finish(job, 'synthesize');
     expect(job.status).toBe('done');
@@ -79,11 +79,26 @@ describe('failures', () => {
     }
     expect(step(job, 'pass:technical').status).toBe('failed_final');
     expect(job.gaps).toEqual(["Technical & indexing analysis didn't complete — rerun to include it"]);
-    for (const p of PASSES.slice(1)) job = finish(job, p);
+    for (const p of [...PASSES.slice(1), 'search', 'pass:reputation']) job = finish(job, p);
     expect(runnableSteps(job, T0)).toEqual(['synthesize']);
     job = finish(job, 'synthesize');
     expect(job.status).toBe('done');
     expect(job.gaps).toHaveLength(1);
+  });
+
+  it('a search step that fails for good leaves a gap, once', () => {
+    let job = finish(finish(mk(), 'crawl'), 'gather');
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'search', T0), 'search', fail, T0);
+    expect(step(job, 'search').status).toBe('failed_final');
+    expect(job.gaps).toEqual(["Web search check didn't complete."]);
+    const twice = { ...job, gaps: ["Web search check didn't complete."] };
+    expect([...new Set(twice.gaps)]).toHaveLength(1);
+  });
+
+  it('does not repeat the search gap when the step already added it', () => {
+    let job = { ...finish(finish(mk(), 'crawl'), 'gather'), gaps: ["Web search check didn't complete."] };
+    for (let i = 0; i < 3; i++) job = applyStepResult(markRunning(job, 'search', T0), 'search', fail, T0);
+    expect(job.gaps).toEqual(["Web search check didn't complete."]);
   });
 
   it('names each area in its gap', () => {
@@ -261,10 +276,77 @@ describe('resetFailed', () => {
     expect(PASSES.every((p) => step(out, p).status === 'pending' && step(out, p).attempts === 0)).toBe(true);
     expect(out.gaps).toEqual([]);
     expect(out.status).toBe('running');
-    expect(runnableSteps(out, T0)).toEqual(PASSES);
+    expect(runnableSteps(out, T0)).toEqual(['search', ...PASSES]);
   });
   it('is a no-op for a job that is not failed', () => {
     const job = mk();
     expect(resetFailed(job, T0)).toBe(job);
+  });
+});
+
+describe('search and reputation steps', () => {
+  const mkQuick = () => newJob({ email: 'a@lilikoiagency.com', domain: 'x.com', auditType: 'quick', now: T0 });
+  const oldJob = () => {
+    const job = mk();
+    return { ...job, steps: job.steps.filter((s) => s.key !== 'search' && s.key !== 'pass:reputation') };
+  };
+  const afterGather = (job) => finish(finish(job, 'crawl'), 'gather');
+
+  it('quick jobs pre-skip search and reputation', () => {
+    const quick = mkQuick();
+    for (const k of ['search', 'pass:reputation']) {
+      expect(step(quick, k)).toMatchObject({ status: 'done', skipped: true });
+      expect(step(mk(), k).status).toBe('pending');
+    }
+    expect(step(quick, 'crawl').skipped).toBeUndefined();
+    expect(runnableSteps(afterGather(quick), T0)).toEqual(PASSES);
+  });
+
+  it('search runs alongside passes after gather; reputation waits for search', () => {
+    let job = afterGather(mk());
+    const runnable = runnableSteps(job, T0);
+    expect(runnable).toEqual(['search', ...PASSES]);
+    expect(runnable).not.toContain('pass:reputation');
+    job = finish(job, 'search');
+    expect(runnableSteps(job, T0)).toContain('pass:reputation');
+  });
+
+  it('reputation becomes runnable when search fails for good', () => {
+    let job = afterGather(mk());
+    for (let i = 0; i < 3; i += 1) job = applyStepResult(markRunning(job, 'search', T0), 'search', fail, T0);
+    expect(step(job, 'search').status).toBe('failed_final');
+    expect(runnableSteps(job, T0)).toContain('pass:reputation');
+  });
+
+  it('search failing does not fail the job', () => {
+    let job = afterGather(mk());
+    for (let i = 0; i < 3; i += 1) job = applyStepResult(markRunning(job, 'search', T0), 'search', fail, T0);
+    expect(job.status).toBe('running');
+    for (const p of [...PASSES, 'pass:reputation']) job = finish(job, p);
+    job = finish(job, 'synthesize');
+    expect(job.status).toBe('done');
+    expect(jobStatus(job)).toBe('done');
+  });
+
+  it('old job without new steps still runs and finishes', () => {
+    let job = afterGather(oldJob());
+    expect(runnableSteps(job, T0)).toEqual(PASSES);
+    for (const p of PASSES) job = finish(job, p);
+    expect(runnableSteps(job, T0)).toEqual(['synthesize']);
+    job = finish(job, 'synthesize');
+    expect(jobStatus(job)).toBe('done');
+  });
+
+  it('old job whose four passes all failed is still failed, and retry resets them', () => {
+    let job = afterGather(oldJob());
+    for (const p of PASSES) job = failPass(job, p);
+    expect(jobStatus(job)).toBe('failed');
+    expect(resetFailed(job, T0).status).toBe('running');
+    expect(expireStale(job, T0)).toBe(job);
+  });
+
+  it('any other missing step still throws', () => {
+    const job = { ...mk(), steps: mk().steps.filter((s) => s.key !== 'crawl') };
+    expect(() => runnableSteps(job, T0)).toThrow('Unknown step: crawl');
   });
 });
