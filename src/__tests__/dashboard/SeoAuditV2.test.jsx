@@ -864,6 +864,67 @@ describe('Advanced: Google Business Profiles picker', () => {
   });
 });
 
+describe('Advanced: company brief', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+  const SAVED = { services: 'Panel upgrades', exclude: ['generator installs'], areas: 'Tampa', notes: '' };
+  const mockBrief = (brief) => {
+    global.fetch = vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('/v2/brief') ? { brief } : { sites: [], properties: [] }),
+    }));
+  };
+  const open = (value = EMPTY_ADVANCED) => {
+    const onChange = vi.fn();
+    render(<AdvancedOptions value={value} onChange={onChange} auditType="full" domain="acme.com" />);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+    return onChange;
+  };
+
+  it('loads and shows the saved brief for the domain', async () => {
+    mockBrief(SAVED);
+    open();
+    expect(global.fetch).toHaveBeenCalledWith('/api/seo-audit/v2/brief?domain=acme.com');
+    expect(await screen.findByDisplayValue('Panel upgrades')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Tampa')).toBeInTheDocument();
+    expect(screen.getByText('generator installs')).toBeInTheDocument();
+  });
+
+  it('adding and removing a service not to recommend updates the form', async () => {
+    mockBrief(SAVED);
+    const onChange = open();
+    await screen.findByDisplayValue('Panel upgrades');
+    fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'pool wiring' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      brief: { ...SAVED, exclude: ['generator installs', 'pool wiring'] },
+      briefLoaded: SAVED,
+      briefDomain: 'acme.com',
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove generator installs' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ brief: { ...SAVED, exclude: [] } }));
+  });
+
+  it('rejects an exclusion under 4 characters with a message', async () => {
+    mockBrief(null);
+    const onChange = open();
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("Don't recommend"), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service not to recommend' }));
+    expect(screen.getByText('Use at least 4 characters for each service not to recommend.')).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('typing in services reports the edited brief', async () => {
+    mockBrief(null);
+    const onChange = open();
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText('Services'), { target: { value: 'Rewiring' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      brief: { services: 'Rewiring', exclude: [], areas: '', notes: '' }, briefLoaded: null,
+    }));
+  });
+});
+
 describe('ProgressSteps time text', () => {
   it('says 6–10 minutes for full audits only', () => {
     const { unmount } = render(<ProgressSteps progress={{ status: 'running', auditType: 'full', steps: [] }} />);

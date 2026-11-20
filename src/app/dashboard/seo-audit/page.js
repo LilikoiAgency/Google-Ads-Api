@@ -10,7 +10,8 @@ import { SEOAuditIcon } from "../components/DashboardIcons";
 import ResultsView from "./ResultsView";
 import ProgressSteps from "./v2/ProgressSteps";
 import { useAuditJob, friendlyError } from "./v2/useAuditJob";
-import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions } from "./v2/AdvancedOptions";
+import AdvancedOptions, { EMPTY_ADVANCED, toRequestOptions, fromAuditOptions, bareHost } from "./v2/AdvancedOptions";
+import { sameBrief } from "../../../lib/seoAuditV2/briefs";
 import "../../globals.css";
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -87,6 +88,24 @@ export default function SEOAuditPage() {
     setError(null);
     setStarting(true);
     try {
+      // The company brief is saved on its own; the job loads it when it starts.
+      if (advanced.brief && advanced.briefDomain === bareHost(target) && !sameBrief(advanced.brief, advanced.briefLoaded)) {
+        let saved;
+        try {
+          saved = await fetch("/api/seo-audit/v2/brief", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: bareHost(target), brief: advanced.brief }),
+          });
+        } catch {
+          throw new Error("Couldn't save the company brief. Check your connection and try again.");
+        }
+        if (!saved.ok) {
+          const b = await saved.json().catch(() => ({}));
+          throw new Error(b.error || "Couldn't save the company brief.");
+        }
+        setAdvanced((cur) => ({ ...cur, briefLoaded: cur.brief }));
+      }
       let res;
       try {
         res = await fetch("/api/seo-audit/v2/jobs", {
