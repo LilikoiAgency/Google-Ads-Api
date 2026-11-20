@@ -6,9 +6,10 @@ const RANGE_KEYS = PRESETS.map((p) => p.key);
 const TYPE_KEYS = SEARCH_TYPES.map((t) => t.key);
 export const COMPARES = ["prev", "yoy", "none"];
 export const GRANULARITIES = ["day", "week", "month"];
+export const SEGS = ["all", "nonbrand", "brand"];
 export const TABS = ["queries", "pages", "groups", "opportunities", "cannibalization", "audience", "indexing"];
 
-export const DEFAULTS = { rangeKey: "last_28", compare: "prev", type: "web", tab: "queries" };
+export const DEFAULTS = { rangeKey: "last_28", compare: "prev", type: "web", tab: "queries", seg: "all" };
 
 export function parseParams(sp) {
   const get = (k) => sp.get(k);
@@ -28,10 +29,11 @@ export function parseParams(sp) {
     type: TYPE_KEYS.includes(get("type")) ? get("type") : DEFAULTS.type,
     tab: TABS.includes(get("tab")) ? get("tab") : DEFAULTS.tab,
     gran: GRANULARITIES.includes(get("gran")) ? get("gran") : null,
+    seg: SEGS.includes(get("q")) ? get("q") : DEFAULTS.seg,
   };
 }
 
-export function buildQuery({ site, rangeKey, custom, compare, type, tab, gran }) {
+export function buildQuery({ site, rangeKey, custom, compare, type, tab, gran, seg = "all" }) {
   const p = new URLSearchParams();
   p.set("site", site);
   p.set("range", rangeKey);
@@ -43,6 +45,7 @@ export function buildQuery({ site, rangeKey, custom, compare, type, tab, gran })
   if (type !== DEFAULTS.type) p.set("type", type);
   if (tab !== DEFAULTS.tab) p.set("tab", tab);
   if (gran) p.set("gran", gran);
+  if (seg !== DEFAULTS.seg) p.set("q", seg);
   return `?${p.toString()}`;
 }
 

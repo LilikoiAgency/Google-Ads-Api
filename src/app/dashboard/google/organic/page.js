@@ -12,7 +12,7 @@ import PropertyPicker from "../analytics/components/PropertyPicker";
 import RangeControls from "../analytics/components/RangeControls";
 import { localToday } from "../analytics/urlState";
 import { presetRange, autoGranularity, rangeLabel, compareRange } from "@/lib/ga4Dates";
-import { SEARCH_TYPES } from "@/lib/gscReport";
+import { SEARCH_TYPES, SEGMENTS, canSegment, segmentReport } from "@/lib/gscReport";
 import { expectedCtrModel } from "@/lib/gscInsights";
 import { ga4ByPath, normalizePath } from "@/lib/gscGa4Join";
 import { downloadSearchReport } from "@/lib/gscReportHtml";
@@ -107,6 +107,7 @@ function OrganicPage() {
   const [compare, setCompare] = useState(initial.compare);
   const [type, setType] = useState(initial.type);
   const [tab, setTab] = useState(initial.tab);
+  const [seg, setSeg] = useState(initial.seg);
   const [granOverride, setGranOverride] = useState(initial.gran);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -171,9 +172,9 @@ function OrganicPage() {
 
   useEffect(() => {
     if (!site) return;
-    const qs = buildQuery({ site, rangeKey, custom, compare, type, tab, gran: granOverride });
+    const qs = buildQuery({ site, rangeKey, custom, compare, type, tab, gran: granOverride, seg });
     if (window.location.search !== qs) window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs}`);
-  }, [site, rangeKey, custom, compare, type, tab, granOverride]);
+  }, [site, rangeKey, custom, compare, type, tab, granOverride, seg]);
 
   // ── report ──────────────────────────────────────────────────────────────
   const fetchKey = site && range && settings
@@ -189,6 +190,11 @@ function OrganicPage() {
   const brandTerms = settings?.brandTerms || [];
   const ctrAt = useMemo(() => expectedCtrModel(report?.queries || []), [report]);
   const noData = !!report && !loading && !(report.totals.impressions > 0);
+  // Branded / non-branded view of the report (the "All searches" view is the report itself).
+  const segmentable = canSegment(report);
+  const activeSeg = segmentable ? seg : "all";
+  const view = useMemo(() => segmentReport(report, activeSeg), [report, activeSeg]);
+  const segLabel = SEGMENTS.find((x) => x.key === activeSeg)?.label;
   const tabs = TAB_LIST.filter((t) => !t.needsQueries || report?.hasQueries !== false);
   const activeTab = tabs.some((t) => t.key === tab) ? tab : "pages";
 
@@ -272,7 +278,7 @@ function OrganicPage() {
   const onDownload = () => {
     if (!report) return;
     try {
-      downloadSearchReport(report, { brandTerms, granularity });
+      downloadSearchReport(view, { brandTerms, granularity });
     } catch (err) {
       console.error("[gsc] download failed", err);
       window.alert("Couldn't build the report file. Please try again.");
@@ -365,6 +371,22 @@ function OrganicPage() {
         {hasSites && site && (
           <>
             <div className="ga4-view-row gsc-status-row">
+              {report?.hasQueries && (
+                <div className="gsc-seg-wrap">
+                  <div className="ga4-segment" role="group" aria-label="Branded or non-branded searches">
+                    {SEGMENTS.map((x) => (
+                      <button key={x.key} type="button" disabled={!segmentable && x.key !== "all"}
+                        className={`ga4-segment-btn${activeSeg === x.key ? " is-active" : ""}`}
+                        aria-pressed={activeSeg === x.key} onClick={() => setSeg(x.key)}>{x.label}</button>
+                    ))}
+                  </div>
+                  {!segmentable && !loading && (
+                    <span className="gsc-seg-hint">
+                      {brandTerms.length ? "Refresh to load the branded split." : "Add brand terms below to filter branded vs non-branded."}
+                    </span>
+                  )}
+                </div>
+              )}
               {loading && <span className="ga4-loading-pill"><span className="ga4-spinner" aria-hidden="true" />Loading Search Console…</span>}
               {report && !loading && (
                 <span className="gsc-fetched">
@@ -390,7 +412,12 @@ function OrganicPage() {
               <Notice>No {type === "web" ? "" : `${SEARCH_TYPES.find((t) => t.key === type)?.label} `}search impressions for this site in this range.</Notice>
             ) : (
               <div className={`ga4-content${stale ? " is-stale" : ""}`} aria-busy={loading}>
-                <SearchKpis totals={report?.totals} prev={report?.totalsCompare} compareLabel={compareLabel}
+                {activeSeg !== "all" && (
+                  <p className="ga4-dq-note gsc-seg-note" role="note">
+                    Showing <b>{segLabel.toLowerCase()}</b> searches only ({activeSeg === "brand" ? "queries containing" : "queries without"} {brandTerms.map((t) => `“${t}”`).join(", ")}). Searches Google keeps private are in neither, so branded + non-branded add up to less than all searches. Devices, countries and indexing always show all searches.
+                  </p>
+                )}
+                <SearchKpis totals={view?.totals} prev={view?.totalsCompare} compareLabel={compareLabel}
                   hasPosition={report?.hasQueries !== false} loading={!report} />
 
                 {prelimInRange && (
@@ -400,7 +427,7 @@ function OrganicPage() {
                 )}
 
                 <SearchTrend
-                  trend={report?.trend} trendCompare={report?.trendCompare} granularity={granularity}
+                  trend={view?.trend} trendCompare={view?.trendCompare} granularity={granularity}
                   onGranularityChange={(g) => setGranOverride(g === autoGran ? null : g)}
                   firstIncompleteDate={report?.firstIncompleteDate} annotations={settings?.annotations || []}
                   onAddAnnotation={onAddAnnotation} onRemoveAnnotation={onRemoveAnnotation}
@@ -423,15 +450,15 @@ function OrganicPage() {
                       ))}
                     </div>
                     <div className="gsc-tab-body" role="tabpanel">
-                      {activeTab === "queries" && <QueriesTab report={report} brandTerms={brandTerms} onOpenQuery={openQuery} csvBase={csvBase} />}
+                      {activeTab === "queries" && <QueriesTab report={view} brandTerms={brandTerms} onOpenQuery={openQuery} csvBase={csvBase} />}
                       {activeTab === "pages" && (
                         <>
                           {type === "web" && <Ga4Link ga4={ga4} properties={ga4Props} onLoadProperties={loadGa4Props} onPick={onPickGa4} />}
-                          <PagesTab report={report} ga4={ga4} inspections={inspections} onInspect={onInspect} onOpenPage={openPage} csvBase={csvBase} />
+                          <PagesTab report={view} ga4={ga4} inspections={inspections} onInspect={onInspect} onOpenPage={openPage} csvBase={csvBase} />
                         </>
                       )}
-                      {activeTab === "groups" && <GroupsTab report={report} csvBase={csvBase} />}
-                      {activeTab === "opportunities" && <OpportunitiesTab report={report} ctrAt={ctrAt} brandTerms={brandTerms} onOpenQuery={openQuery} onOpenPage={openPage} csvBase={csvBase} />}
+                      {activeTab === "groups" && <GroupsTab report={view} csvBase={csvBase} />}
+                      {activeTab === "opportunities" && <OpportunitiesTab report={view} ctrAt={ctrAt} brandTerms={brandTerms} onOpenQuery={openQuery} onOpenPage={openPage} csvBase={csvBase} />}
                       {activeTab === "cannibalization" && <CannibalizationTab report={report} brandTerms={brandTerms} onOpenQuery={openQuery} />}
                       {activeTab === "audience" && <AudienceTab report={report} csvBase={csvBase} />}
                       {activeTab === "indexing" && <IndexingTab report={report} inspections={inspections} onInspect={onInspect} csvBase={csvBase} />}
@@ -446,7 +473,7 @@ function OrganicPage() {
         )}
       </div>
 
-      <DetailDrawer detail={detail} report={report} onClose={closeDetail} onOpenQuery={openQuery} onOpenPage={openPage} />
+      <DetailDrawer detail={detail} report={view} onClose={closeDetail} onOpenQuery={openQuery} onOpenPage={openPage} />
     </div>
   );
 }

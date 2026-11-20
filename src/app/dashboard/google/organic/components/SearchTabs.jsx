@@ -64,14 +64,11 @@ function Seg({ value, onChange, options, label }) {
 
 // ── Queries ───────────────────────────────────────────────────────────────
 
+// Branded / non-branded filtering happens page-wide (segmentReport), so this
+// tab just shows the rows it's given.
 export function QueriesTab({ report, brandTerms, onOpenQuery, csvBase }) {
-  const [seg, setSeg] = useState("all");
   const hasCompare = !!report.compareRange;
   const branded = brandTerms.length > 0;
-  const rows = useMemo(() => {
-    if (!branded || seg === "all") return report.queries;
-    return report.queries.filter((q) => isBranded(q.query, brandTerms) === (seg === "brand"));
-  }, [report.queries, brandTerms, branded, seg]);
   const columns = [
     { key: "query", label: "Query", render: (r) => (
       <span className="gsc-cell-q">
@@ -83,12 +80,11 @@ export function QueriesTab({ report, brandTerms, onOpenQuery, csvBase }) {
   ];
   return (
     <>
-    <CapNote count={report.queries.length} limit={report.limits?.queries} what="queries" />
+    <CapNote count={report.allQueryCount ?? report.queries.length} limit={report.limits?.queries} what="queries" />
     <SearchTable
-      columns={columns} rows={rows} rowKey={(r) => r.query} searchKeys={["query"]} searchPlaceholder="Filter queries…"
+      columns={columns} rows={report.queries} rowKey={(r) => r.query} searchKeys={["query"]} searchPlaceholder="Filter queries…"
       onRowClick={(r) => onOpenQuery(r.query)} csvName={`${csvBase} queries.csv`}
       emptyMsg="No queries in this range."
-      toolbar={branded && <Seg label="Query type" value={seg} onChange={setSeg} options={[["all", "All"], ["nonbrand", "Non-branded"], ["brand", "Branded"]]} />}
     />
     </>
   );

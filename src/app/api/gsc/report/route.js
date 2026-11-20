@@ -43,7 +43,7 @@ export async function GET(request) {
     const brandHash = brandTerms.length
       ? createHash("sha1").update(brandTerms.join("|")).digest("hex").slice(0, 10)
       : "none";
-    const key = `gsc:v1:report:${site}:${startDate}:${endDate}:${compare}:${type}:${brandHash}`;
+    const key = `gsc:v2:report:${site}:${startDate}:${endDate}:${compare}:${type}:${brandHash}`;
     if (!fresh) {
       const cached = await getCached(key);
       if (cached) return NextResponse.json(cached);

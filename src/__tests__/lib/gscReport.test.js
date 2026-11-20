@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSearchRequests, normalizeSearchReport, brandRegex, cleanBrandTerms, hasQueries } from '@/lib/gscReport';
+import { buildSearchRequests, normalizeSearchReport, brandRegex, cleanBrandTerms, hasQueries, segmentReport, canSegment } from '@/lib/gscReport';
 
 const range = { startDate: '2026-10-01', endDate: '2026-10-31' };
 const cmp = { startDate: '2026-09-01', endDate: '2026-09-30' };
@@ -102,5 +102,59 @@ describe('normalizeSearchReport', () => {
     expect(e.totalsCompare).toBeNull();
     expect(e.brand).toBeNull();
     expect(e.queries).toEqual([]);
+  });
+});
+
+describe('branded / non-branded segments', () => {
+  const range2 = { startDate: '2026-10-01', endDate: '2026-10-31' };
+  const cmp2 = { startDate: '2026-09-01', endDate: '2026-09-30' };
+  const r = (keys, clicks, impressions, position = 5) => ({ keys, clicks, impressions, ctr: clicks / impressions, position });
+
+  it('requests filtered totals, trend and pages for both periods', () => {
+    const keys = buildSearchRequests({ ...range2, compareRange: cmp2, brandTerms: ['acme'] }).map((x) => x.key);
+    for (const s of ['brand', 'nonBrand']) {
+      for (const k of ['totals', 'trend', 'pages', 'totals:compare', 'trend:compare', 'pages:compare']) {
+        expect(keys).toContain(`${s}:${k}`);
+      }
+    }
+  });
+
+  const results = {
+    totals: { rows: [{ clicks: 100, impressions: 1000, ctr: 0.1, position: 5 }] },
+    queries: { rows: [r(['acme roofing'], 30, 100), r(['roof repair'], 10, 400)] },
+    queryPages: { rows: [r(['acme roofing', '/a'], 30, 100), r(['roof repair', '/b'], 10, 400)] },
+    pages: { rows: [r(['/a'], 60, 500)] },
+    'brand:totals': { rows: [{ clicks: 30, impressions: 100, ctr: 0.3, position: 1.2 }] },
+    'nonBrand:totals': { rows: [{ clicks: 50, impressions: 800, ctr: 0.0625, position: 9 }] },
+    'brand:trend': { rows: [r(['2026-10-01'], 30, 100)] },
+    'nonBrand:trend': { rows: [r(['2026-10-01'], 50, 800)] },
+    'brand:pages': { rows: [r(['/a'], 30, 100)] },
+    'nonBrand:pages': { rows: [r(['/b'], 50, 800)] },
+  };
+  const report = normalizeSearchReport(results, { site: 's', range: range2, compareRange: null, type: 'web', brandTerms: ['acme'] });
+
+  it('swaps totals, trend and pages and filters queries', () => {
+    expect(canSegment(report)).toBe(true);
+    const nb = segmentReport(report, 'nonbrand');
+    expect(nb.segment).toBe('nonbrand');
+    expect(nb.totals.clicks).toBe(50);
+    expect(nb.trend[0].clicks).toBe(50);
+    expect(nb.pages.map((p) => p.page)).toEqual(['/b']);
+    expect(nb.queries.map((q) => q.query)).toEqual(['roof repair']);
+    expect(nb.queryPages.map((q) => q.query)).toEqual(['roof repair']);
+    expect(nb.allQueryCount).toBe(2);
+    expect(nb.devices).toBe(report.devices); // unfiltered
+    const b = segmentReport(report, 'brand');
+    expect(b.totals.clicks).toBe(30);
+    expect(b.queries.map((q) => q.query)).toEqual(['acme roofing']);
+  });
+
+  it('is a no-op for "all", for reports without terms, and for older cached reports', () => {
+    expect(segmentReport(report, 'all')).toBe(report);
+    const none = normalizeSearchReport(results, { site: 's', range: range2, compareRange: null, type: 'web', brandTerms: [] });
+    expect(canSegment(none)).toBe(false);
+    expect(segmentReport(none, 'nonbrand')).toBe(none);
+    const old = { ...report, brand: { ...report.brand, segments: null } };
+    expect(segmentReport(old, 'nonbrand')).toBe(old);
   });
 });
