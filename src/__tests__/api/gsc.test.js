@@ -61,7 +61,7 @@ describe("gsc routes", () => {
     expect(res.body).toEqual({ ok: 1 });
     expect(fetchSearchReport.mock.calls[0][1]).toMatchObject({ site: "sc-domain:acme.com", brandTerms: ["acme"], type: "web" });
     const key = setCached.mock.calls[0][0];
-    expect(key).toMatch(/^gsc:v1:report:sc-domain:acme.com:2026-10-01:2026-10-31:prev:web:[0-9a-f]{10}$/);
+    expect(key).toMatch(/^gsc:v2:report:sc-domain:acme.com:2026-10-01:2026-10-31:prev:web:[0-9a-f]{10}$/);
   });
 
   it("serves the cache unless refresh=1", async () => {

@@ -61,9 +61,13 @@ function table(head, rows, empty, cls = '') {
 
 const deltaCell = (d) => `<span class="${d.c}">${esc(d.t)}</span>`;
 
+// 'nonbrand' / 'brand' views of the report (see segmentReport) get labeled everywhere.
+const SEGMENT_TEXT = { nonbrand: 'non-branded searches', brand: 'branded searches' };
+const SEGMENT_FILE = { nonbrand: ' (Non-branded)', brand: ' (Branded)' };
+
 export function searchReportFilename(report) {
   const type = report.type && report.type !== 'web' ? ` ${SEARCH_TYPES.find((t) => t.key === report.type)?.label || report.type}` : '';
-  return `${siteName(report.site)} Organic Search${type} - ${rangeLabel(report.range)}.html`
+  return `${siteName(report.site)} Organic Search${type}${SEGMENT_FILE[report.segment] || ''} - ${rangeLabel(report.range)}.html`
     .replace(/[\\/:*?"<>|]/g, '').replace(/\s{2,}/g, ' ').trim();
 }
 
@@ -73,7 +77,8 @@ export function generateSearchReportHtml(report, { brandTerms = [], granularity 
   const cmpLabel = hasCompare ? rangeLabel(report.compareRange) : null;
   const typeLabel = SEARCH_TYPES.find((t) => t.key === report.type)?.label || 'Web';
   const name = siteName(report.site);
-  const title = `${name}: Google organic search${report.type !== 'web' ? ` (${typeLabel})` : ''}, ${range}`;
+  const segText = SEGMENT_TEXT[report.segment] || null;
+  const title = `${name}: Google organic search${report.type !== 'web' ? ` (${typeLabel})` : ''}${segText ? `, ${segText}` : ''}, ${range}`;
   const t = report.totals;
   const p = report.totalsCompare;
   const q = report.hasQueries;
@@ -156,7 +161,9 @@ ${table(['Search query', 'Position', 'Impressions', 'Clicks now', 'Est. extra cl
 
   const note = `Source: Google Search Console, ${typeLabel.toLowerCase()} search results for ${name}, ${range}.`
     + (hasCompare ? ` Compared with ${cmpLabel}.` : '')
-    + ' Totals include searches Google keeps private, so the query table adds up to less than the totals.'
+    + (segText
+      ? ` Figures cover ${segText} only: searches ${report.segment === 'brand' ? 'containing' : 'not containing'} ${(report.brand?.terms || []).map((t) => `"${t}"`).join(', ')}. Searches Google keeps private are not included. Devices and countries cover all searches.`
+      : ' Totals include searches Google keeps private, so the query table adds up to less than the totals.')
     + (report.firstIncompleteDate && report.firstIncompleteDate <= report.range.endDate ? ' The most recent days are preliminary and may still rise.' : '');
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">

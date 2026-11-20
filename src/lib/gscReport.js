@@ -1,6 +1,8 @@
 // Pure Search Console request builder and response normalizer for the
 // organic search report. No I/O: gscClient.js sends the requests built here.
 
+import { isBranded } from './gscInsights';
+
 export const SEARCH_TYPES = [
   { key: 'web', label: 'Web' },
   { key: 'image', label: 'Image' },
@@ -11,7 +13,7 @@ export const SEARCH_TYPES = [
 ];
 
 // Row caps per request (the API maximum is 25,000). The page says when a list hits its cap.
-export const LIMITS = { queries: 5000, pages: 10000, queryPages: 25000 };
+export const LIMITS = { queries: 5000, pages: 10000, queryPages: 25000, segmentPages: 2000 };
 
 // Discover and Google News have no query or device dimension and no position.
 export function hasQueries(type) {
@@ -76,10 +78,17 @@ export function buildSearchRequests({ startDate, endDate, compareRange, type = '
     const filter = (operator) => ({
       dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator, expression: re }] }],
     });
+    // Totals, trend and pages per segment, both periods, so the page-wide
+    // branded / non-branded filter shows Google's own numbers (not estimates).
     for (const [name, op] of [['brand', 'includingRegex'], ['nonBrand', 'excludingRegex']]) {
       add(`${name}:totals`, cur, filter(op));
       add(`${name}:trend`, cur, { dimensions: ['date'], rowLimit: 1000, ...filter(op) });
-      if (compareRange) add(`${name}:totals:compare`, compareRange, filter(op));
+      add(`${name}:pages`, cur, { dimensions: ['page'], rowLimit: LIMITS.segmentPages, ...filter(op) });
+      if (compareRange) {
+        add(`${name}:totals:compare`, compareRange, filter(op));
+        add(`${name}:trend:compare`, compareRange, { dimensions: ['date'], rowLimit: 1000, ...filter(op) });
+        add(`${name}:pages:compare`, compareRange, { dimensions: ['page'], rowLimit: LIMITS.segmentPages, ...filter(op) });
+      }
     }
   }
   return out;
@@ -163,6 +172,13 @@ export function normalizeSearchReport(results, { site, range, compareRange, type
     const bTrend = new Map(trendOf(R['brand:trend']).map((t) => [t.date, t]));
     const nTrend = new Map(trendOf(R['nonBrand:trend']).map((t) => [t.date, t]));
     const dates = [...new Set([...bTrend.keys(), ...nTrend.keys()])].sort();
+    const segment = (name) => ({
+      totals: totalsOf(R[`${name}:totals`]),
+      totalsCompare: hasCompare ? totalsOf(R[`${name}:totals:compare`]) : null,
+      trend: trendOf(R[`${name}:trend`]),
+      trendCompare: hasCompare ? trendOf(R[`${name}:trend:compare`]) : null,
+      pages: withPrev(keyed(R[`${name}:pages`], ['page']), keyed(R[`${name}:pages:compare`], ['page']), 'page', hasCompare),
+    });
     brand = {
       terms,
       current: split(''),
@@ -172,6 +188,8 @@ export function normalizeSearchReport(results, { site, range, compareRange, type
         branded: bTrend.get(date)?.clicks || 0,
         nonBranded: nTrend.get(date)?.clicks || 0,
       })),
+      // Older cached reports lack segment pages; segmentReport() checks for them.
+      segments: R['brand:pages'] ? { brand: segment('brand'), nonBrand: segment('nonBrand') } : null,
     };
   }
 
@@ -197,5 +215,41 @@ export function normalizeSearchReport(results, { site, range, compareRange, type
     brand,
     sitemaps,
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+// ── branded / non-branded view ────────────────────────────────────────────
+
+export const SEGMENTS = [
+  { key: 'all', label: 'All searches' },
+  { key: 'nonbrand', label: 'Non-branded' },
+  { key: 'brand', label: 'Branded' },
+];
+
+export function canSegment(report) {
+  return !!report?.brand?.segments;
+}
+
+// The report as seen through one segment. Totals, trend and pages come from
+// Google's own filtered requests; queries and query+page pairs are filtered by
+// name. Devices, countries, search appearance and sitemaps stay unfiltered.
+// Anonymized queries belong to neither segment, so the two don't add up to "all".
+export function segmentReport(report, seg) {
+  if (!report || seg === 'all' || !canSegment(report)) return report;
+  const s = report.brand.segments[seg === 'brand' ? 'brand' : 'nonBrand'];
+  const wantBrand = seg === 'brand';
+  const keep = (q) => isBranded(q, report.brand.terms) === wantBrand;
+  return {
+    ...report,
+    segment: seg,
+    totals: s.totals,
+    totalsCompare: s.totalsCompare,
+    trend: s.trend,
+    trendCompare: s.trendCompare,
+    pages: s.pages,
+    queries: report.queries.filter((r) => keep(r.query)),
+    allQueryCount: report.queries.length,
+    queryPages: report.queryPages.filter((r) => keep(r.query)),
+    limits: { ...report.limits, pages: report.limits?.segmentPages },
   };
 }

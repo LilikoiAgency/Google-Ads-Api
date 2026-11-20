@@ -1,6 +1,11 @@
 /* Organic Search (Search Console) page. Builds on ga4.css (shared ga4-* classes). */
 
 .gsc-status-row { justify-content: flex-end; min-height: 24px; }
+.gsc-seg-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-right: auto; }
+.gsc-seg-wrap .ga4-segment-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.gsc-seg-hint { font-size: 12px; color: var(--text-muted); }
+.gsc-seg-note { padding: 10px 14px; border-radius: 12px; background: var(--ga4-accent-soft); color: var(--text-primary); }
+@media (max-width: 767px) { .gsc-seg-wrap, .gsc-seg-wrap .ga4-segment { width: 100%; } .gsc-seg-wrap .ga4-segment-btn { flex: 1 0 auto; } }
 .gsc-fetched { display: inline-flex; gap: 10px; align-items: center; font-size: 12px; color: var(--text-secondary); }
 .gsc-muted { color: var(--text-muted); }
 

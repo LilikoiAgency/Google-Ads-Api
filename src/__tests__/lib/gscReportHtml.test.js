@@ -58,3 +58,13 @@ describe('gscReportHtml', () => {
       .toEqual([expect.objectContaining({ date: '2026-10-05', label: 'Launch' })]);
   });
 });
+
+describe('segmented download', () => {
+  it('labels a non-branded report in the title, file name and note', () => {
+    const r = { ...report(), segment: 'nonbrand' };
+    const html = generateSearchReportHtml(r, { brandTerms: ['acme'] });
+    expect(html).toContain('acme.com: Google organic search, non-branded searches, Oct 2026');
+    expect(html).toContain('Figures cover non-branded searches only: searches not containing &quot;acme&quot;');
+    expect(searchReportFilename(r)).toBe('acme.com Organic Search (Non-branded) - Oct 2026.html');
+  });
+});
