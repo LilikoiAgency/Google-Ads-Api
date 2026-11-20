@@ -1092,6 +1092,17 @@ describe('corrections and Update the plan', () => {
     await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_offered', service: 'turf installation', source_ids: ['S1'], saveToBrief: true }));
   });
 
+  it("a task's correction also covers its follow-ups' source ids, so a plan update leaves them out too", async () => {
+    const r = review();
+    const withFollowUps = { ...PLAN[1], follow_ups: [{ ...TASKS[2], id: 'T2.1', source_ids: ['S7', 'S8'] }, { ...TASKS[0], id: 'T2.2', source_ids: ['S2'] }] };
+    render(<ResultsView audit={{ ...RESULT, action_plan: [PLAN[0], withFollowUps] }} domain="acme.com" review={r} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for T2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not for this business' }));
+    fireEvent.click(screen.getByLabelText('Not relevant here'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(r.onCorrect).toHaveBeenCalledWith({ kind: 'not_relevant', source_ids: ['S2', 'S7', 'S8'], saveToBrief: false }));
+  });
+
   it('Not relevant here sends no service and nothing for the brief; a short service is rejected', async () => {
     const r = review();
     render(<ResultsView audit={RESULT} domain="acme.com" review={r} />);

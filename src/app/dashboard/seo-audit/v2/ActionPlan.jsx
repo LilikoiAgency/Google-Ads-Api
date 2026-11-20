@@ -194,6 +194,8 @@ function CorrectionControl({ task, onCorrect }) {
 
   async function save() {
     const offered = kind === "not_offered";
+    // Follow-ups are hidden with their task, so a plan update must leave them out too.
+    const ids = [...new Set([task.source_ids, ...(task.follow_ups || []).map((f) => f.source_ids)].flatMap((x) => x || []))];
     if (offered && !isUsablePhrase(service)) {
       setError(`Name the service in at least ${MIN_PHRASE} characters.`);
       return;
@@ -202,8 +204,8 @@ function CorrectionControl({ task, onCorrect }) {
     setSaving(true);
     try {
       await onCorrect(offered
-        ? { kind, service: service.trim(), source_ids: task.source_ids, saveToBrief }
-        : { kind, source_ids: task.source_ids, saveToBrief: false });
+        ? { kind, service: service.trim(), source_ids: ids, saveToBrief }
+        : { kind, source_ids: ids, saveToBrief: false });
       setOpen(false);
     } catch (err) {
       setError(err?.message || "Couldn't save. Try again.");
