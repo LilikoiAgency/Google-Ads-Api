@@ -1,5 +1,7 @@
 // Pure task model for SEO Audit v2. No server imports: the browser UI uses tasksToCsv.
 
+import { phaseByTaskId } from './roadmap';
+
 const IMPACT_EFFORT = { type: 'integer', enum: [1, 2, 3, 4, 5] };
 
 export const TASK_JSON_SCHEMA = {
@@ -29,8 +31,8 @@ export function priorityScore(task) {
   return (w * task.impact * task.impact) / ((task.effort || 1) + 1);
 }
 
-// Evidence backed by a measurement (Search Console, URL Inspection, GA4, PageSpeed).
-const MEASURED = /search console|impressions?\b|\bclicks?\b|url inspection|google analytics|\bga4\b|pagespeed|key events?|\bsessions\b/i;
+// Evidence backed by a measurement (Search Console, URL Inspection, GA4, PageSpeed, Keyword Planner).
+const MEASURED = /search console|impressions?\b|\bclicks?\b|url inspection|google analytics|\bga4\b|pagespeed|key events?|\bsessions\b|keyword planner|monthly searches/i;
 export const isMeasured = (task) => (task?.evidence || []).some((e) => MEASURED.test(String(e)));
 
 // Content and answer-engine tasks with no measured evidence are capped at impact 2,
@@ -127,10 +129,13 @@ function csvCell(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function tasksToCsv(tasks) {
-  const header = ['ID', 'Priority', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Why', 'Evidence', 'Part of'];
+export function tasksToCsv(tasks, { phases = null } = {}) {
+  // phases: id -> period label from the whole plan, so a filtered export keeps
+  // each task in the same period as the screen.
+  const phase = phases || phaseByTaskId(tasks);
+  const header = ['ID', 'Priority', 'When', 'Task', 'Page', 'Category', 'Impact', 'Effort', 'Confidence', 'Change', 'Why', 'Evidence', 'Part of'];
   const row = (t, rank, parent = '') => [
-    t.id, rank, t.title, t.page, t.category, t.impact, t.effort, t.confidence,
+    t.id, rank, phase.get(t.id) || '', t.title, t.page, t.category, t.impact, t.effort, t.confidence,
     t.change, t.why, (t.evidence || []).join(' | '), parent,
   ];
   const rows = (tasks || []).flatMap((t, i) => [

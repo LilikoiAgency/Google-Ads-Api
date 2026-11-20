@@ -2,14 +2,16 @@
 
 export const STEP_KEYS = [
   'crawl', 'gather', 'search', 'pass:technical', 'pass:content', 'pass:local', 'pass:conversion',
-  'pass:reputation', 'synthesize',
+  'pass:reputation', 'pass:targets', 'synthesize',
 ];
 
 const PASS_KEYS = STEP_KEYS.filter((k) => k.startsWith('pass:'));
 // Passes every audit has; "all failed" means nothing to synthesize only across these.
-const CORE_PASS_KEYS = PASS_KEYS.filter((k) => k !== 'pass:reputation');
+const CORE_PASS_KEYS = PASS_KEYS.filter((k) => k !== 'pass:reputation' && k !== 'pass:targets');
 // Steps added later: jobs created before them lack the key and treat it as skipped.
-const OPTIONAL_KEYS = ['search', 'pass:reputation'];
+const OPTIONAL_KEYS = ['search', 'pass:reputation', 'pass:targets'];
+// Skipped in quick audits.
+const FULL_ONLY_KEYS = ['search', 'pass:reputation'];
 const MAX_ATTEMPTS = 3; // 1 try + 2 retries
 const STALE_MS = 6 * 60 * 1000;
 const EFFORTS = ['high', 'medium', 'low'];
@@ -22,12 +24,15 @@ const PASS_AREA = {
   'pass:local': 'Local & AI search',
   'pass:conversion': 'Conversion',
   'pass:reputation': 'Reputation',
+  'pass:targets': 'Target keywords',
 };
 
 const ms = (now) => (now instanceof Date ? now.getTime() : typeof now === 'string' ? Date.parse(now) : Number(now));
 const iso = (now) => new Date(ms(now)).toISOString();
 
-export function newJob({ email, domain, auditType, now }) {
+// targets: true when the audit options name pages with target keywords; the
+// target keywords pass runs only then (in quick and full audits alike).
+export function newJob({ email, domain, auditType, now, targets = false }) {
   const t = iso(now);
   return {
     version: 2,
@@ -37,7 +42,7 @@ export function newJob({ email, domain, auditType, now }) {
     status: 'queued',
     steps: STEP_KEYS.map((key) => ({
       key,
-      ...(auditType === 'quick' && OPTIONAL_KEYS.includes(key)
+      ...((auditType === 'quick' && FULL_ONLY_KEYS.includes(key)) || (key === 'pass:targets' && !targets)
         ? { status: 'done', skipped: true }
         : { status: 'pending' }),
       attempts: 0, startedAt: null, finishedAt: null, error: null,

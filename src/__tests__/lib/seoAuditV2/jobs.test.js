@@ -16,13 +16,35 @@ function finish(job, key, now = T0) {
 }
 
 describe('newJob', () => {
-  it('starts queued with every step pending', () => {
+  it('starts queued with every step pending except target keywords when there are no target pages', () => {
     const job = mk();
     expect(job.version).toBe(2);
     expect(job.status).toBe('queued');
     expect(job.steps.map((s) => s.key)).toEqual(STEP_KEYS);
-    expect(job.steps.every((s) => s.status === 'pending' && s.attempts === 0)).toBe(true);
+    const pending = job.steps.filter((s) => s.key !== 'pass:targets');
+    expect(pending.every((s) => s.status === 'pending' && s.attempts === 0)).toBe(true);
+    expect(job.steps.find((s) => s.key === 'pass:targets')).toMatchObject({ status: 'done', skipped: true });
     expect(job.gaps).toEqual([]);
+  });
+
+  it('runs target keywords in quick and full audits when there are target pages', () => {
+    for (const auditType of ['quick', 'full']) {
+      const job = newJob({ email: 'a@lilikoiagency.com', domain: 'x.com', auditType, now: T0, targets: true });
+      expect(job.steps.find((s) => s.key === 'pass:targets')).toMatchObject({ status: 'pending' });
+    }
+    const quick = newJob({ email: 'a@lilikoiagency.com', domain: 'x.com', auditType: 'quick', now: T0, targets: true });
+    expect(quick.steps.find((s) => s.key === 'search').skipped).toBe(true);
+  });
+
+  it('a failed target keywords pass leaves a gap but the job still finishes', () => {
+    let job = newJob({ email: 'a@lilikoiagency.com', domain: 'x.com', auditType: 'quick', now: T0, targets: true });
+    for (const k of ['crawl', 'gather', 'pass:technical', 'pass:content', 'pass:local', 'pass:conversion']) job = finish(job, k);
+    for (let i = 0; i < 3; i += 1) {
+      job = markRunning(job, 'pass:targets', T0);
+      job = applyStepResult(job, 'pass:targets', { ok: false, error: 'x' }, T0);
+    }
+    expect(job.gaps).toContain("Target keywords analysis didn't complete — rerun to include it");
+    expect(runnableSteps(job, T0)).toEqual(['synthesize']);
   });
 });
 

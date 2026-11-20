@@ -6,7 +6,7 @@ import { getMonthlyClaudeCost, getClaudeBudgetCap } from "../../../../../lib/usa
 import { checkRateLimit } from "../../../../../lib/seoRateLimit";
 import { newJob } from "../../../../../lib/seoAuditV2/jobs";
 import { saveLocations } from "../../../../../lib/seoAuditV2/reputationStore";
-import { parseAuditOptions } from "../../../../../lib/seoAuditV2/options";
+import { parseAuditOptions, hasTargets } from "../../../../../lib/seoAuditV2/options";
 import {
   findReusable, getDailyUsage, incrementUsage, createJob, refundUsage,
 } from "../../../../../lib/seoAuditV2/jobStore";
@@ -33,7 +33,7 @@ function normalizeDomain(raw) {
 
 /**
  * POST /api/seo-audit/v2/jobs  { domain, auditType: 'full'|'quick', forceRerun?, options? }
- * options: { pages?, onlyListed?, skip?, pageCount? } (see seoAuditV2/options).
+ * options: { pages?, onlyListed?, skip?, pageCount?, targets? } (see seoAuditV2/options).
  * Returns { jobId, reused }. A new job counts as one daily audit use.
  */
 export async function POST(request) {
@@ -96,7 +96,7 @@ export async function POST(request) {
     }
 
     await incrementUsage(email, usageDate);
-    const job = { ...newJob({ email, domain, auditType, now: new Date() }), usageDate, ...(options ? { options } : {}) };
+    const job = { ...newJob({ email, domain, auditType, now: new Date(), targets: hasTargets(options) }), usageDate, ...(options ? { options } : {}) };
     try {
       const jobId = await createJob(job);
       if (options?.locations?.length) {

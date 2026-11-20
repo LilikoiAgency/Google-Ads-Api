@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { tasksToCsv } from "@/lib/seoAuditV2/tasks";
+import { buildRoadmap, phaseByTaskId } from "@/lib/seoAuditV2/roadmap";
 import p from "./plan.module.css";
 
 export const CATEGORY_META = {
@@ -217,13 +218,19 @@ function SubTasks({ task, domain, notice, onCopy }) {
   );
 }
 
-export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
+// focusId: a task to show opened (from another tab); a nested id (T2.1) opens its parent.
+export default function ActionPlan({ tasks = [], domain = "", auditDate, focusId = null }) {
   const [category, setCategory] = useState("");
   const [page, setPage] = useState("");
   const [quickOnly, setQuickOnly] = useState(false);
-  const [open, setOpen] = useState(() => new Set());
+  const [open, setOpen] = useState(() => new Set(focusId ? [String(focusId).split(".")[0]] : []));
   const [notice, setNotice] = useState(null); // { key, text, ok }
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(!!focusId);
+  const [view, setView] = useState("ranked"); // "ranked" | "roadmap"
+  // Phases come from the whole plan, so filtering never moves a task to another month.
+  const roadmap = useMemo(() => buildRoadmap(tasks), [tasks]);
+  const phaseOf = useMemo(() => new Map(roadmap.flatMap((ph) => ph.tasks.map((t) => [t.id, ph]))), [roadmap]);
+  const phaseLabels = useMemo(() => phaseByTaskId(tasks), [tasks]);
 
   const categories = useMemo(() => {
     const counts = new Map();
@@ -238,7 +245,7 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
   const filtered = Boolean(category || page || quickOnly);
   // Unfiltered: the first TOP_COUNT tasks; the rest behind "Show more". Copy and
   // download always cover every matching task.
-  const collapsed = !filtered && !showAll && visible.length > TOP_COUNT;
+  const collapsed = view === "ranked" && !filtered && !showAll && visible.length > TOP_COUNT;
   const shown = collapsed ? visible.slice(0, TOP_COUNT) : visible;
   const quickCount = tasks.filter(isQuickWin).length;
 
@@ -265,15 +272,83 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
 
   function handleCsv() {
     const date = auditDate || new Date().toISOString().slice(0, 10);
-    downloadCsv(tasksToCsv(visible), `${domain} SEO action plan ${date}.csv`);
+    downloadCsv(tasksToCsv(visible, { phases: phaseLabels }), `${domain} SEO action plan ${date}.csv`);
   }
 
   if (!tasks.length) {
     return <p style={{ color: "var(--muted)", fontSize: 13 }}>No tasks in this audit&apos;s action plan.</p>;
   }
 
+  const renderRows = (list) => list.map((t) => {
+    const isOpen = open.has(t.id);
+    return [
+      <tr key={t.id} onClick={() => toggle(t.id)} className={isOpen ? `${p.row} ${p.rowOpen}` : p.row}>
+        <td className={`${p.td} ${p.rank}`}>{t.id}</td>
+        <td className={`${p.td} ${p.taskCell}`}>
+          <span className={p.title}>{t.title}</span>
+          <span className={p.sub} title={t.group ? t.pages?.join(", ") : t.page}>
+            <span className={p.path}>{t.group ? `${t.items.length} pages` : pagePath(t.page)}</span>
+            {t.follow_ups?.length > 0 && <span className={p.tag}>+{t.follow_ups.length} related</span>}
+            {isQuickWin(t) && <span className={`${p.tag} ${p.tagWin}`}>Quick win</span>}
+            {view === "ranked" && phaseOf.get(t.id) && <span className={p.tag}>{phaseOf.get(t.id).label}</span>}
+          </span>
+        </td>
+        <td className={p.td}><Area category={t.category} /></td>
+        <td className={p.td}><ImpactMeter value={t.impact} /></td>
+        <td className={`${p.td} ${p.effort}`}>{effortLabel(t.effort)}</td>
+        <td className={p.td}>
+          <button
+            type="button"
+            aria-expanded={isOpen}
+            aria-label={`Show details for ${t.id}`}
+            onClick={(e) => { e.stopPropagation(); toggle(t.id); }}
+            className={p.chev}
+          >
+            <span aria-hidden style={{ display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>&#9656;</span>
+          </button>
+        </td>
+      </tr>,
+      isOpen && (
+        <tr key={`${t.id}-detail`} className={p.detailRow}>
+          <td />
+          <td colSpan={5} style={{ padding: "0 12px 18px" }}>
+            <ExpandedTask task={t} domain={domain} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
+            <SubTasks task={t} domain={domain} notice={notice} onCopy={handleCopyChange} />
+          </td>
+        </tr>
+      ),
+    ];
+  });
+
+  const table = (list) => (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr>
+            <th className={p.th} style={{ width: 52 }}>#</th>
+            <th className={p.th}>Task</th>
+            <th className={p.th}>Area</th>
+            <th className={p.th}>Impact</th>
+            <th className={p.th}>Effort</th>
+            <th className={p.th} style={{ width: 36 }}><span className={p.srOnly}>Details</span></th>
+          </tr>
+        </thead>
+        <tbody>{renderRows(list)}</tbody>
+      </table>
+    </div>
+  );
+
+  const visibleIds = new Set(visible.map((t) => t.id));
+
   return (
     <div>
+      <div role="group" aria-label="Plan view" className={p.viewToggle}>
+        {[["ranked", "Highest value first"], ["roadmap", "30 / 60 / 90 days"]].map(([key, label]) => (
+          <button key={key} type="button" aria-pressed={view === key} onClick={() => setView(key)} className={view === key ? `${p.viewBtn} ${p.viewOn}` : p.viewBtn}>
+            {label}
+          </button>
+        ))}
+      </div>
       {/* Filters + export */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -319,68 +394,44 @@ export default function ActionPlan({ tasks = [], domain = "", auditDate }) {
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
-        {filtered
-          ? `Showing ${visible.length} of ${tasks.length} tasks`
-          : collapsed ? `Do these first: the top ${TOP_COUNT} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
-        {". "}Open a task for the evidence and the exact change.
-      </p>
-
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th className={p.th} style={{ width: 52 }}>#</th>
-              <th className={p.th}>Task</th>
-              <th className={p.th}>Area</th>
-              <th className={p.th}>Impact</th>
-              <th className={p.th}>Effort</th>
-              <th className={p.th} style={{ width: 36 }}><span className={p.srOnly}>Details</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((t) => {
-              const isOpen = open.has(t.id);
-              return [
-                <tr key={t.id} onClick={() => toggle(t.id)} className={isOpen ? `${p.row} ${p.rowOpen}` : p.row}>
-                  <td className={`${p.td} ${p.rank}`}>{t.id}</td>
-                  <td className={`${p.td} ${p.taskCell}`}>
-                    <span className={p.title}>{t.title}</span>
-                    <span className={p.sub} title={t.group ? t.pages?.join(", ") : t.page}>
-                      <span className={p.path}>{t.group ? `${t.items.length} pages` : pagePath(t.page)}</span>
-                      {t.follow_ups?.length > 0 && <span className={p.tag}>+{t.follow_ups.length} related</span>}
-                      {isQuickWin(t) && <span className={`${p.tag} ${p.tagWin}`}>Quick win</span>}
-                    </span>
-                  </td>
-                  <td className={p.td}><Area category={t.category} /></td>
-                  <td className={p.td}><ImpactMeter value={t.impact} /></td>
-                  <td className={`${p.td} ${p.effort}`}>{effortLabel(t.effort)}</td>
-                  <td className={p.td}>
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      aria-label={`Show details for ${t.id}`}
-                      onClick={(e) => { e.stopPropagation(); toggle(t.id); }}
-                      className={p.chev}
-                    >
-                      <span aria-hidden style={{ display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>&#9656;</span>
-                    </button>
-                  </td>
-                </tr>,
-                isOpen && (
-                  <tr key={`${t.id}-detail`} className={p.detailRow}>
-                    <td />
-                    <td colSpan={5} style={{ padding: "0 12px 18px" }}>
-                      <ExpandedTask task={t} domain={domain} copyNotice={notice?.key === `change-${t.id}` ? notice : null} onCopy={() => handleCopyChange(t)} />
-                      <SubTasks task={t} domain={domain} notice={notice} onCopy={handleCopyChange} />
-                    </td>
-                  </tr>
-                ),
-              ];
-            })}
-          </tbody>
-        </table>
-      </div>
+      {view === "ranked" ? (
+        <>
+          <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
+            {filtered
+              ? `Showing ${visible.length} of ${tasks.length} tasks`
+              : collapsed ? `Do these first: the top ${TOP_COUNT} of ${tasks.length} tasks` : `${tasks.length} tasks, highest value first`}
+            {". "}Open a task for the evidence and the exact change.
+          </p>
+          {table(shown)}
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
+            {filtered ? `Showing ${visible.length} of ${tasks.length} tasks. ` : ""}
+            Problems that hold the site back and quick wins come first; bigger work follows once there is room. Open a task for the evidence and the exact change.
+          </p>
+          {roadmap.map((ph) => {
+            const list = ph.tasks.filter((t) => visibleIds.has(t.id));
+            const mix = ph.categories.map((c) => `${c.count} ${(CATEGORY_META[c.category]?.label || c.category).toLowerCase()}`).join(", ");
+            return (
+              <section key={ph.days} className={p.phase} aria-label={ph.label}>
+                <header className={p.phaseHead}>
+                  <span className={p.phaseLabel}>{ph.label}</span>
+                  <span className={p.phaseTitle}>{ph.title}</span>
+                  <span className={p.phaseCount}>
+                    {ph.tasks.length} task{ph.tasks.length === 1 ? "" : "s"}{mix ? ` · ${mix}` : ""}
+                  </span>
+                </header>
+                {list.length ? table(list) : (
+                  <p style={{ color: "var(--muted)", fontSize: 13, padding: "8px 12px" }}>
+                    {ph.tasks.length ? "No tasks in this period match the filters." : "Nothing planned here: earlier work carries over."}
+                  </p>
+                )}
+              </section>
+            );
+          })}
+        </>
+      )}
       {collapsed && (
         <button
           onClick={() => setShowAll(true)}
