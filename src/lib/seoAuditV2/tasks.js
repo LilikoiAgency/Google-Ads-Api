@@ -2,7 +2,13 @@
 
 import { phaseByTaskId } from './roadmap';
 
-const IMPACT_EFFORT = { type: 'integer', enum: [1, 2, 3, 4, 5] };
+// "…from 7 pages" -> the real number of pages in a group (also used when
+// corrections hide some of a group's pages).
+export function fixPageCount(title, n) {
+  return String(title).replace(/\b\d+(?=(?:\s+[\w-]+){0,3}?\s+pages?\b)/i, String(n));
+}
+
+const IMPACT_EFFORT ={ type: 'integer', enum: [1, 2, 3, 4, 5] };
 
 export const TASK_JSON_SCHEMA = {
   type: 'object',

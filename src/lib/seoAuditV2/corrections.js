@@ -1,6 +1,8 @@
 // Pure helpers for the "not offered / not relevant" corrections applied to a
 // finished audit. No server imports: used from server code and React alike.
 
+import { fixPageCount } from './tasks';
+
 export const MIN_PHRASE = 4;
 const MAX_PHRASE = 80;
 
@@ -20,7 +22,8 @@ function phraseRegex(phrase) {
   if (p.endsWith('es')) stems.add(p.slice(0, -2));
   if (p.endsWith('s')) stems.add(p.slice(0, -1));
   const alts = [...stems].filter(Boolean).map(escapeRe).join('|');
-  return new RegExp(`(?<![a-z0-9])(?:${alts})(?:es|s)?(?![a-z0-9])`);
+  // A leading (?:^|[^a-z0-9]) instead of a lookbehind, which older Safari can't parse.
+  return new RegExp(`(?:^|[^a-z0-9])(?:${alts})(?:es|s)?(?![a-z0-9])`);
 }
 
 export function matchesExclusion(task, phrases) {
@@ -41,6 +44,28 @@ export function guessService(title) {
   s = s.replace(LEADING, '').replace(/^(?:a|an|the)\s+/i, '');
   s = s.replace(TRAILING, '').replace(TRAILING, '');
   return s.trim().toLowerCase().slice(0, MAX_PHRASE).trim();
+}
+
+const maxOf = (items, key) => {
+  const nums = items.map((t) => t[key]).filter(Number.isFinite);
+  return nums.length ? Math.max(...nums) : undefined;
+};
+
+// A group with some items hidden: title, pages, impact, effort and source ids
+// from the items that remain.
+function regroup(task, kept) {
+  const out = {
+    ...task,
+    title: fixPageCount(task.title, kept.length),
+    items: kept,
+    pages: [...new Set(kept.map((t) => t.page))],
+    source_ids: [...new Set(kept.flatMap((t) => t.source_ids || []))],
+  };
+  for (const key of ['impact', 'effort']) {
+    const n = maxOf(kept, key);
+    if (n !== undefined) out[key] = n;
+  }
+  return out;
 }
 
 export function applyCorrections(result, corrections) {
@@ -71,6 +96,13 @@ export function applyCorrections(result, corrections) {
   const plan = [];
   for (const task of result.action_plan || []) {
     if (task.group && Array.isArray(task.items)) {
+      // A group whose own title names a service not offered goes as a whole.
+      const whole = services.find((c) => matchesExclusion({ title: task.title }, [c.service]));
+      if (whole) {
+        hideTree(task, whole);
+        for (const item of task.items) if (item.id) hiddenIds.add(item.id);
+        continue;
+      }
       const kept = [];
       let lastCorrection = null;
       for (const item of task.items) {
@@ -86,7 +118,7 @@ export function applyCorrections(result, corrections) {
         hiddenIds.add(task.id);
         for (const f of task.follow_ups || []) hide(f, lastCorrection);
       } else {
-        plan.push({ ...task, items: kept, pages: [...new Set(kept.map((t) => t.page))] });
+        plan.push(regroup(task, kept));
       }
       continue;
     }
@@ -103,11 +135,14 @@ export function applyCorrections(result, corrections) {
       .map((m) => (byId.has(m.task.id) ? { ...m, task: byId.get(m.task.id) } : m));
   }
   if (result.targets?.pages) {
+    // Suggested keywords about a service not offered go too; the agency's own stay.
+    const offOffer = (k) => k?.given !== true && services.some((c) => matchesExclusion({ title: k?.keyword }, [c.service]));
     out.targets = {
       ...result.targets,
       pages: result.targets.pages.map((p) => ({
         ...p,
         task_ids: (p.task_ids || []).filter((id) => !hiddenIds.has(id)),
+        ...(Array.isArray(p.keywords) ? { keywords: p.keywords.filter((k) => !offOffer(k)) } : {}),
       })),
     };
   }

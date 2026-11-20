@@ -5,7 +5,9 @@
 
 import { brandName } from './reviews';
 import { briefBlock } from './briefs';
-import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask, effectiveImpact, priorityScore } from './tasks';
+import { TASK_JSON_SCHEMA, mergeKey, mergeTasks, pathKey, isEmptyTask, effectiveImpact, priorityScore, fixPageCount } from './tasks';
+
+export { fixPageCount };
 import { targetsInput } from './targets';
 
 export const PASSES = ['technical', 'content', 'local', 'conversion', 'reputation', 'targets'];
@@ -557,11 +559,6 @@ export function buildSynthInput(passOutputs, extra = {}) {
 
 // passTasks: a flat task list or a list of lists. The merged tasks carry
 // source_ids: the pass task ids folded into each one.
-// "…from 7 pages" -> the real number of pages in the group.
-export function fixPageCount(title, n) {
-  return String(title).replace(/\b\d+(?=(?:\s+[\w-]+){0,3}?\s+pages?\b)/i, String(n));
-}
-
 // Unmeasured content/answer tasks are capped (effectiveImpact). The synthesis's
 // follow_ups fold tasks into their parent (task.follow_ups) and its groups turn
 // the same fix across pages into one task (group: true, items, pages). Top-level
