@@ -8,7 +8,7 @@ export function fixPageCount(title, n) {
   return String(title).replace(/\b\d+(?=(?:\s+[\w-]+){0,3}?\s+pages?\b)/i, String(n));
 }
 
-const IMPACT_EFFORT ={ type: 'integer', enum: [1, 2, 3, 4, 5] };
+const IMPACT_EFFORT = { type: 'integer', enum: [1, 2, 3, 4, 5] };
 
 export const TASK_JSON_SCHEMA = {
   type: 'object',
